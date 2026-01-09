@@ -15,7 +15,7 @@ on:
         required: false
 
 env:
-  FLUTTER_VERSION: '3.24.0'
+  FLUTTER_VERSION: '3.29.0'
   PRIVATE_REPO: acking-you/proxy-everything
 
 permissions:
