@@ -72,7 +72,10 @@ class ProxyState extends ChangeNotifier {
   }
 
   Future<bool> start() async {
-    if (_isRunning) return true;
+    // Stop first if already running to apply new config
+    if (_isRunning) {
+      stop();
+    }
     if (_config.serverHost.isEmpty) {
       _lastError = 'Server host is required';
       notifyListeners();
