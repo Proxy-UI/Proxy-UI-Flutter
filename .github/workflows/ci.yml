@@ -31,6 +31,3 @@ jobs:
 
       - name: Build APK (Android)
         run: flutter build apk --debug
-
-      - name: Build Web
-        run: flutter build web
