@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 import 'package:path_provider/path_provider.dart';
@@ -45,36 +44,33 @@ class ProxyService {
   static final _logController = StreamController<LogEntry>.broadcast();
   static Stream<LogEntry> get logStream => _logController.stream;
 
-  // Native callback pointer (must be kept alive)
-  static Pointer<NativeFunction<LogCallbackNative>>? _nativeCallback;
-  static ReceivePort? _logPort;
+  // NativeCallable for thread-safe callback from native code
+  static NativeCallable<LogCallbackNative>? _nativeCallable;
 
   /// Initialize logging system with FFI callback.
   void initLogging() {
     if (_loggingInitialized) return;
 
-    // Set up isolate-based log receiving
-    _logPort = ReceivePort();
-    _logPort!.listen((message) {
-      if (message is List && message.length == 2) {
-        _logController.add(LogEntry(
-          level: message[0] as int,
-          message: message[1] as String,
-        ));
-      }
-    });
-
-    // Note: Dart FFI callbacks from native code run on the main isolate,
-    // so we can directly add to the stream controller
-    _nativeCallback = Pointer.fromFunction<LogCallbackNative>(_logCallback);
-    _ffi.proxySetLogCallback(_nativeCallback!);
+    // Use NativeCallable.listener for thread-safe callbacks from native threads
+    _nativeCallable = NativeCallable<LogCallbackNative>.listener(_logCallback);
+    _ffi.proxySetLogCallback(_nativeCallable!.nativeFunction);
     _ffi.proxyInitLogging();
     _loggingInitialized = true;
   }
 
   static void _logCallback(int level, Pointer<Utf8> message) {
-    final msg = message.toDartString();
-    _logController.add(LogEntry(level: level, message: msg));
+    try {
+      if (message == nullptr) return;
+      final msg = message.toDartString();
+      _logController.add(LogEntry(level: level, message: msg));
+    } catch (e) {
+      // Ignore UTF-8 decode errors
+    } finally {
+      // Free the string allocated by Rust
+      if (message != nullptr) {
+        ProxyFFI().proxyFreeString(message);
+      }
+    }
   }
 
   /// Create proxy handle.
@@ -172,6 +168,6 @@ class ProxyService {
   /// Dispose resources.
   void dispose() {
     destroy();
-    _logPort?.close();
+    _nativeCallable?.close();
   }
 }

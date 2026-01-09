@@ -63,6 +63,20 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Proxy UI'),
         actions: [
+          Consumer<ProxyState>(
+            builder: (context, provider, _) => DropdownButton<int>(
+              value: provider.minLogLevel,
+              underline: const SizedBox(),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('TRACE')),
+                DropdownMenuItem(value: 1, child: Text('DEBUG')),
+                DropdownMenuItem(value: 2, child: Text('INFO')),
+                DropdownMenuItem(value: 3, child: Text('WARN')),
+                DropdownMenuItem(value: 4, child: Text('ERROR')),
+              ],
+              onChanged: (v) => provider.setMinLogLevel(v ?? 0),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () => context.read<ProxyState>().clearLogs(),
@@ -261,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildLogView() {
     return Consumer<ProxyState>(
       builder: (context, provider, _) {
-        final logs = provider.logs;
+        final logs = provider.filteredLogs;
         if (logs.isEmpty) {
           return const Center(
             child: Text('No logs yet', style: TextStyle(color: Colors.grey)),
@@ -340,7 +354,7 @@ class _LogItem extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
+            child: SelectableText(
               entry.message,
               style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
             ),

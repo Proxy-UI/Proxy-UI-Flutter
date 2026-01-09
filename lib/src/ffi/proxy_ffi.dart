@@ -80,6 +80,9 @@ typedef _ProxyDestroyDart = void Function(Pointer<Void> handle);
 typedef _ProxyIsRunningNative = Int32 Function(Pointer<Void> handle);
 typedef _ProxyIsRunningDart = int Function(Pointer<Void> handle);
 
+typedef _ProxyFreeStringNative = Void Function(Pointer<Utf8> s);
+typedef _ProxyFreeStringDart = void Function(Pointer<Utf8> s);
+
 /// FFI bindings for proxy library.
 class ProxyFFI {
   static ProxyFFI? _instance;
@@ -147,4 +150,8 @@ class ProxyFFI {
   late final proxyIsRunning =
       lib.lookupFunction<_ProxyIsRunningNative, _ProxyIsRunningDart>(
           'proxy_is_running');
+
+  late final proxyFreeString =
+      lib.lookupFunction<_ProxyFreeStringNative, _ProxyFreeStringDart>(
+          'proxy_free_string');
 }

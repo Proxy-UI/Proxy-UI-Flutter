@@ -1,15 +1,18 @@
 name: Build Flutter App
 
 on:
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
   workflow_dispatch:
     inputs:
       lib_version:
-        description: 'Native library version (e.g., 0.1.0)'
+        description: 'Native library version from proxy-everything releases (e.g., 0.4.10)'
         required: true
-        default: '0.1.0'
+      create_release:
+        description: 'Create GitHub release'
+        type: boolean
+        default: true
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0), required if create_release is true'
+        required: false
 
 env:
   FLUTTER_VERSION: '3.24.0'
@@ -19,34 +22,18 @@ permissions:
   contents: write
 
 jobs:
-  get-lib-version:
-    runs-on: ubuntu-latest
-    outputs:
-      lib_version: ${{ steps.version.outputs.lib_version }}
-    steps:
-      - name: Determine library version
-        id: version
-        run: |
-          if [ -n "${{ github.event.inputs.lib_version }}" ]; then
-            echo "lib_version=${{ github.event.inputs.lib_version }}" >> $GITHUB_OUTPUT
-          else
-            # Extract version from tag (v1.0.0 -> 1.0.0)
-            VERSION="${GITHUB_REF#refs/tags/v}"
-            echo "lib_version=${VERSION}" >> $GITHUB_OUTPUT
-          fi
-
   download-native-libs:
     runs-on: ubuntu-latest
-    needs: get-lib-version
     steps:
       - uses: actions/checkout@v4
 
       - name: Download native libraries
         env:
           GH_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
-          LIB_VERSION: ${{ needs.get-lib-version.outputs.lib_version }}
+          LIB_VERSION: ${{ github.event.inputs.lib_version }}
         run: |
           mkdir -p native/{android/{arm64-v8a,armeabi-v7a,x86_64},ios,macos,windows/{x64,arm64},linux/{x64,arm64}}
+          WORK_DIR=$(mktemp -d)
 
           # Android
           for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
@@ -54,14 +41,14 @@ jobs:
             gh release download "$LIB_VERSION" \
               -R "$PRIVATE_REPO" \
               -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
-              -D /tmp || continue
-            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
+              -D "$WORK_DIR" || continue
+            tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
             case $target in
               aarch64-linux-android) dest="arm64-v8a" ;;
               armv7-linux-androideabi) dest="armeabi-v7a" ;;
               x86_64-linux-android) dest="x86_64" ;;
             esac
-            cp /tmp/libhttp_proxy-*/libhttp_proxy.so "native/android/$dest/" || true
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.so" "native/android/$dest/" || true
           done
 
           # iOS
@@ -70,9 +57,9 @@ jobs:
             gh release download "$LIB_VERSION" \
               -R "$PRIVATE_REPO" \
               -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
-              -D /tmp || continue
-            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
-            cp /tmp/libhttp_proxy-*/libhttp_proxy.a "native/ios/libhttp_proxy-${target}.a" || true
+              -D "$WORK_DIR" || continue
+            tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.a" "native/ios/libhttp_proxy-${target}.a" || true
           done
 
           # macOS
@@ -81,9 +68,9 @@ jobs:
             gh release download "$LIB_VERSION" \
               -R "$PRIVATE_REPO" \
               -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
-              -D /tmp || continue
-            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
-            cp /tmp/libhttp_proxy-*/libhttp_proxy.dylib "native/macos/libhttp_proxy-${target}.dylib" || true
+              -D "$WORK_DIR" || continue
+            tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.dylib" "native/macos/libhttp_proxy-${target}.dylib" || true
           done
 
           # Windows
@@ -92,13 +79,13 @@ jobs:
             gh release download "$LIB_VERSION" \
               -R "$PRIVATE_REPO" \
               -p "libhttp_proxy-${LIB_VERSION}-${target}.zip" \
-              -D /tmp || continue
-            unzip -o "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.zip" -d /tmp
+              -D "$WORK_DIR" || continue
+            unzip -o "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.zip" -d "$WORK_DIR"
             case $target in
               x86_64-pc-windows-msvc) dest="x64" ;;
               aarch64-pc-windows-msvc) dest="arm64" ;;
             esac
-            cp /tmp/libhttp_proxy-*/http_proxy.dll "native/windows/$dest/" || true
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/http_proxy.dll" "native/windows/$dest/" || true
           done
 
           # Linux
@@ -107,13 +94,13 @@ jobs:
             gh release download "$LIB_VERSION" \
               -R "$PRIVATE_REPO" \
               -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
-              -D /tmp || continue
-            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
+              -D "$WORK_DIR" || continue
+            tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
             case $target in
               x86_64-unknown-linux-gnu) dest="x64" ;;
               aarch64-unknown-linux-gnu) dest="arm64" ;;
             esac
-            cp /tmp/libhttp_proxy-*/libhttp_proxy.so "native/linux/$dest/" || true
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.so" "native/linux/$dest/" || true
           done
 
           echo "Downloaded libraries:"
@@ -127,7 +114,7 @@ jobs:
           retention-days: 1
 
   build-android:
-    needs: [get-lib-version, download-native-libs]
+    needs: download-native-libs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,7 +153,7 @@ jobs:
           path: build/app/outputs/flutter-apk/proxy-ui-*.apk
 
   build-ios:
-    needs: [get-lib-version, download-native-libs]
+    needs: download-native-libs
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -222,7 +209,7 @@ jobs:
           path: build/ios/iphoneos/proxy-ui-ios-unsigned.ipa
 
   build-macos:
-    needs: [get-lib-version, download-native-libs]
+    needs: download-native-libs
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -275,7 +262,7 @@ jobs:
           path: build/macos/Build/Products/Release/proxy-ui-macos.dmg
 
   build-windows:
-    needs: [get-lib-version, download-native-libs]
+    needs: download-native-libs
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -307,7 +294,7 @@ jobs:
           path: build/windows/x64/runner/Release/proxy-ui-windows-x64.zip
 
   build-linux:
-    needs: [get-lib-version, download-native-libs]
+    needs: download-native-libs
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -344,9 +331,9 @@ jobs:
           path: build/linux/x64/release/bundle/proxy-ui-linux-x64.tar.gz
 
   release:
-    needs: [get-lib-version, build-android, build-ios, build-macos, build-windows, build-linux]
+    needs: [build-android, build-ios, build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: ${{ github.event.inputs.create_release == 'true' && github.event.inputs.release_tag != '' }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -362,11 +349,14 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: "Proxy UI ${{ github.ref_name }}"
+          tag_name: ${{ github.event.inputs.release_tag }}
+          name: "Proxy UI ${{ github.event.inputs.release_tag }}"
           body: |
-            # Proxy UI Release ${{ github.ref_name }}
+            # Proxy UI Release ${{ github.event.inputs.release_tag }}
 
             Cross-platform graphical interface for proxy-everything.
+
+            Native library version: ${{ github.event.inputs.lib_version }}
 
             ## Downloads
             - **Android**: APK files for different architectures

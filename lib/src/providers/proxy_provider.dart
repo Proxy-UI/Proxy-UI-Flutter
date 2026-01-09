@@ -16,8 +16,9 @@ class ProxyState extends ChangeNotifier {
   String? _lastError;
   final List<LogEntry> _logs = [];
   StreamSubscription<LogEntry>? _logSubscription;
+  int _minLogLevel = 0; // 0=trace, 1=debug, 2=info, 3=warn, 4=error
 
-  static const int maxLogs = 500;
+  static const int maxLogs = 1000;
   static const String _configKey = 'proxy_config';
 
   ProxyState() {
@@ -28,6 +29,9 @@ class ProxyState extends ChangeNotifier {
   bool get isRunning => _isRunning;
   String? get lastError => _lastError;
   List<LogEntry> get logs => List.unmodifiable(_logs);
+  int get minLogLevel => _minLogLevel;
+  List<LogEntry> get filteredLogs =>
+      _logs.where((e) => e.level >= _minLogLevel).toList();
 
   Future<void> _init() async {
     _service.initLogging();
@@ -115,6 +119,11 @@ class ProxyState extends ChangeNotifier {
 
   void clearLogs() {
     _logs.clear();
+    notifyListeners();
+  }
+
+  void setMinLogLevel(int level) {
+    _minLogLevel = level.clamp(0, 4);
     notifyListeners();
   }
 
