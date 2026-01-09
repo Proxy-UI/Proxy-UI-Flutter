@@ -91,9 +91,9 @@ class ProxyService {
     String? needCodecIps,
     bool forceCodec = false,
   }) async {
-    if (_handle == null) {
-      if (!create()) return ProxyResult.runtimeError;
-    }
+    // Always recreate handle to apply new config
+    destroy();
+    if (!create()) return ProxyResult.runtimeError;
 
     final config = calloc<ProxyConfig>();
     Pointer<Utf8>? serverHostPtr;
