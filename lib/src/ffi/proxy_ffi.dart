@@ -55,10 +55,10 @@ final class ProxyConfig extends Struct {
 }
 
 // FFI function signatures
-typedef _ProxySetLogCallbackNative = Void Function(
-    Pointer<NativeFunction<LogCallbackNative>> callback);
-typedef _ProxySetLogCallbackDart = void Function(
-    Pointer<NativeFunction<LogCallbackNative>> callback);
+typedef _ProxySetLogCallbackNative =
+    Void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
+typedef _ProxySetLogCallbackDart =
+    void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
 
 typedef _ProxyInitLoggingNative = Void Function();
 typedef _ProxyInitLoggingDart = void Function();
@@ -66,10 +66,10 @@ typedef _ProxyInitLoggingDart = void Function();
 typedef _ProxyCreateNative = Pointer<Void> Function();
 typedef _ProxyCreateDart = Pointer<Void> Function();
 
-typedef _ProxyStartNative = Int32 Function(
-    Pointer<Void> handle, Pointer<ProxyConfig> config);
-typedef _ProxyStartDart = int Function(
-    Pointer<Void> handle, Pointer<ProxyConfig> config);
+typedef _ProxyStartNative =
+    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfig> config);
+typedef _ProxyStartDart =
+    int Function(Pointer<Void> handle, Pointer<ProxyConfig> config);
 
 typedef _ProxyStopNative = Int32 Function(Pointer<Void> handle);
 typedef _ProxyStopDart = int Function(Pointer<Void> handle);
@@ -110,7 +110,8 @@ class ProxyFFI {
       // Try app bundle first, then fallback to current directory
       try {
         return DynamicLibrary.open(
-            '@executable_path/../Frameworks/libhttp_proxy.dylib');
+          '@executable_path/../Frameworks/libhttp_proxy.dylib',
+        );
       } catch (_) {
         return DynamicLibrary.open('libhttp_proxy.dylib');
       }
@@ -127,31 +128,36 @@ class ProxyFFI {
     throw UnsupportedError('Unsupported platform: ${Platform.operatingSystem}');
   }
 
-  late final proxySetLogCallback = lib.lookupFunction<
-      _ProxySetLogCallbackNative,
-      _ProxySetLogCallbackDart>('proxy_set_log_callback');
+  late final proxySetLogCallback = lib
+      .lookupFunction<_ProxySetLogCallbackNative, _ProxySetLogCallbackDart>(
+        'proxy_set_log_callback',
+      );
 
-  late final proxyInitLogging = lib.lookupFunction<_ProxyInitLoggingNative,
-      _ProxyInitLoggingDart>('proxy_init_logging');
+  late final proxyInitLogging = lib
+      .lookupFunction<_ProxyInitLoggingNative, _ProxyInitLoggingDart>(
+        'proxy_init_logging',
+      );
 
-  late final proxyCreate =
-      lib.lookupFunction<_ProxyCreateNative, _ProxyCreateDart>('proxy_create');
+  late final proxyCreate = lib
+      .lookupFunction<_ProxyCreateNative, _ProxyCreateDart>('proxy_create');
 
-  late final proxyStart =
-      lib.lookupFunction<_ProxyStartNative, _ProxyStartDart>('proxy_start');
+  late final proxyStart = lib
+      .lookupFunction<_ProxyStartNative, _ProxyStartDart>('proxy_start');
 
-  late final proxyStop =
-      lib.lookupFunction<_ProxyStopNative, _ProxyStopDart>('proxy_stop');
+  late final proxyStop = lib.lookupFunction<_ProxyStopNative, _ProxyStopDart>(
+    'proxy_stop',
+  );
 
-  late final proxyDestroy =
-      lib.lookupFunction<_ProxyDestroyNative, _ProxyDestroyDart>(
-          'proxy_destroy');
+  late final proxyDestroy = lib
+      .lookupFunction<_ProxyDestroyNative, _ProxyDestroyDart>('proxy_destroy');
 
-  late final proxyIsRunning =
-      lib.lookupFunction<_ProxyIsRunningNative, _ProxyIsRunningDart>(
-          'proxy_is_running');
+  late final proxyIsRunning = lib
+      .lookupFunction<_ProxyIsRunningNative, _ProxyIsRunningDart>(
+        'proxy_is_running',
+      );
 
-  late final proxyFreeString =
-      lib.lookupFunction<_ProxyFreeStringNative, _ProxyFreeStringDart>(
-          'proxy_free_string');
+  late final proxyFreeString = lib
+      .lookupFunction<_ProxyFreeStringNative, _ProxyFreeStringDart>(
+        'proxy_free_string',
+      );
 }

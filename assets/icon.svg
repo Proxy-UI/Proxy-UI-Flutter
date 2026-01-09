@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1976D2"/>
+      <stop offset="100%" style="stop-color:#0D47A1"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#26A69A"/>
+      <stop offset="100%" style="stop-color:#00897B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bg)"/>
+
+  <!-- Globe lines (simplified) -->
+  <ellipse cx="256" cy="256" rx="160" ry="160" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.3"/>
+  <ellipse cx="256" cy="256" rx="160" ry="80" fill="none" stroke="#ffffff" stroke-width="6" opacity="0.25"/>
+  <line x1="96" y1="256" x2="416" y2="256" stroke="#ffffff" stroke-width="6" opacity="0.25"/>
+  <line x1="256" y1="96" x2="256" y2="416" stroke="#ffffff" stroke-width="6" opacity="0.25"/>
+
+  <!-- Paper airplane (proxy symbol) -->
+  <g transform="translate(256, 256) rotate(-30)">
+    <path d="M-80,-20 L80,0 L-40,60 L-20,10 Z" fill="url(#accent)"/>
+    <path d="M-80,-20 L80,0 L-20,10 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- Connection dots -->
+  <circle cx="140" cy="180" r="16" fill="#ffffff" opacity="0.8"/>
+  <circle cx="372" cy="332" r="16" fill="url(#accent)"/>
+
+  <!-- Connection line (dashed) -->
+  <line x1="156" y1="196" x2="356" y2="316" stroke="#ffffff" stroke-width="4" stroke-dasharray="12,8" opacity="0.5"/>
+</svg>

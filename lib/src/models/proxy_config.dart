@@ -21,15 +21,15 @@ class ProxyConfigModel {
   });
 
   Map<String, dynamic> toJson() => {
-        'serverHost': serverHost,
-        'serverPort': serverPort,
-        'localPort': localPort,
-        'sessionKey': sessionKey,
-        'autoProxy': autoProxy,
-        'reverseGeo': reverseGeo,
-        'needCodecIps': needCodecIps,
-        'forceCodec': forceCodec,
-      };
+    'serverHost': serverHost,
+    'serverPort': serverPort,
+    'localPort': localPort,
+    'sessionKey': sessionKey,
+    'autoProxy': autoProxy,
+    'reverseGeo': reverseGeo,
+    'needCodecIps': needCodecIps,
+    'forceCodec': forceCodec,
+  };
 
   factory ProxyConfigModel.fromJson(Map<String, dynamic> json) =>
       ProxyConfigModel(
@@ -52,15 +52,14 @@ class ProxyConfigModel {
     bool? reverseGeo,
     String? needCodecIps,
     bool? forceCodec,
-  }) =>
-      ProxyConfigModel(
-        serverHost: serverHost ?? this.serverHost,
-        serverPort: serverPort ?? this.serverPort,
-        localPort: localPort ?? this.localPort,
-        sessionKey: sessionKey ?? this.sessionKey,
-        autoProxy: autoProxy ?? this.autoProxy,
-        reverseGeo: reverseGeo ?? this.reverseGeo,
-        needCodecIps: needCodecIps ?? this.needCodecIps,
-        forceCodec: forceCodec ?? this.forceCodec,
-      );
+  }) => ProxyConfigModel(
+    serverHost: serverHost ?? this.serverHost,
+    serverPort: serverPort ?? this.serverPort,
+    localPort: localPort ?? this.localPort,
+    sessionKey: sessionKey ?? this.sessionKey,
+    autoProxy: autoProxy ?? this.autoProxy,
+    reverseGeo: reverseGeo ?? this.reverseGeo,
+    needCodecIps: needCodecIps ?? this.needCodecIps,
+    forceCodec: forceCodec ?? this.forceCodec,
+  );
 }
