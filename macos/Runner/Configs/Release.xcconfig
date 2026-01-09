@@ -1,0 +1,5 @@
+#include "../../Flutter/Flutter-Release.xcconfig"
+#include "Warnings.xcconfig"
+
+// Native library linking
+OTHER_LDFLAGS=$(inherited) -L$(PROJECT_DIR)/../native/macos -lhttp_proxy -Wl,-rpath,@executable_path/../Frameworks

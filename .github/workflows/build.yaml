@@ -1,0 +1,377 @@
+name: Build Flutter App
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      lib_version:
+        description: 'Native library version (e.g., 0.1.0)'
+        required: true
+        default: '0.1.0'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+  PRIVATE_REPO: acking-you/proxy-everything
+
+permissions:
+  contents: write
+
+jobs:
+  get-lib-version:
+    runs-on: ubuntu-latest
+    outputs:
+      lib_version: ${{ steps.version.outputs.lib_version }}
+    steps:
+      - name: Determine library version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.lib_version }}" ]; then
+            echo "lib_version=${{ github.event.inputs.lib_version }}" >> $GITHUB_OUTPUT
+          else
+            # Extract version from tag (v1.0.0 -> 1.0.0)
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "lib_version=${VERSION}" >> $GITHUB_OUTPUT
+          fi
+
+  download-native-libs:
+    runs-on: ubuntu-latest
+    needs: get-lib-version
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download native libraries
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+          LIB_VERSION: ${{ needs.get-lib-version.outputs.lib_version }}
+        run: |
+          mkdir -p native/{android/{arm64-v8a,armeabi-v7a,x86_64},ios,macos,windows/{x64,arm64},linux/{x64,arm64}}
+
+          # Android
+          for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
+            echo "Downloading Android: $target"
+            gh release download "$LIB_VERSION" \
+              -R "$PRIVATE_REPO" \
+              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
+              -D /tmp || continue
+            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
+            case $target in
+              aarch64-linux-android) dest="arm64-v8a" ;;
+              armv7-linux-androideabi) dest="armeabi-v7a" ;;
+              x86_64-linux-android) dest="x86_64" ;;
+            esac
+            cp /tmp/libhttp_proxy-*/libhttp_proxy.so "native/android/$dest/" || true
+          done
+
+          # iOS
+          for target in aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim; do
+            echo "Downloading iOS: $target"
+            gh release download "$LIB_VERSION" \
+              -R "$PRIVATE_REPO" \
+              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
+              -D /tmp || continue
+            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
+            cp /tmp/libhttp_proxy-*/libhttp_proxy.a "native/ios/libhttp_proxy-${target}.a" || true
+          done
+
+          # macOS
+          for target in x86_64-apple-darwin aarch64-apple-darwin; do
+            echo "Downloading macOS: $target"
+            gh release download "$LIB_VERSION" \
+              -R "$PRIVATE_REPO" \
+              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
+              -D /tmp || continue
+            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
+            cp /tmp/libhttp_proxy-*/libhttp_proxy.dylib "native/macos/libhttp_proxy-${target}.dylib" || true
+          done
+
+          # Windows
+          for target in x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
+            echo "Downloading Windows: $target"
+            gh release download "$LIB_VERSION" \
+              -R "$PRIVATE_REPO" \
+              -p "libhttp_proxy-${LIB_VERSION}-${target}.zip" \
+              -D /tmp || continue
+            unzip -o "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.zip" -d /tmp
+            case $target in
+              x86_64-pc-windows-msvc) dest="x64" ;;
+              aarch64-pc-windows-msvc) dest="arm64" ;;
+            esac
+            cp /tmp/libhttp_proxy-*/http_proxy.dll "native/windows/$dest/" || true
+          done
+
+          # Linux
+          for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            echo "Downloading Linux: $target"
+            gh release download "$LIB_VERSION" \
+              -R "$PRIVATE_REPO" \
+              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
+              -D /tmp || continue
+            tar -xzf "/tmp/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C /tmp
+            case $target in
+              x86_64-unknown-linux-gnu) dest="x64" ;;
+              aarch64-unknown-linux-gnu) dest="arm64" ;;
+            esac
+            cp /tmp/libhttp_proxy-*/libhttp_proxy.so "native/linux/$dest/" || true
+          done
+
+          echo "Downloaded libraries:"
+          find native -type f -name "*.so" -o -name "*.dylib" -o -name "*.dll" -o -name "*.a" | head -50
+
+      - name: Upload native libs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs
+          path: native/
+          retention-days: 1
+
+  build-android:
+    needs: [get-lib-version, download-native-libs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-libs
+          path: native/
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Build Android APKs
+        run: |
+          flutter pub get
+          flutter build apk --split-per-abi --release
+
+      - name: Rename APKs
+        run: |
+          cd build/app/outputs/flutter-apk
+          mv app-arm64-v8a-release.apk proxy-ui-arm64-v8a.apk || true
+          mv app-armeabi-v7a-release.apk proxy-ui-armeabi-v7a.apk || true
+          mv app-x86_64-release.apk proxy-ui-x86_64.apk || true
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: build/app/outputs/flutter-apk/proxy-ui-*.apk
+
+  build-ios:
+    needs: [get-lib-version, download-native-libs]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-libs
+          path: native/
+
+      - name: Create iOS static library
+        run: |
+          cd native/ios
+          # Merge simulator architectures if both exist
+          if [ -f "libhttp_proxy-aarch64-apple-ios-sim.a" ] && [ -f "libhttp_proxy-x86_64-apple-ios.a" ]; then
+            lipo -create \
+              libhttp_proxy-aarch64-apple-ios-sim.a \
+              libhttp_proxy-x86_64-apple-ios.a \
+              -output libhttp_proxy-sim.a
+          elif [ -f "libhttp_proxy-aarch64-apple-ios-sim.a" ]; then
+            cp libhttp_proxy-aarch64-apple-ios-sim.a libhttp_proxy-sim.a
+          elif [ -f "libhttp_proxy-x86_64-apple-ios.a" ]; then
+            cp libhttp_proxy-x86_64-apple-ios.a libhttp_proxy-sim.a
+          fi
+
+          # Rename device library
+          if [ -f "libhttp_proxy-aarch64-apple-ios.a" ]; then
+            cp libhttp_proxy-aarch64-apple-ios.a libhttp_proxy.a
+          fi
+
+          ls -la
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Build iOS app
+        run: |
+          flutter pub get
+          flutter build ios --release --no-codesign
+
+      - name: Create IPA
+        run: |
+          cd build/ios/iphoneos
+          mkdir Payload
+          mv Runner.app Payload/
+          zip -r proxy-ui-ios-unsigned.ipa Payload/
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: build/ios/iphoneos/proxy-ui-ios-unsigned.ipa
+
+  build-macos:
+    needs: [get-lib-version, download-native-libs]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-libs
+          path: native/
+
+      - name: Create universal binary
+        run: |
+          cd native/macos
+          if [ -f "libhttp_proxy-x86_64-apple-darwin.dylib" ] && [ -f "libhttp_proxy-aarch64-apple-darwin.dylib" ]; then
+            lipo -create \
+              libhttp_proxy-x86_64-apple-darwin.dylib \
+              libhttp_proxy-aarch64-apple-darwin.dylib \
+              -output libhttp_proxy.dylib
+          elif [ -f "libhttp_proxy-aarch64-apple-darwin.dylib" ]; then
+            cp libhttp_proxy-aarch64-apple-darwin.dylib libhttp_proxy.dylib
+          elif [ -f "libhttp_proxy-x86_64-apple-darwin.dylib" ]; then
+            cp libhttp_proxy-x86_64-apple-darwin.dylib libhttp_proxy.dylib
+          fi
+          ls -la
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Build macOS app
+        run: |
+          flutter pub get
+          flutter build macos --release
+
+      - name: Copy dylib to app bundle
+        run: |
+          APP_DIR="build/macos/Build/Products/Release/proxy_ui.app"
+          mkdir -p "$APP_DIR/Contents/Frameworks"
+          cp native/macos/libhttp_proxy.dylib "$APP_DIR/Contents/Frameworks/" || true
+
+      - name: Create DMG
+        run: |
+          cd build/macos/Build/Products/Release
+          hdiutil create -volname "Proxy UI" -srcfolder proxy_ui.app -ov -format UDZO proxy-ui-macos.dmg
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: build/macos/Build/Products/Release/proxy-ui-macos.dmg
+
+  build-windows:
+    needs: [get-lib-version, download-native-libs]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-libs
+          path: native/
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Build Windows app
+        run: |
+          flutter pub get
+          flutter build windows --release
+
+      - name: Create ZIP
+        run: |
+          cd build/windows/x64/runner/Release
+          Compress-Archive -Path * -DestinationPath proxy-ui-windows-x64.zip
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: build/windows/x64/runner/Release/proxy-ui-windows-x64.zip
+
+  build-linux:
+    needs: [get-lib-version, download-native-libs]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-libs
+          path: native/
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Build Linux app
+        run: |
+          flutter pub get
+          flutter build linux --release
+
+      - name: Create archive
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czvf proxy-ui-linux-x64.tar.gz *
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-tar
+          path: build/linux/x64/release/bundle/proxy-ui-linux-x64.tar.gz
+
+  release:
+    needs: [get-lib-version, build-android, build-ios, build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release files
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.apk" -o -name "*.ipa" -o -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Proxy UI ${{ github.ref_name }}"
+          body: |
+            # Proxy UI Release ${{ github.ref_name }}
+
+            Cross-platform graphical interface for proxy-everything.
+
+            ## Downloads
+            - **Android**: APK files for different architectures
+            - **iOS**: Unsigned IPA (for development/sideloading)
+            - **macOS**: DMG installer
+            - **Windows**: ZIP portable version
+            - **Linux**: tar.gz archive
+          files: release/*
