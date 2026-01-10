@@ -30,13 +30,13 @@ jobs:
         run: dart format --set-exit-if-changed lib/
 
       - name: Build APK (Android)
-        run: flutter build apk --debug
+        run: flutter build apk --release
 
-      - name: Upload debug APK
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
 
       - name: Generate download summary
@@ -46,12 +46,12 @@ jobs:
           echo "### Code Quality" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ Analysis passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ Formatting checked" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ Debug APK built" >> $GITHUB_STEP_SUMMARY
+          echo "- ✓ Release APK built" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Debug APK" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download Debug APK](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Release APK" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Download Release APK](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
-            SIZE=$(ls -lh build/app/outputs/flutter-apk/app-debug.apk | awk '{print $5}')
+          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            SIZE=$(ls -lh build/app/outputs/flutter-apk/app-release.apk | awk '{print $5}')
             echo "File size: $SIZE" >> $GITHUB_STEP_SUMMARY
           fi
