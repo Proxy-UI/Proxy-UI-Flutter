@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../constants.dart';
 import '../providers/proxy_provider.dart';
-import '../providers/theme_provider.dart';
 import '../models/proxy_config.dart';
 
-/// Configuration dialog for proxy settings
+/// Configuration dialog for proxy settings - simplified AlertDialog style
 class ConfigDialog extends StatefulWidget {
   const ConfigDialog({super.key});
 
@@ -54,7 +52,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
 
   void _save() {
     final state = context.read<ProxyState>();
-    final colors = ThemeColors.get(context.read<ThemeState>().appTheme);
     state.updateConfig(
       ProxyConfigModel(
         serverHost: _hostController.text.trim(),
@@ -70,9 +67,10 @@ class _ConfigDialogState extends State<ConfigDialog> {
     );
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Configuration saved'),
-        backgroundColor: colors.accent,
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        width: 300,
+        content: Text('Configuration saved'),
       ),
     );
   }
@@ -80,298 +78,105 @@ class _ConfigDialogState extends State<ConfigDialog> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final isSmallScreen = size.width < smallWidthBreakpoint;
-    final theme = Theme.of(context);
-    final colors = ThemeColors.get(context.watch<ThemeState>().appTheme);
 
-    return Dialog(
-      child: Container(
-        width: isSmallScreen ? size.width * 0.9 : 500,
-        constraints: BoxConstraints(maxHeight: size.height * 0.85),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(theme, colors),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(largeSpacing),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionTitle('SERVER', theme, colors),
-                    const SizedBox(height: mediumSpacing),
-                    _buildServerFields(),
-                    const SizedBox(height: largeSpacing),
-                    _buildSectionTitle('LOCAL', theme, colors),
-                    const SizedBox(height: mediumSpacing),
-                    _buildLocalFields(),
-                    const SizedBox(height: largeSpacing),
-                    _buildSectionTitle('OPTIONS', theme, colors),
-                    const SizedBox(height: mediumSpacing),
-                    _buildOptions(theme, colors),
-                  ],
+    return AlertDialog(
+      title: const Text('Proxy Configuration'),
+      content: SizedBox(
+        height: size.height / 2,
+        width: size.width / 1.5,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Server section
+              Text('Server', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _hostController,
+                decoration: const InputDecoration(
+                  labelText: 'Server Host',
+                  hintText: 'e.g., proxy.example.com',
+                  prefixIcon: Icon(Icons.dns_outlined),
                 ),
               ),
-            ),
-            _buildActions(theme, colors),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(ThemeData theme, ThemeColors colors) {
-    return Container(
-      padding: const EdgeInsets.all(largeSpacing),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.primary.withValues(alpha: 0.2),
-            colors.accent.withValues(alpha: 0.1),
-          ],
-        ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(smallSpacing),
-            decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.settings, color: colors.primary),
-          ),
-          const SizedBox(width: mediumSpacing),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'PROXY CONFIGURATION',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                    color: theme.colorScheme.onSurface,
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _serverPortController,
+                      decoration: const InputDecoration(
+                        labelText: 'Server Port',
+                        hintText: '1081',
+                        prefixIcon: Icon(Icons.numbers),
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    ),
                   ),
-                ),
-                const SizedBox(height: tinySpacing),
-                Text(
-                  'Configure your proxy server settings',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _sessionKeyController,
+                      decoration: const InputDecoration(
+                        labelText: 'Session Key',
+                        hintText: '32 characters',
+                        prefixIcon: Icon(Icons.key_outlined),
+                      ),
+                      obscureText: true,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close),
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, ThemeData theme, ThemeColors colors) {
-    return Row(
-      children: [
-        Container(
-          width: 4,
-          height: 16,
-          decoration: BoxDecoration(
-            color: colors.primary,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: smallSpacing),
-        Text(
-          title,
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildServerFields() {
-    return Column(
-      children: [
-        TextField(
-          controller: _hostController,
-          decoration: const InputDecoration(
-            labelText: 'Server Host',
-            hintText: 'e.g., proxy.example.com',
-            prefixIcon: Icon(Icons.dns_outlined),
-          ),
-        ),
-        const SizedBox(height: mediumSpacing),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _serverPortController,
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Local section
+              Text('Local', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _localPortController,
                 decoration: const InputDecoration(
-                  labelText: 'Server Port',
-                  hintText: '1081',
-                  prefixIcon: Icon(Icons.numbers),
+                  labelText: 'Local Port',
+                  hintText: '1080',
+                  prefixIcon: Icon(Icons.computer_outlined),
+                  helperText: 'Port for local proxy server',
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
-            ),
-            const SizedBox(width: mediumSpacing),
-            Expanded(
-              child: TextField(
-                controller: _sessionKeyController,
-                decoration: const InputDecoration(
-                  labelText: 'Session Key',
-                  hintText: '32 characters',
-                  prefixIcon: Icon(Icons.key_outlined),
-                ),
-                obscureText: true,
+              const SizedBox(height: 24),
+              // Options section
+              Text('Options', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                title: const Text('Auto Proxy'),
+                subtitle: const Text('Route traffic based on geo-location'),
+                value: _autoProxy,
+                onChanged: (v) => setState(() => _autoProxy = v),
               ),
-            ),
-          ],
+              SwitchListTile(
+                title: const Text('Reverse Geo'),
+                subtitle: const Text('Reverse geo-location routing logic'),
+                value: _reverseGeo,
+                onChanged: (v) => setState(() => _reverseGeo = v),
+              ),
+              SwitchListTile(
+                title: const Text('Force Codec'),
+                subtitle: const Text('Force encryption for all connections'),
+                value: _forceCodec,
+                onChanged: (v) => setState(() => _forceCodec = v),
+              ),
+            ],
+          ),
         ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          child: const Text('Dismiss'),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
       ],
-    );
-  }
-
-  Widget _buildLocalFields() {
-    return TextField(
-      controller: _localPortController,
-      decoration: const InputDecoration(
-        labelText: 'Local Port',
-        hintText: '1080',
-        prefixIcon: Icon(Icons.computer_outlined),
-        helperText: 'Port for local proxy server',
-      ),
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-    );
-  }
-
-  Widget _buildOptions(ThemeData theme, ThemeColors colors) {
-    return Column(
-      children: [
-        _buildSwitchTile(
-          title: 'Auto Proxy',
-          subtitle: 'Automatically route traffic based on geo-location',
-          value: _autoProxy,
-          onChanged: (v) => setState(() => _autoProxy = v),
-          icon: Icons.auto_awesome,
-          theme: theme,
-          colors: colors,
-        ),
-        _buildSwitchTile(
-          title: 'Reverse Geo',
-          subtitle: 'Reverse geo-location routing logic',
-          value: _reverseGeo,
-          onChanged: (v) => setState(() => _reverseGeo = v),
-          icon: Icons.swap_horiz,
-          theme: theme,
-          colors: colors,
-        ),
-        _buildSwitchTile(
-          title: 'Force Codec',
-          subtitle: 'Force encryption for all connections',
-          value: _forceCodec,
-          onChanged: (v) => setState(() => _forceCodec = v),
-          icon: Icons.lock_outline,
-          theme: theme,
-          colors: colors,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSwitchTile({
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    required IconData icon,
-    required ThemeData theme,
-    required ThemeColors colors,
-  }) {
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: smallSpacing),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A2332) : const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: value
-              ? colors.primary.withValues(alpha: 0.3)
-              : theme.colorScheme.onSurface.withValues(alpha: 0.1),
-        ),
-      ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: value
-              ? colors.primary
-              : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 12,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-          ),
-        ),
-        trailing: Switch(value: value, onChanged: onChanged),
-      ),
-    );
-  }
-
-  Widget _buildActions(ThemeData theme, ThemeColors colors) {
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(largeSpacing),
-      decoration: BoxDecoration(
-        color: (isDark ? const Color(0xFF1A2332) : const Color(0xFFF5F5F5))
-            .withValues(alpha: 0.5),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('CANCEL'),
-          ),
-          const SizedBox(width: mediumSpacing),
-          FilledButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save),
-            label: const Text('SAVE'),
-          ),
-        ],
-      ),
     );
   }
 }

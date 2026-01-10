@@ -1,264 +1,275 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../constants.dart';
+import '../models/proxy_config.dart';
 import '../providers/proxy_provider.dart';
-import '../providers/theme_provider.dart';
 import '../widgets/config_dialog.dart';
 
-/// Proxy control page with large switch and config FAB
-class ProxyPage extends StatelessWidget {
-  const ProxyPage({super.key});
+/// Proxy control page with simple switch and config FAB
+class ProxyPage extends StatefulWidget {
+  final GlobalKey<ScaffoldState> scaffoldKey;
+
+  const ProxyPage({super.key, required this.scaffoldKey});
 
   @override
-  Widget build(BuildContext context) {
-    final themeState = context.watch<ThemeState>();
-    final colors = ThemeColors.get(themeState.appTheme);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+  State<ProxyPage> createState() => _ProxyPageState();
+}
 
-    return Consumer<ProxyState>(
-      builder: (context, state, _) {
-        return Stack(
-          children: [
-            // Animated background color transition
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-              color: state.isRunning
-                  ? Color.lerp(
-                      colors.accent.withValues(alpha: 0.08),
-                      theme.scaffoldBackgroundColor,
-                      0.7,
-                    )
-                  : theme.scaffoldBackgroundColor,
-            ),
-            // Main content
-            SafeArea(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Status text
-                    _buildStatusText(context, state, colors, theme),
-                    const SizedBox(height: extraLargeSpacing),
-                    // Large switch
-                    _buildSwitch(context, state, colors, isDark, theme),
-                    const SizedBox(height: extraLargeSpacing),
-                    // Connection info
-                    _buildConnectionInfo(context, state, colors, theme),
-                  ],
-                ),
-              ),
-            ),
-            // Config FAB
-            Positioned(
-              right: mediumSpacing,
-              bottom: mediumSpacing,
-              child: FloatingActionButton.extended(
-                onPressed: state.isRunning
-                    ? null
-                    : () => _showConfigDialog(context),
-                icon: const Icon(Icons.settings),
-                label: const Text('CONFIG'),
-                backgroundColor: state.isRunning
-                    ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
-                    : colors.primary,
-              ),
-            ),
-          ],
-        );
-      },
-    );
+class _ProxyPageState extends State<ProxyPage> {
+  final TextEditingController _portController = TextEditingController(
+    text: '1080',
+  );
+
+  final WidgetStateProperty<Icon?> thumbIcon =
+      WidgetStateProperty.resolveWith<Icon?>((states) {
+        if (states.contains(WidgetState.selected)) {
+          return const Icon(Icons.flight_takeoff);
+        }
+        return const Icon(Icons.flight_land);
+      });
+
+  @override
+  void dispose() {
+    _portController.dispose();
+    super.dispose();
   }
 
-  void _showConfigDialog(BuildContext context) {
-    showDialog(context: context, builder: (context) => const ConfigDialog());
-  }
-
-  void _toggleProxy(BuildContext context, ProxyState state) async {
+  void _toggleProxy(ProxyState state) async {
     if (state.isRunning) {
       state.stop();
     } else {
       final success = await state.start();
-      if (!success && context.mounted) {
+      if (!success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            behavior: SnackBarBehavior.floating,
+            width: 400.0,
             content: Text(state.lastError ?? 'Failed to start proxy'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+    if (mounted) {
+      final text = state.isRunning ? 'Proxy started!' : 'Proxy closed!';
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          width: 400.0,
+          content: Text(text),
+          action: SnackBarAction(label: 'Close', onPressed: () {}),
+        ),
+      );
+    }
+  }
+
+  void _showPortDialog() async {
+    final state = context.read<ProxyState>();
+    _portController.text = state.config.localPort.toString();
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Change local proxy server port'),
+        content: TextField(
+          controller: _portController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Enter a port number (1-65535)',
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('Dismiss'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          FilledButton(
+            child: const Text('Okay'),
+            onPressed: () {
+              final port = int.tryParse(_portController.text) ?? 1080;
+              state.updateConfig(state.config.copyWith(localPort: port));
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showConfigDialog() {
+    showDialog(context: context, builder: (context) => const ConfigDialog());
+  }
+
+  void _exportConfig() async {
+    final state = context.read<ProxyState>();
+    final json = jsonEncode(state.config.toJson());
+    final encoded = base64Encode(utf8.encode(json));
+    try {
+      await Clipboard.setData(ClipboardData(text: encoded));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            width: 300,
+            content: Text('Config exported to clipboard'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            width: 400,
+            content: Text('Failed to copy: $e'),
           ),
         );
       }
     }
   }
 
-  Widget _buildStatusText(
-    BuildContext context,
-    ProxyState state,
-    ThemeColors colors,
-    ThemeData theme,
-  ) {
-    return Column(
-      children: [
-        Text(
-          state.isRunning ? 'CONNECTED' : 'DISCONNECTED',
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 4,
-            color: state.isRunning
-                ? colors.accent
-                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+  Future<void> _importConfig() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (data?.text == null || data!.text!.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              behavior: SnackBarBehavior.floating,
+              width: 300,
+              content: Text('Clipboard is empty'),
+            ),
+          );
+        }
+        return;
+      }
+      final json = utf8.decode(base64Decode(data.text!));
+      final config = ProxyConfigModel.fromJson(jsonDecode(json));
+      if (mounted) {
+        context.read<ProxyState>().updateConfig(config);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            width: 300,
+            content: Text('Config imported successfully'),
           ),
-        ),
-        const SizedBox(height: smallSpacing),
-        Text(
-          state.isRunning ? 'Proxy is active' : 'Tap to connect',
-          style: TextStyle(
-            fontSize: 14,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            width: 400,
+            content: Text('Invalid config format'),
           ),
-        ),
-      ],
-    );
+        );
+      }
+    }
   }
 
-  Widget _buildSwitch(
-    BuildContext context,
-    ProxyState state,
-    ThemeColors colors,
-    bool isDark,
-    ThemeData theme,
-  ) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 1.0, end: state.isRunning ? 1.05 : 1.0),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-      builder: (context, scale, child) {
-        return Transform.scale(
-          scale: scale,
-          child: GestureDetector(
-            onTap: () => _toggleProxy(context, state),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: state.isRunning
-                      ? [colors.accent, colors.accentDark]
-                      : isDark
-                      ? [const Color(0xFF1E2736), const Color(0xFF151C28)]
-                      : [Colors.white, const Color(0xFFF5F5F5)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: state.isRunning
-                        ? colors.accent.withValues(alpha: 0.5)
-                        : colors.primary.withValues(alpha: 0.2),
-                    blurRadius: state.isRunning ? 40 : 20,
-                    spreadRadius: state.isRunning ? 8 : 2,
-                  ),
-                ],
-                border: Border.all(
-                  color: state.isRunning
-                      ? colors.accent.withValues(alpha: 0.8)
-                      : theme.colorScheme.onSurface.withValues(alpha: 0.3),
-                  width: 3,
-                ),
-              ),
-              child: Center(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: Icon(
-                    state.isRunning ? Icons.flight_takeoff : Icons.flight_land,
-                    key: ValueKey(state.isRunning),
-                    size: 80,
-                    color: state.isRunning
-                        ? (isDark ? const Color(0xFF0A0E14) : Colors.white)
-                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ProxyState>(
+      builder: (context, state, _) {
+        return Expanded(
+          child: Stack(
+            children: [
+              // Port FAB at bottom right
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: FloatingActionButton.extended(
+                    heroTag: 'port_fab',
+                    icon: const Icon(Icons.network_wifi),
+                    onPressed: state.isRunning ? null : _showPortDialog,
+                    label: Text('Port: ${state.config.localPort}'),
                   ),
                 ),
               ),
-            ),
+              // Config FAB at bottom left
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FloatingActionButton.small(
+                            heroTag: 'import_fab',
+                            onPressed: state.isRunning ? null : _importConfig,
+                            tooltip: 'Import from clipboard',
+                            child: const Icon(Icons.file_download),
+                          ),
+                          const SizedBox(width: 8),
+                          FloatingActionButton.small(
+                            heroTag: 'export_fab',
+                            onPressed: _exportConfig,
+                            tooltip: 'Export to clipboard',
+                            child: const Icon(Icons.file_upload),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      FloatingActionButton.extended(
+                        heroTag: 'config_fab',
+                        icon: const Icon(Icons.settings),
+                        onPressed: state.isRunning ? null : _showConfigDialog,
+                        label: const Text('Config'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Center switch
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Status text
+                    Text(
+                      state.isRunning ? 'Connected' : 'Disconnected',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      state.config.serverHost.isEmpty
+                          ? 'Configure server first'
+                          : '${state.config.serverHost}:${state.config.serverPort}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Large switch
+                    Transform.scale(
+                      scale: 1.8,
+                      child: Switch(
+                        thumbIcon: thumbIcon,
+                        value: state.isRunning,
+                        onChanged: state.config.serverHost.isEmpty
+                            ? null
+                            : (_) => _toggleProxy(state),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildConnectionInfo(
-    BuildContext context,
-    ProxyState state,
-    ThemeColors colors,
-    ThemeData theme,
-  ) {
-    if (state.config.serverHost.isEmpty) {
-      return TextButton.icon(
-        onPressed: () => _showConfigDialog(context),
-        icon: const Icon(Icons.add_circle_outline),
-        label: const Text('Configure server'),
-        style: TextButton.styleFrom(foregroundColor: colors.primary),
-      );
-    }
-
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 300),
-      opacity: state.isRunning ? 1.0 : 0.6,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: largeSpacing,
-          vertical: mediumSpacing,
-        ),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-          ),
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.dns,
-                  size: 16,
-                  color: state.isRunning
-                      ? colors.accent
-                      : theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-                const SizedBox(width: smallSpacing),
-                Text(
-                  '${state.config.serverHost}:${state.config.serverPort}',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: tinySpacing),
-            Text(
-              'Local port: ${state.config.localPort}',
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

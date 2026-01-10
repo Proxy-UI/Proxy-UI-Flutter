@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 
 /// Responsive breakpoints
+const double narrowScreenWidthThreshold = 450;
 const double smallWidthBreakpoint = 500;
 const double mediumWidthBreakpoint = 1000;
 const double largeWidthBreakpoint = 1500;
+
+/// Animation
+const double transitionLength = 500;
+
+/// Layout status for responsive design
+enum LayoutStatus { moreSmall, small, medium, large }
 
 /// Spacing constants
 const double tinySpacing = 4.0;
@@ -20,60 +27,41 @@ const Duration longDuration = Duration(milliseconds: 600);
 /// Navigation animation curve
 const Curve navCurve = Curves.easeInOutCubicEmphasized;
 
-/// App color scheme - Cyberpunk/Aviation theme
-class AppColors {
-  // Primary palette - Neon cyan
-  static const Color primaryCyan = Color(0xFF00E5FF);
-  static const Color primaryCyanDark = Color(0xFF00B8D4);
+/// Color seed options
+enum ColorSeed {
+  baseColor('M3 Baseline', Color(0xff6750a4)),
+  indigo('Indigo', Colors.indigo),
+  blue('Blue', Colors.blue),
+  teal('Teal', Colors.teal),
+  green('Green', Colors.green),
+  yellow('Yellow', Colors.yellow),
+  orange('Orange', Colors.orange),
+  deepOrange('Deep Orange', Colors.deepOrange),
+  pink('Pink', Colors.pink);
 
-  // Accent - Electric green
-  static const Color accentGreen = Color(0xFF00FF88);
-  static const Color accentGreenDark = Color(0xFF00C853);
-
-  // Warning/Error
-  static const Color warningAmber = Color(0xFFFFAB00);
-  static const Color errorRed = Color(0xFFFF1744);
-
-  // Background gradients
-  static const Color bgDark = Color(0xFF0A0E14);
-  static const Color bgMedium = Color(0xFF121820);
-  static const Color bgLight = Color(0xFF1A2332);
-
-  // Surface colors
-  static const Color surfaceDark = Color(0xFF151C28);
-  static const Color surfaceLight = Color(0xFF1E2736);
-
-  // Text colors
-  static const Color textPrimary = Color(0xFFE8EAED);
-  static const Color textSecondary = Color(0xFF9AA0A6);
-  static const Color textMuted = Color(0xFF5F6368);
-
-  // Log level colors
-  static const Color logTrace = Color(0xFF78909C);
-  static const Color logDebug = Color(0xFF64B5F6);
-  static const Color logInfo = Color(0xFF81C784);
-  static const Color logWarn = Color(0xFFFFD54F);
-  static const Color logError = Color(0xFFE57373);
+  const ColorSeed(this.label, this.color);
+  final String label;
+  final Color color;
 }
 
 /// Log level utilities
 class LogLevel {
   static const List<String> names = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
 
-  static Color getColor(int level) {
+  static Color getColor(int level, {bool isDark = true}) {
     switch (level) {
       case 0:
-        return AppColors.logTrace;
+        return isDark ? const Color(0xFF78909C) : const Color(0xFF607D8B);
       case 1:
-        return AppColors.logDebug;
+        return isDark ? const Color(0xFF64B5F6) : const Color(0xFF1976D2);
       case 2:
-        return AppColors.logInfo;
+        return isDark ? const Color(0xFF81C784) : const Color(0xFF388E3C);
       case 3:
-        return AppColors.logWarn;
+        return isDark ? const Color(0xFFFFD54F) : const Color(0xFFF57C00);
       case 4:
-        return AppColors.logError;
+        return isDark ? const Color(0xFFE57373) : const Color(0xFFD32F2F);
       default:
-        return AppColors.textMuted;
+        return isDark ? const Color(0xFF9AA0A6) : const Color(0xFF757575);
     }
   }
 
