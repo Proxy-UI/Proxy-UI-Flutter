@@ -52,6 +52,8 @@ final class ProxyConfig extends Struct {
   external Pointer<Utf8> needCodecIps;
   @Int32()
   external int forceCodec;
+  @Int32()
+  external int setSystemProxy; // desktop only: 0 = disabled, 1 = set system proxy
 }
 
 // FFI function signatures

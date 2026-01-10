@@ -8,6 +8,7 @@ class ProxyConfigModel {
   bool reverseGeo;
   String? needCodecIps;
   bool forceCodec;
+  bool setSystemProxy; // desktop only
 
   ProxyConfigModel({
     this.serverHost = '',
@@ -18,6 +19,7 @@ class ProxyConfigModel {
     this.reverseGeo = false,
     this.needCodecIps,
     this.forceCodec = false,
+    this.setSystemProxy = true, // default true for desktop
   });
 
   Map<String, dynamic> toJson() => {
@@ -29,6 +31,7 @@ class ProxyConfigModel {
     'reverseGeo': reverseGeo,
     'needCodecIps': needCodecIps,
     'forceCodec': forceCodec,
+    'setSystemProxy': setSystemProxy,
   };
 
   factory ProxyConfigModel.fromJson(Map<String, dynamic> json) =>
@@ -41,6 +44,7 @@ class ProxyConfigModel {
         reverseGeo: json['reverseGeo'] ?? false,
         needCodecIps: json['needCodecIps'],
         forceCodec: json['forceCodec'] ?? false,
+        setSystemProxy: json['setSystemProxy'] ?? true,
       );
 
   ProxyConfigModel copyWith({
@@ -52,6 +56,7 @@ class ProxyConfigModel {
     bool? reverseGeo,
     String? needCodecIps,
     bool? forceCodec,
+    bool? setSystemProxy,
   }) => ProxyConfigModel(
     serverHost: serverHost ?? this.serverHost,
     serverPort: serverPort ?? this.serverPort,
@@ -61,5 +66,6 @@ class ProxyConfigModel {
     reverseGeo: reverseGeo ?? this.reverseGeo,
     needCodecIps: needCodecIps ?? this.needCodecIps,
     forceCodec: forceCodec ?? this.forceCodec,
+    setSystemProxy: setSystemProxy ?? this.setSystemProxy,
   );
 }

@@ -90,6 +90,7 @@ class ProxyService {
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
+    bool setSystemProxy = false,
   }) async {
     // Always recreate handle to apply new config
     destroy();
@@ -134,6 +135,13 @@ class ProxyService {
       }
 
       config.ref.forceCodec = forceCodec ? 1 : 0;
+
+      // Desktop platforms: set system proxy
+      config.ref.setSystemProxy =
+          (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
+                  setSystemProxy
+              ? 1
+              : 0;
 
       return _ffi.proxyStart(_handle!, config);
     } finally {

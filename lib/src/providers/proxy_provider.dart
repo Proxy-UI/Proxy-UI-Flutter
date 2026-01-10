@@ -92,6 +92,7 @@ class ProxyState extends ChangeNotifier {
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,
+      setSystemProxy: _config.setSystemProxy,
     );
 
     if (result == ProxyResult.ok) {
