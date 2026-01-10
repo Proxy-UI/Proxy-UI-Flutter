@@ -244,11 +244,17 @@ jobs:
           flutter pub get
           flutter build macos --release
 
-      - name: Copy dylib to app bundle
+      - name: Copy dylib and fix install name
         run: |
           APP_DIR="build/macos/Build/Products/Release/proxy_ui.app"
+          DYLIB_PATH="$APP_DIR/Contents/Frameworks/libhttp_proxy.dylib"
           mkdir -p "$APP_DIR/Contents/Frameworks"
-          cp native/macos/libhttp_proxy.dylib "$APP_DIR/Contents/Frameworks/" || true
+          cp native/macos/libhttp_proxy.dylib "$DYLIB_PATH"
+          # Fix the dylib install name to use @rpath
+          install_name_tool -id "@rpath/libhttp_proxy.dylib" "$DYLIB_PATH"
+          # Sign the dylib and app
+          codesign --force --sign - "$DYLIB_PATH"
+          codesign --force --deep --sign - "$APP_DIR"
 
       - name: Create DMG
         run: |
