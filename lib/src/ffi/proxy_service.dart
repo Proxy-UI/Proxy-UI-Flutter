@@ -139,9 +139,9 @@ class ProxyService {
       // Desktop platforms: set system proxy
       config.ref.setSystemProxy =
           (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
-                  setSystemProxy
-              ? 1
-              : 0;
+              setSystemProxy
+          ? 1
+          : 0;
 
       return _ffi.proxyStart(_handle!, config);
     } finally {

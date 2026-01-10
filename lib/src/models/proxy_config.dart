@@ -26,7 +26,8 @@ class ProxyConfigModel {
     this.needCodecIps,
     this.forceCodec = false,
     bool? setSystemProxy,
-  }) : setSystemProxy = setSystemProxy ?? isDesktop; // default true only for desktop
+  }) : setSystemProxy =
+           setSystemProxy ?? isDesktop; // default true only for desktop
 
   Map<String, dynamic> toJson() => {
     'serverHost': serverHost,
