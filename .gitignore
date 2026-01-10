@@ -46,3 +46,11 @@ app.*.map.json
 
 # Native libraries (downloaded during CI)
 /native/
+
+# CocoaPods
+**/ios/Pods/
+**/macos/Pods/
+**/ios/Podfile
+**/ios/Podfile.lock
+**/macos/Podfile
+**/macos/Podfile.lock
