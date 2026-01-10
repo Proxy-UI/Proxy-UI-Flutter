@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// Proxy configuration model.
 class ProxyConfigModel {
   String serverHost;
@@ -10,6 +12,10 @@ class ProxyConfigModel {
   bool forceCodec;
   bool setSystemProxy; // desktop only
 
+  /// Check if current platform is desktop
+  static bool get isDesktop =>
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+
   ProxyConfigModel({
     this.serverHost = '',
     this.serverPort = 1081,
@@ -19,8 +25,8 @@ class ProxyConfigModel {
     this.reverseGeo = false,
     this.needCodecIps,
     this.forceCodec = false,
-    this.setSystemProxy = true, // default true for desktop
-  });
+    bool? setSystemProxy,
+  }) : setSystemProxy = setSystemProxy ?? isDesktop; // default true only for desktop
 
   Map<String, dynamic> toJson() => {
     'serverHost': serverHost,
@@ -44,7 +50,7 @@ class ProxyConfigModel {
         reverseGeo: json['reverseGeo'] ?? false,
         needCodecIps: json['needCodecIps'],
         forceCodec: json['forceCodec'] ?? false,
-        setSystemProxy: json['setSystemProxy'] ?? true,
+        setSystemProxy: json['setSystemProxy'] ?? isDesktop,
       );
 
   ProxyConfigModel copyWith({
