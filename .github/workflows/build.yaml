@@ -152,6 +152,23 @@ jobs:
           name: android-apks
           path: build/app/outputs/flutter-apk/proxy-ui-*.apk
 
+      - name: Generate download summary
+        run: |
+          echo "## 📦 Android APK Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Built APKs are available as artifacts. Download them from the workflow run page:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Available APKs:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`proxy-ui-arm64-v8a.apk\` (ARM64)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`proxy-ui-armeabi-v7a.apk\` (ARMv7)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`proxy-ui-x86_64.apk\` (x86_64)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### File Sizes:" >> $GITHUB_STEP_SUMMARY
+          cd build/app/outputs/flutter-apk
+          ls -lh proxy-ui-*.apk | awk '{print "- " $9 ": " $5}' >> $GITHUB_STEP_SUMMARY
+
   build-ios:
     needs: download-native-libs
     runs-on: macos-latest
@@ -207,6 +224,14 @@ jobs:
         with:
           name: ios-ipa
           path: build/ios/iphoneos/proxy-ui-ios-unsigned.ipa
+
+      - name: Generate download summary
+        run: |
+          echo "## 📱 iOS IPA Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note**: This is an unsigned IPA for development/sideloading only." >> $GITHUB_STEP_SUMMARY
 
   build-macos:
     needs: download-native-libs
@@ -267,6 +292,12 @@ jobs:
           name: macos-dmg
           path: build/macos/Build/Products/Release/proxy-ui-macos.dmg
 
+      - name: Generate download summary
+        run: |
+          echo "## 🍎 macOS DMG Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+
   build-windows:
     needs: download-native-libs
     runs-on: windows-latest
@@ -298,6 +329,13 @@ jobs:
         with:
           name: windows-zip
           path: build/windows/x64/runner/Release/proxy-ui-windows-x64.zip
+
+      - name: Generate download summary
+        shell: bash
+        run: |
+          echo "## 🪟 Windows Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
 
   build-linux:
     needs: download-native-libs
@@ -335,6 +373,12 @@ jobs:
         with:
           name: linux-tar
           path: build/linux/x64/release/bundle/proxy-ui-linux-x64.tar.gz
+
+      - name: Generate download summary
+        run: |
+          echo "## 🐧 Linux Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
 
   release:
     needs: [build-android, build-ios, build-macos, build-windows, build-linux]
