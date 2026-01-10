@@ -57,7 +57,7 @@ static void my_application_activate(GApplication* application) {
 
   // Set window icon
   g_autoptr(GError) error = nullptr;
-  g_autoptr(GdkPixbuf) icon = gdk_pixbuf_new_from_file("linux/app_icon.png", &error);
+  g_autoptr(GdkPixbuf) icon = gdk_pixbuf_new_from_file("data/app_icon.png", &error);
   if (icon != nullptr) {
     gtk_window_set_icon(window, icon);
   }
