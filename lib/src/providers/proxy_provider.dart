@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../ffi/proxy_ffi.dart';
 import '../ffi/proxy_service.dart';
 import '../models/proxy_config.dart';
+import '../services/subscription_service.dart';
 
 /// Proxy state provider for UI.
 class ProxyState extends ChangeNotifier {
@@ -17,6 +18,13 @@ class ProxyState extends ChangeNotifier {
   final List<LogEntry> _logs = [];
   StreamSubscription<LogEntry>? _logSubscription;
   int _minLogLevel = 0; // 0=trace, 1=debug, 2=info, 3=warn, 4=error
+
+  // Subscription service
+  SubscriptionService? _subscriptionService;
+  bool _subscriptionServiceRunning = false;
+  int _subscriptionServicePort = 8080;
+  String? _clashUrl;
+  String? _shadowrocketUrl;
 
   static const int maxLogs = 1000;
   static const String _configKey = 'proxy_config';
@@ -32,6 +40,12 @@ class ProxyState extends ChangeNotifier {
   int get minLogLevel => _minLogLevel;
   List<LogEntry> get filteredLogs =>
       _logs.where((e) => e.level >= _minLogLevel).toList();
+
+  // Subscription service getters
+  bool get subscriptionServiceRunning => _subscriptionServiceRunning;
+  int get subscriptionServicePort => _subscriptionServicePort;
+  String? get clashUrl => _clashUrl;
+  String? get shadowrocketUrl => _shadowrocketUrl;
 
   Future<void> _init() async {
     _service.initLogging();
@@ -131,10 +145,32 @@ class ProxyState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> startSubscriptionService({int port = 8080}) async {
+    if (_subscriptionServiceRunning) return;
+
+    _subscriptionService = SubscriptionService();
+    await _subscriptionService!.start(_config, port);
+    _subscriptionServiceRunning = true;
+    _subscriptionServicePort = port;
+    _clashUrl = await _subscriptionService!.getClashUrl();
+    _shadowrocketUrl = await _subscriptionService!.getShadowrocketUrl();
+    notifyListeners();
+  }
+
+  Future<void> stopSubscriptionService() async {
+    await _subscriptionService?.stop();
+    _subscriptionService = null;
+    _subscriptionServiceRunning = false;
+    _clashUrl = null;
+    _shadowrocketUrl = null;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _logSubscription?.cancel();
     _service.dispose();
+    _subscriptionService?.stop();
     super.dispose();
   }
 }
