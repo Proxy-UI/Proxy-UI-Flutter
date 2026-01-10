@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, dev]
 
+env:
+  PRIVATE_REPO: acking-you/proxy-everything
+  # Update this version when new native library releases are available
+  LIB_VERSION: '0.4.10'
+
 jobs:
   analyze-and-build:
     runs-on: ubuntu-latest
@@ -22,6 +27,32 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Download Android native libraries
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          mkdir -p native/android/{arm64-v8a,armeabi-v7a,x86_64}
+          WORK_DIR=$(mktemp -d)
+
+          # Download Android libraries
+          for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
+            echo "Downloading Android: $target"
+            gh release download "$LIB_VERSION" \
+              -R "$PRIVATE_REPO" \
+              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
+              -D "$WORK_DIR" || continue
+            tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
+            case $target in
+              aarch64-linux-android) dest="arm64-v8a" ;;
+              armv7-linux-androideabi) dest="armeabi-v7a" ;;
+              x86_64-linux-android) dest="x86_64" ;;
+            esac
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.so" "native/android/$dest/" || true
+          done
+
+          echo "Downloaded libraries:"
+          find native/android -type f -name "*.so"
 
       - name: Analyze code
         run: flutter analyze --no-fatal-infos
