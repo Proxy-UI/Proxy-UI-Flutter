@@ -54,39 +54,22 @@ class TrayService with TrayListener {
     final statusLabel = isRunning ? 'Proxy: Connected' : 'Proxy: Disconnected';
     final serverLabel = 'Server: ${config.serverHost}:${config.serverPort}';
 
-    final menu = Menu(items: [
-      MenuItem(
-        key: 'show_hide',
-        label: _isWindowVisible ? 'Hide Window' : 'Show Window',
-      ),
-      MenuItem.separator(),
-      MenuItem(
-        key: 'status',
-        label: statusLabel,
-        disabled: true,
-      ),
-      MenuItem(
-        key: 'server',
-        label: serverLabel,
-        disabled: true,
-      ),
-      MenuItem.separator(),
-      MenuItem(
-        key: 'start',
-        label: 'Start Proxy',
-        disabled: isRunning,
-      ),
-      MenuItem(
-        key: 'stop',
-        label: 'Stop Proxy',
-        disabled: !isRunning,
-      ),
-      MenuItem.separator(),
-      MenuItem(
-        key: 'quit',
-        label: 'Quit',
-      ),
-    ]);
+    final menu = Menu(
+      items: [
+        MenuItem(
+          key: 'show_hide',
+          label: _isWindowVisible ? 'Hide Window' : 'Show Window',
+        ),
+        MenuItem.separator(),
+        MenuItem(key: 'status', label: statusLabel, disabled: true),
+        MenuItem(key: 'server', label: serverLabel, disabled: true),
+        MenuItem.separator(),
+        MenuItem(key: 'start', label: 'Start Proxy', disabled: isRunning),
+        MenuItem(key: 'stop', label: 'Stop Proxy', disabled: !isRunning),
+        MenuItem.separator(),
+        MenuItem(key: 'quit', label: 'Quit'),
+      ],
+    );
 
     await trayManager.setContextMenu(menu);
   }
