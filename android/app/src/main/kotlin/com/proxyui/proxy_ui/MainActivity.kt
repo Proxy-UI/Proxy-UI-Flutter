@@ -15,7 +15,7 @@ class MainActivity : FlutterActivity() {
         vpnPlugin = VpnPlugin(this, channel)
         channel.setMethodCallHandler(vpnPlugin)
 
-        addActivityResultListener(vpnPlugin!!)
+        flutterEngine.plugins.add(vpnPlugin!!)
     }
 
     override fun onDestroy() {

@@ -5,14 +5,16 @@ import android.content.Intent
 import android.net.VpnService
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 
 class VpnPlugin(
-    private val activity: FlutterActivity,
+    private var activity: FlutterActivity?,
     private val channel: MethodChannel
-) : MethodChannel.MethodCallHandler, PluginRegistry.ActivityResultListener {
+) : MethodChannel.MethodCallHandler, PluginRegistry.ActivityResultListener, ActivityAware {
 
     companion object {
         private const val TAG = "VpnPlugin"
@@ -55,7 +57,7 @@ class VpnPlugin(
         if (intent != null) {
             Log.d(TAG, "VPN permission not granted, requesting")
             pendingResult = result
-            activity.startActivityForResult(intent, VPN_REQUEST_CODE)
+            activity?.startActivityForResult(intent, VPN_REQUEST_CODE)
         } else {
             Log.d(TAG, "VPN permission already granted, starting service")
             startVpnService()
@@ -68,7 +70,7 @@ class VpnPlugin(
 
         try {
             val intent = Intent(activity, ProxyVpnService::class.java)
-            activity.stopService(intent)
+            activity?.stopService(intent)
             result.success(true)
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping VPN service", e)
@@ -82,7 +84,7 @@ class VpnPlugin(
 
     private fun startVpnService() {
         val intent = Intent(activity, ProxyVpnService::class.java)
-        activity.startForegroundService(intent)
+        activity?.startForegroundService(intent)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
@@ -101,5 +103,23 @@ class VpnPlugin(
             return true
         }
         return false
+    }
+
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activity = binding.activity as? FlutterActivity
+        binding.addActivityResultListener(this)
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity as? FlutterActivity
+        binding.addActivityResultListener(this)
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
     }
 }

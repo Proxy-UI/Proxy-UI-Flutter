@@ -91,7 +91,7 @@ class ProxyVpnService : VpnService() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error starting VPN", e)
-            notifyFlutter("vpn_error", mapOf("error" to e.message))
+            notifyFlutter("vpn_error", mapOf("error" to (e.message ?: "Unknown error")))
             stopSelf()
         }
 
