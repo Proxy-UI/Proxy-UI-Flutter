@@ -19,7 +19,6 @@ void main() async {
       size: Size(1280, 720),
       minimumSize: Size(800, 600),
       center: true,
-      backgroundColor: Colors.transparent,
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.normal,
     );
@@ -59,6 +58,7 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
         TrayService.instance.initialize(context);
       });
       windowManager.addListener(this);
+      windowManager.setPreventClose(true);
     }
   }
 

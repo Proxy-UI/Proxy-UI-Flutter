@@ -38,9 +38,10 @@ class TrayService with TrayListener {
   }
 
   Future<void> _updateTrayIcon(bool isRunning) async {
-    final iconPath = isRunning
-        ? 'assets/tray/tray_icon.png'
-        : 'assets/tray/tray_icon_inactive.png';
+    final iconName = isRunning ? 'tray_icon' : 'tray_icon_inactive';
+    final iconPath = Platform.isWindows
+        ? 'assets/tray/$iconName.ico'
+        : 'assets/tray/$iconName.png';
     await trayManager.setIcon(iconPath);
   }
 
