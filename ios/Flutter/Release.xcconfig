@@ -1,5 +1,4 @@
 #include "Generated.xcconfig"
 
 // Native library linking
-OTHER_LDFLAGS=$(inherited) -lhttp_proxy
-LIBRARY_SEARCH_PATHS=$(inherited) $(PROJECT_DIR)/../native/ios
+OTHER_LDFLAGS=$(inherited) -L$(PROJECT_DIR)/../native/ios -lhttp_proxy
