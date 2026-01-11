@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +8,7 @@ import '../providers/theme_provider.dart';
 import 'proxy_page.dart';
 import 'log_page.dart';
 import 'subscription_page.dart';
+import 'vpn_page.dart';
 
 /// Main navigation container with responsive layout and smooth transitions
 class HomeScreen extends StatefulWidget {
@@ -85,6 +88,18 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget createScreenFor(int index) {
+    // On Android, insert VPN page at index 2
+    if (Platform.isAndroid) {
+      return switch (index) {
+        0 => ProxyPage(scaffoldKey: scaffoldKey),
+        1 => const LogPage(),
+        2 => const VpnPage(),
+        3 => const SubscriptionPage(),
+        _ => ProxyPage(scaffoldKey: scaffoldKey),
+      };
+    }
+
+    // On other platforms, no VPN page
     return switch (index) {
       0 => ProxyPage(scaffoldKey: scaffoldKey),
       1 => const LogPage(),
@@ -291,25 +306,31 @@ class _ExpandedColorSeedAction extends StatelessWidget {
 }
 
 // Navigation destinations
-const List<NavigationDestination> appBarDestinations = [
-  NavigationDestination(
+List<NavigationDestination> get appBarDestinations => [
+  const NavigationDestination(
     icon: Icon(Icons.flight_outlined),
     selectedIcon: Icon(Icons.flight),
     label: 'Proxy',
   ),
-  NavigationDestination(
+  const NavigationDestination(
     icon: Icon(Icons.terminal_outlined),
     selectedIcon: Icon(Icons.terminal),
     label: 'Logs',
   ),
-  NavigationDestination(
+  if (Platform.isAndroid)
+    const NavigationDestination(
+      icon: Icon(Icons.vpn_lock_outlined),
+      selectedIcon: Icon(Icons.vpn_lock),
+      label: 'VPN',
+    ),
+  const NavigationDestination(
     icon: Icon(Icons.cloud_download_outlined),
     selectedIcon: Icon(Icons.cloud_download),
     label: 'Subscription',
   ),
 ];
 
-final List<NavigationRailDestination> navRailDestinations = appBarDestinations
+List<NavigationRailDestination> get navRailDestinations => appBarDestinations
     .map(
       (destination) => NavigationRailDestination(
         icon: Tooltip(message: destination.label, child: destination.icon),

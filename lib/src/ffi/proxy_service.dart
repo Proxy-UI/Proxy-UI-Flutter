@@ -46,6 +46,7 @@ class ProxyService {
 
   // NativeCallable for thread-safe callback from native code
   static NativeCallable<LogCallbackNative>? _nativeCallable;
+  static NativeCallable<ProtectCallbackNative>? _protectCallable;
 
   /// Initialize logging system with FFI callback.
   void initLogging() {
@@ -153,6 +154,80 @@ class ProxyService {
     }
   }
 
+  /// Start VPN mode with TUN file descriptor (Android only).
+  ///
+  /// This initializes runtime config and then starts the native TUN handler.
+  Future<int> startVpn({
+    required int tunFd,
+    required String serverHost,
+    required int serverPort,
+    String? sessionKey,
+    bool autoProxy = true,
+    bool reverseGeo = false,
+    String? needCodecIps,
+    bool forceCodec = false,
+  }) async {
+    destroy();
+    if (!create()) return ProxyResult.runtimeError;
+
+    final config = calloc<ProxyConfig>();
+    Pointer<Utf8>? serverHostPtr;
+    Pointer<Utf8>? sessionKeyPtr;
+    Pointer<Utf8>? cacheDirPtr;
+    Pointer<Utf8>? needCodecIpsPtr;
+
+    try {
+      serverHostPtr = serverHost.toNativeUtf8();
+      config.ref.serverHost = serverHostPtr;
+      config.ref.serverPort = serverPort;
+      config.ref.localPort = 0;
+
+      if (sessionKey != null && sessionKey.length == 32) {
+        sessionKeyPtr = sessionKey.toNativeUtf8();
+        config.ref.sessionKey = sessionKeyPtr;
+      } else {
+        config.ref.sessionKey = nullptr;
+      }
+
+      config.ref.autoProxy = autoProxy ? 1 : 0;
+      config.ref.reverseGeo = reverseGeo ? 1 : 0;
+
+      // Mobile platforms need cache_dir for auto-proxy.
+      if (Platform.isAndroid || Platform.isIOS) {
+        final dir = await getApplicationDocumentsDirectory();
+        cacheDirPtr = dir.path.toNativeUtf8();
+        config.ref.cacheDir = cacheDirPtr;
+      } else {
+        config.ref.cacheDir = nullptr;
+      }
+
+      if (needCodecIps != null && needCodecIps.isNotEmpty) {
+        needCodecIpsPtr = needCodecIps.toNativeUtf8();
+        config.ref.needCodecIps = needCodecIpsPtr;
+      } else {
+        config.ref.needCodecIps = nullptr;
+      }
+
+      config.ref.forceCodec = forceCodec ? 1 : 0;
+      config.ref.setSystemProxy = 0;
+
+      // Initialize native runtime config (server host/port/key/etc).
+      final initResult = _ffi.proxyInitConfig(config);
+      if (initResult != ProxyResult.ok) return initResult;
+
+      // Protection callback is registered via Android JNI bridge; pass null here.
+      final protectCallback = nullptr
+          .cast<NativeFunction<ProtectCallbackNative>>();
+      return _ffi.proxyStartVpn(_handle!, tunFd, protectCallback);
+    } finally {
+      if (serverHostPtr != null) calloc.free(serverHostPtr);
+      if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);
+      if (cacheDirPtr != null) calloc.free(cacheDirPtr);
+      if (needCodecIpsPtr != null) calloc.free(needCodecIpsPtr);
+      calloc.free(config);
+    }
+  }
+
   /// Stop proxy.
   int stop() {
     if (_handle == null) return ProxyResult.invalidParam;
@@ -177,5 +252,6 @@ class ProxyService {
   void dispose() {
     destroy();
     _nativeCallable?.close();
+    _protectCallable?.close();
   }
 }

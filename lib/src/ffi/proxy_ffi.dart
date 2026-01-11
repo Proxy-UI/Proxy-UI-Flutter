@@ -85,6 +85,30 @@ typedef _ProxyIsRunningDart = int Function(Pointer<Void> handle);
 typedef _ProxyFreeStringNative = Void Function(Pointer<Utf8> s);
 typedef _ProxyFreeStringDart = void Function(Pointer<Utf8> s);
 
+// VPN-related typedefs
+typedef ProtectCallbackNative = Bool Function(Int32 fd);
+
+typedef _ProxyRegisterProtectCallbackNative =
+    Void Function(Pointer<NativeFunction<ProtectCallbackNative>> callback);
+typedef _ProxyRegisterProtectCallbackDart =
+    void Function(Pointer<NativeFunction<ProtectCallbackNative>> callback);
+
+typedef _ProxyStartVpnNative =
+    Int32 Function(
+      Pointer<Void> handle,
+      Int32 tunFd,
+      Pointer<NativeFunction<ProtectCallbackNative>> protectCallback,
+    );
+typedef _ProxyStartVpnDart =
+    int Function(
+      Pointer<Void> handle,
+      int tunFd,
+      Pointer<NativeFunction<ProtectCallbackNative>> protectCallback,
+    );
+
+typedef _ProxyInitConfigNative = Int32 Function(Pointer<ProxyConfig> config);
+typedef _ProxyInitConfigDart = int Function(Pointer<ProxyConfig> config);
+
 /// FFI bindings for proxy library.
 class ProxyFFI {
   static ProxyFFI? _instance;
@@ -162,4 +186,21 @@ class ProxyFFI {
       .lookupFunction<_ProxyFreeStringNative, _ProxyFreeStringDart>(
         'proxy_free_string',
       );
+
+  // VPN-related functions
+  late final proxyInitConfig = lib
+      .lookupFunction<_ProxyInitConfigNative, _ProxyInitConfigDart>(
+        'proxy_init_config',
+      );
+
+  late final proxyStartVpn = lib
+      .lookupFunction<_ProxyStartVpnNative, _ProxyStartVpnDart>(
+        'proxy_start_vpn',
+      );
+
+  late final proxyRegisterProtectCallback = lib
+      .lookupFunction<
+        _ProxyRegisterProtectCallbackNative,
+        _ProxyRegisterProtectCallbackDart
+      >('proxy_register_protect_callback');
 }
