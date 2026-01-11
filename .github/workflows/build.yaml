@@ -257,6 +257,8 @@ jobs:
           elif [ -f "libhttp_proxy-x86_64-apple-darwin.dylib" ]; then
             cp libhttp_proxy-x86_64-apple-darwin.dylib libhttp_proxy.dylib
           fi
+          # Sign the dylib before Flutter build
+          codesign --force --sign - libhttp_proxy.dylib
           ls -la
 
       - uses: subosito/flutter-action@v2
