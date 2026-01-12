@@ -187,9 +187,9 @@ class _NodesPageState extends State<NodesPage> {
                         ),
                         const Spacer(),
                         IconButton(
-                          icon: Icon(_showConfig
-                              ? Icons.expand_less
-                              : Icons.expand_more),
+                          icon: Icon(
+                            _showConfig ? Icons.expand_less : Icons.expand_more,
+                          ),
                           onPressed: () =>
                               setState(() => _showConfig = !_showConfig),
                         ),
@@ -240,14 +240,14 @@ class _NodesPageState extends State<NodesPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed:
-                              state.isLoadingNodes ? null : _fetchNodes,
+                          onPressed: state.isLoadingNodes ? null : _fetchNodes,
                           icon: state.isLoadingNodes
                               ? const SizedBox(
                                   width: 18,
                                   height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.refresh),
                           label: const Text('Fetch Nodes'),
@@ -357,9 +357,9 @@ class _NodesPageState extends State<NodesPage> {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onPrimaryContainer,
                           ),
                         ),
                       ),
@@ -439,7 +439,9 @@ class _NodesPageState extends State<NodesPage> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.speed, size: 18),
                         label: const Text('Ping'),
@@ -459,7 +461,9 @@ class _NodesPageState extends State<NodesPage> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.swap_horiz, size: 18),
                         label: const Text('Switch'),

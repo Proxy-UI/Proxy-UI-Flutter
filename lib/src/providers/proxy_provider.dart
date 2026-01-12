@@ -197,11 +197,7 @@ class ProxyState extends ChangeNotifier {
   }
 
   // Update nodes server config
-  void updateNodesServerConfig({
-    String? host,
-    int? port,
-    String? sessionKey,
-  }) {
+  void updateNodesServerConfig({String? host, int? port, String? sessionKey}) {
     if (host != null) _nodesServerHost = host;
     if (port != null) _nodesServerPort = port;
     if (sessionKey != null) _nodesSessionKey = sessionKey;
@@ -224,8 +220,7 @@ class ProxyState extends ChangeNotifier {
       _nodes = await _service.getServerNodes(
         serverHost: _nodesServerHost,
         serverPort: _nodesServerPort,
-        sessionKey:
-            _nodesSessionKey?.isEmpty ?? true ? null : _nodesSessionKey,
+        sessionKey: _nodesSessionKey?.isEmpty ?? true ? null : _nodesSessionKey,
       );
       _nodesError = null;
     } catch (e) {

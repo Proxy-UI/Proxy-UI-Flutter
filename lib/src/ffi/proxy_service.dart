@@ -183,7 +183,8 @@ class ProxyService {
 
   // Isolate entry point for ping test
   static Future<Map<String, dynamic>> _testLatencyIsolate(
-      Map<String, dynamic> params) async {
+    Map<String, dynamic> params,
+  ) async {
     final ffi = ProxyFFI();
     final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
     final testUrl = params['testUrl'] as String?;
@@ -232,7 +233,8 @@ class ProxyService {
 
   // Isolate entry point for node listing
   static Future<Map<String, dynamic>> _getServerNodesIsolate(
-      Map<String, dynamic> params) async {
+    Map<String, dynamic> params,
+  ) async {
     final ffi = ProxyFFI();
     final serverHost = params['serverHost'] as String;
     final serverPort = params['serverPort'] as int;
@@ -243,8 +245,12 @@ class ProxyService {
     final keyPtr = sessionKey?.toNativeUtf8() ?? nullptr;
 
     try {
-      final result =
-          ffi.proxyGetServerNodes(hostPtr, serverPort, keyPtr, timeoutMs);
+      final result = ffi.proxyGetServerNodes(
+        hostPtr,
+        serverPort,
+        keyPtr,
+        timeoutMs,
+      );
 
       try {
         if (result.success == 1) {
@@ -298,13 +304,15 @@ class ProxyService {
     if (result['success'] == true) {
       final nodesList = result['nodes'] as List;
       return nodesList
-          .map((n) => NodeInfo(
-                nodeId: n['nodeId'],
-                addr: n['addr'],
-                lastSeen: DateTime.fromMillisecondsSinceEpoch(n['lastSeenMs']),
-                country: n['country'],
-                region: n['region'],
-              ))
+          .map(
+            (n) => NodeInfo(
+              nodeId: n['nodeId'],
+              addr: n['addr'],
+              lastSeen: DateTime.fromMillisecondsSinceEpoch(n['lastSeenMs']),
+              country: n['country'],
+              region: n['region'],
+            ),
+          )
           .toList();
     } else {
       throw Exception(result['error'] ?? 'Failed to get nodes');

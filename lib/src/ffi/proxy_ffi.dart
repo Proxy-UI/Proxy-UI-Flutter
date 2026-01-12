@@ -115,37 +115,44 @@ typedef _ProxyFreeStringNative = Void Function(Pointer<Utf8> s);
 typedef _ProxyFreeStringDart = void Function(Pointer<Utf8> s);
 
 // proxy_test_latency
-typedef _ProxyTestLatencyNative = LatencyResult Function(
-  Pointer<Void> handle,
-  Pointer<Utf8> testUrl,
-  Uint32 timeoutMs,
-);
-typedef _ProxyTestLatencyDart = LatencyResult Function(
-  Pointer<Void> handle,
-  Pointer<Utf8> testUrl,
-  int timeoutMs,
-);
+typedef _ProxyTestLatencyNative =
+    LatencyResult Function(
+      Pointer<Void> handle,
+      Pointer<Utf8> testUrl,
+      Uint32 timeoutMs,
+    );
+typedef _ProxyTestLatencyDart =
+    LatencyResult Function(
+      Pointer<Void> handle,
+      Pointer<Utf8> testUrl,
+      int timeoutMs,
+    );
 
 // proxy_get_server_nodes
-typedef _ProxyGetServerNodesNative = NodesResult Function(
-  Pointer<Utf8> serverHost,
-  Uint16 serverPort,
-  Pointer<Utf8> sessionKey,
-  Uint32 timeoutMs,
-);
-typedef _ProxyGetServerNodesDart = NodesResult Function(
-  Pointer<Utf8> serverHost,
-  int serverPort,
-  Pointer<Utf8> sessionKey,
-  int timeoutMs,
-);
+typedef _ProxyGetServerNodesNative =
+    NodesResult Function(
+      Pointer<Utf8> serverHost,
+      Uint16 serverPort,
+      Pointer<Utf8> sessionKey,
+      Uint32 timeoutMs,
+    );
+typedef _ProxyGetServerNodesDart =
+    NodesResult Function(
+      Pointer<Utf8> serverHost,
+      int serverPort,
+      Pointer<Utf8> sessionKey,
+      int timeoutMs,
+    );
 
 // proxy_free_latency_result
-typedef _ProxyFreeLatencyResultNative = Void Function(Pointer<LatencyResult> result);
-typedef _ProxyFreeLatencyResultDart = void Function(Pointer<LatencyResult> result);
+typedef _ProxyFreeLatencyResultNative =
+    Void Function(Pointer<LatencyResult> result);
+typedef _ProxyFreeLatencyResultDart =
+    void Function(Pointer<LatencyResult> result);
 
 // proxy_free_nodes_result
-typedef _ProxyFreeNodesResultNative = Void Function(Pointer<NodesResult> result);
+typedef _ProxyFreeNodesResultNative =
+    Void Function(Pointer<NodesResult> result);
 typedef _ProxyFreeNodesResultDart = void Function(Pointer<NodesResult> result);
 
 /// FFI bindings for proxy library.
@@ -237,9 +244,10 @@ class ProxyFFI {
       );
 
   late final proxyFreeLatencyResult = lib
-      .lookupFunction<_ProxyFreeLatencyResultNative, _ProxyFreeLatencyResultDart>(
-        'proxy_free_latency_result',
-      );
+      .lookupFunction<
+        _ProxyFreeLatencyResultNative,
+        _ProxyFreeLatencyResultDart
+      >('proxy_free_latency_result');
 
   late final proxyFreeNodesResult = lib
       .lookupFunction<_ProxyFreeNodesResultNative, _ProxyFreeNodesResultDart>(
