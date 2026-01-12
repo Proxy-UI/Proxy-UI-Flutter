@@ -19,7 +19,7 @@ class ProxyConfigModel {
   ProxyConfigModel({
     this.serverHost = '',
     this.serverPort = 1081,
-    this.localPort = 1080,
+    this.localPort = 10801,
     this.sessionKey,
     this.autoProxy = true,
     this.reverseGeo = false,

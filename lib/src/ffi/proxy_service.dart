@@ -3,8 +3,10 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/node_model.dart';
 import 'proxy_ffi.dart';
 
 /// Log entry from native library.
@@ -177,5 +179,135 @@ class ProxyService {
   void dispose() {
     destroy();
     _nativeCallable?.close();
+  }
+
+  // Isolate entry point for ping test
+  static Future<Map<String, dynamic>> _testLatencyIsolate(
+      Map<String, dynamic> params) async {
+    final ffi = ProxyFFI();
+    final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
+    final testUrl = params['testUrl'] as String?;
+    final timeoutMs = params['timeoutMs'] as int;
+
+    final urlPtr = testUrl != null ? testUrl.toNativeUtf8() : nullptr;
+
+    try {
+      final result = ffi.proxyTestLatency(handle, urlPtr, timeoutMs);
+
+      try {
+        if (result.success == 1) {
+          return {'success': true, 'latencyMs': result.latencyMs};
+        } else {
+          final error = result.error.toDartString();
+          return {'success': false, 'error': error};
+        }
+      } finally {
+        // Free the error string allocated by Rust (if any)
+        if (result.error != nullptr) {
+          ffi.proxyFreeString(result.error);
+        }
+      }
+    } finally {
+      if (urlPtr != nullptr) calloc.free(urlPtr);
+    }
+  }
+
+  /// Test proxy latency (only works when proxy is running).
+  /// Tests real-world latency by sending HTTPS request through local proxy.
+  Future<int?> testLatency({String? testUrl, int timeoutMs = 10000}) async {
+    if (_handle == null) throw StateError('Proxy not initialized');
+
+    final result = await compute(_testLatencyIsolate, {
+      'handleAddress': _handle!.address,
+      'testUrl': testUrl,
+      'timeoutMs': timeoutMs,
+    });
+
+    if (result['success'] == true) {
+      return result['latencyMs'] as int;
+    } else {
+      throw Exception(result['error'] ?? 'Latency test failed');
+    }
+  }
+
+  // Isolate entry point for node listing
+  static Future<Map<String, dynamic>> _getServerNodesIsolate(
+      Map<String, dynamic> params) async {
+    final ffi = ProxyFFI();
+    final serverHost = params['serverHost'] as String;
+    final serverPort = params['serverPort'] as int;
+    final sessionKey = params['sessionKey'] as String?;
+    final timeoutMs = params['timeoutMs'] as int;
+
+    final hostPtr = serverHost.toNativeUtf8();
+    final keyPtr = sessionKey?.toNativeUtf8() ?? nullptr;
+
+    try {
+      final result =
+          ffi.proxyGetServerNodes(hostPtr, serverPort, keyPtr, timeoutMs);
+
+      try {
+        if (result.success == 1) {
+          final nodes = <Map<String, dynamic>>[];
+          for (int i = 0; i < result.count; i++) {
+            final node = (result.nodes + i).ref;
+            nodes.add({
+              'nodeId': node.nodeId.toDartString(),
+              'addr': node.addr.toDartString(),
+              'lastSeenMs': node.lastSeenMs,
+              'country': node.country.toDartString(),
+              'region': node.region.toDartString(),
+            });
+          }
+          return {'success': true, 'nodes': nodes};
+        } else {
+          final error = result.error.toDartString();
+          return {'success': false, 'error': error};
+        }
+      } finally {
+        // Free the NodesResult allocated by Rust
+        // We need to allocate a pointer to pass to the free function
+        final resultPtr = calloc<NodesResult>();
+        resultPtr.ref.success = result.success;
+        resultPtr.ref.nodes = result.nodes;
+        resultPtr.ref.count = result.count;
+        resultPtr.ref.error = result.error;
+        ffi.proxyFreeNodesResult(resultPtr);
+        calloc.free(resultPtr);
+      }
+    } finally {
+      calloc.free(hostPtr);
+      if (keyPtr != nullptr) calloc.free(keyPtr);
+    }
+  }
+
+  /// Get all nodes from server with geo location info.
+  Future<List<NodeInfo>> getServerNodes({
+    required String serverHost,
+    required int serverPort,
+    String? sessionKey,
+    int timeoutMs = 10000,
+  }) async {
+    final result = await compute(_getServerNodesIsolate, {
+      'serverHost': serverHost,
+      'serverPort': serverPort,
+      'sessionKey': sessionKey,
+      'timeoutMs': timeoutMs,
+    });
+
+    if (result['success'] == true) {
+      final nodesList = result['nodes'] as List;
+      return nodesList
+          .map((n) => NodeInfo(
+                nodeId: n['nodeId'],
+                addr: n['addr'],
+                lastSeen: DateTime.fromMillisecondsSinceEpoch(n['lastSeenMs']),
+                country: n['country'],
+                region: n['region'],
+              ))
+          .toList();
+    } else {
+      throw Exception(result['error'] ?? 'Failed to get nodes');
+    }
   }
 }

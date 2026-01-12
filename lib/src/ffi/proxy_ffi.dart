@@ -7,6 +7,35 @@ import 'package:ffi/ffi.dart';
 /// level: 0=trace, 1=debug, 2=info, 3=warn, 4=error
 typedef LogCallbackNative = Void Function(Int32 level, Pointer<Utf8> message);
 
+/// LatencyResult structure from FFI.
+final class LatencyResult extends Struct {
+  @Int32()
+  external int success;
+  @Uint64()
+  external int latencyMs;
+  external Pointer<Utf8> error;
+}
+
+/// NodeInfoWithGeo structure from FFI.
+final class NodeInfoWithGeo extends Struct {
+  external Pointer<Utf8> nodeId;
+  external Pointer<Utf8> addr;
+  @Int64()
+  external int lastSeenMs;
+  external Pointer<Utf8> country;
+  external Pointer<Utf8> region;
+}
+
+/// NodesResult structure from FFI.
+final class NodesResult extends Struct {
+  @Int32()
+  external int success;
+  external Pointer<NodeInfoWithGeo> nodes;
+  @Size()
+  external int count;
+  external Pointer<Utf8> error;
+}
+
 /// ProxyResult codes from FFI.
 abstract class ProxyResult {
   static const int ok = 0;
@@ -85,6 +114,40 @@ typedef _ProxyIsRunningDart = int Function(Pointer<Void> handle);
 typedef _ProxyFreeStringNative = Void Function(Pointer<Utf8> s);
 typedef _ProxyFreeStringDart = void Function(Pointer<Utf8> s);
 
+// proxy_test_latency
+typedef _ProxyTestLatencyNative = LatencyResult Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> testUrl,
+  Uint32 timeoutMs,
+);
+typedef _ProxyTestLatencyDart = LatencyResult Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> testUrl,
+  int timeoutMs,
+);
+
+// proxy_get_server_nodes
+typedef _ProxyGetServerNodesNative = NodesResult Function(
+  Pointer<Utf8> serverHost,
+  Uint16 serverPort,
+  Pointer<Utf8> sessionKey,
+  Uint32 timeoutMs,
+);
+typedef _ProxyGetServerNodesDart = NodesResult Function(
+  Pointer<Utf8> serverHost,
+  int serverPort,
+  Pointer<Utf8> sessionKey,
+  int timeoutMs,
+);
+
+// proxy_free_latency_result
+typedef _ProxyFreeLatencyResultNative = Void Function(Pointer<LatencyResult> result);
+typedef _ProxyFreeLatencyResultDart = void Function(Pointer<LatencyResult> result);
+
+// proxy_free_nodes_result
+typedef _ProxyFreeNodesResultNative = Void Function(Pointer<NodesResult> result);
+typedef _ProxyFreeNodesResultDart = void Function(Pointer<NodesResult> result);
+
 /// FFI bindings for proxy library.
 class ProxyFFI {
   static ProxyFFI? _instance;
@@ -161,5 +224,25 @@ class ProxyFFI {
   late final proxyFreeString = lib
       .lookupFunction<_ProxyFreeStringNative, _ProxyFreeStringDart>(
         'proxy_free_string',
+      );
+
+  late final proxyTestLatency = lib
+      .lookupFunction<_ProxyTestLatencyNative, _ProxyTestLatencyDart>(
+        'proxy_test_latency',
+      );
+
+  late final proxyGetServerNodes = lib
+      .lookupFunction<_ProxyGetServerNodesNative, _ProxyGetServerNodesDart>(
+        'proxy_get_server_nodes',
+      );
+
+  late final proxyFreeLatencyResult = lib
+      .lookupFunction<_ProxyFreeLatencyResultNative, _ProxyFreeLatencyResultDart>(
+        'proxy_free_latency_result',
+      );
+
+  late final proxyFreeNodesResult = lib
+      .lookupFunction<_ProxyFreeNodesResultNative, _ProxyFreeNodesResultDart>(
+        'proxy_free_nodes_result',
       );
 }

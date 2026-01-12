@@ -6,6 +6,7 @@ import '../providers/theme_provider.dart';
 import 'proxy_page.dart';
 import 'log_page.dart';
 import 'subscription_page.dart';
+import 'nodes_page.dart';
 
 /// Main navigation container with responsive layout and smooth transitions
 class HomeScreen extends StatefulWidget {
@@ -89,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen>
       0 => ProxyPage(scaffoldKey: scaffoldKey),
       1 => const LogPage(),
       2 => const SubscriptionPage(),
+      3 => const NodesPage(),
       _ => ProxyPage(scaffoldKey: scaffoldKey),
     };
   }
@@ -306,6 +308,11 @@ const List<NavigationDestination> appBarDestinations = [
     icon: Icon(Icons.cloud_download_outlined),
     selectedIcon: Icon(Icons.cloud_download),
     label: 'Subscription',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.dns_outlined),
+    selectedIcon: Icon(Icons.dns),
+    label: 'Nodes',
   ),
 ];
 
