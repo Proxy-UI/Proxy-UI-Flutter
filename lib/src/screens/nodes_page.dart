@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
+import '../utils/toast_utils.dart';
 
 /// Nodes page for managing proxy nodes.
 class NodesPage extends StatefulWidget {
@@ -56,28 +57,15 @@ class _NodesPageState extends State<NodesPage> {
   Future<void> _exportConfig(BuildContext context, int index) async {
     final state = context.read<ProxyState>();
     final node = state.nodes[index];
-    final messenger = ScaffoldMessenger.of(context);
 
     try {
       await state.exportNodeConfig(node);
       if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 300,
-            content: Text('Config exported to clipboard'),
-          ),
-        );
+        ToastUtils.showSuccess('Config exported to clipboard');
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 400,
-            content: Text('Failed to export: $e'),
-          ),
-        );
+        ToastUtils.showError('Failed to export: $e');
       }
     }
   }
@@ -85,34 +73,21 @@ class _NodesPageState extends State<NodesPage> {
   Future<void> _switchNode(BuildContext context, int index) async {
     final state = context.read<ProxyState>();
     final node = state.nodes[index];
-    final messenger = ScaffoldMessenger.of(context);
 
     setState(() => _switchLoading[node.nodeId] = true);
 
     try {
       final success = await state.switchToNode(node);
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 300,
-            content: Text(
-              success
-                  ? 'Switched to ${node.displayName}'
-                  : 'Failed to start proxy',
-            ),
-          ),
-        );
+        if (success) {
+          ToastUtils.showSuccess('Switched to ${node.displayName}');
+        } else {
+          ToastUtils.showError('Failed to start proxy');
+        }
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 400,
-            content: Text('Failed to switch: $e'),
-          ),
-        );
+        ToastUtils.showError('Failed to switch: $e');
       }
     } finally {
       if (mounted) {
@@ -124,7 +99,6 @@ class _NodesPageState extends State<NodesPage> {
   Future<void> _pingNode(BuildContext context, int index) async {
     final state = context.read<ProxyState>();
     final node = state.nodes[index];
-    final messenger = ScaffoldMessenger.of(context);
 
     setState(() {
       _pingLoading[node.nodeId] = true;
@@ -132,24 +106,10 @@ class _NodesPageState extends State<NodesPage> {
 
     try {
       await state.pingCurrentNode();
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 300,
-            content: Text('Latency: ${node.latencyMs}ms'),
-          ),
-        );
-      }
+      // No toast on success - latency is already displayed on the card
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 400,
-            content: Text('Ping failed: $e'),
-          ),
-        );
+        ToastUtils.showError('Ping failed: $e');
       }
     } finally {
       if (mounted) {

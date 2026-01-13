@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
 import '../models/proxy_config.dart';
+import '../utils/toast_utils.dart';
 
 /// Configuration dialog for proxy settings - simplified AlertDialog style
 class ConfigDialog extends StatefulWidget {
@@ -66,13 +67,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
       ),
     );
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        width: 300,
-        content: Text('Configuration saved'),
-      ),
-    );
+    ToastUtils.showSuccess('Configuration saved');
   }
 
   @override

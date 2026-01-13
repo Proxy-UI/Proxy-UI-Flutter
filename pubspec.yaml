@@ -40,6 +40,7 @@ dependencies:
   tray_manager: ^0.2.3
   window_manager: ^0.4.2
   country_flags: ^3.0.0
+  toastification: ^3.0.3
 
 dev_dependencies:
   flutter_test:

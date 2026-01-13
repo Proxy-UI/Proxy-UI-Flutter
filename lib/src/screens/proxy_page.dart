@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/proxy_config.dart';
 import '../providers/proxy_provider.dart';
+import '../utils/toast_utils.dart';
 import '../widgets/config_dialog.dart';
 
 /// Proxy control page with simple switch and config FAB
@@ -40,29 +41,18 @@ class _ProxyPageState extends State<ProxyPage> {
   void _toggleProxy(ProxyState state) async {
     if (state.isRunning) {
       state.stop();
+      if (mounted) {
+        ToastUtils.showSuccess('Proxy stopped');
+      }
     } else {
       final success = await state.start();
-      if (!success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 400.0,
-            content: Text(state.lastError ?? 'Failed to start proxy'),
-          ),
-        );
+      if (mounted) {
+        if (success) {
+          ToastUtils.showSuccess('Proxy started');
+        } else {
+          ToastUtils.showError(state.lastError ?? 'Failed to start proxy');
+        }
       }
-    }
-    if (mounted) {
-      final text = state.isRunning ? 'Proxy started!' : 'Proxy closed!';
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          width: 400.0,
-          content: Text(text),
-          action: SnackBarAction(label: 'Close', onPressed: () {}),
-        ),
-      );
     }
   }
 
@@ -111,23 +101,11 @@ class _ProxyPageState extends State<ProxyPage> {
     try {
       await Clipboard.setData(ClipboardData(text: encoded));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 300,
-            content: Text('Config exported to clipboard'),
-          ),
-        );
+        ToastUtils.showSuccess('Config exported to clipboard');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 400,
-            content: Text('Failed to copy: $e'),
-          ),
-        );
+        ToastUtils.showError('Failed to copy: $e');
       }
     }
   }
@@ -137,13 +115,7 @@ class _ProxyPageState extends State<ProxyPage> {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data?.text == null || data!.text!.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
-              width: 300,
-              content: Text('Clipboard is empty'),
-            ),
-          );
+          ToastUtils.showWarning('Clipboard is empty');
         }
         return;
       }
@@ -151,23 +123,11 @@ class _ProxyPageState extends State<ProxyPage> {
       final config = ProxyConfigModel.fromJson(jsonDecode(json));
       if (mounted) {
         context.read<ProxyState>().updateConfig(config);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 300,
-            content: Text('Config imported successfully'),
-          ),
-        );
+        ToastUtils.showSuccess('Config imported successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            width: 400,
-            content: Text('Invalid config format'),
-          ),
-        );
+        ToastUtils.showError('Invalid config format');
       }
     }
   }

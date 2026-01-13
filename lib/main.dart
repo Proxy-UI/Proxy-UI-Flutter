@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:toastification/toastification.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'src/providers/proxy_provider.dart';
@@ -30,12 +31,14 @@ void main() async {
   }
 
   runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => ProxyState()),
-        ChangeNotifierProvider(create: (_) => ThemeState()),
-      ],
-      child: const ProxyApp(),
+    ToastificationWrapper(
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ProxyState()),
+          ChangeNotifierProvider(create: (_) => ThemeState()),
+        ],
+        child: const ProxyApp(),
+      ),
     ),
   );
 }

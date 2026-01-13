@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
+import '../utils/toast_utils.dart';
 
 class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
@@ -109,11 +110,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               if (port != null && port >= 1024 && port <= 65535) {
                 Navigator.pop(context, port);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Invalid port number (1024-65535)'),
-                  ),
-                );
+                ToastUtils.showError('Invalid port number (1024-65535)');
               }
             },
             child: const Text('Start'),
@@ -209,12 +206,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             FilledButton.tonalIcon(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: url));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('URL copied to clipboard'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                ToastUtils.showInfo('URL copied to clipboard');
               },
               icon: const Icon(Icons.copy, size: 18),
               label: const Text('Copy URL'),
