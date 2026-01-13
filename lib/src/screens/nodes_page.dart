@@ -26,7 +26,9 @@ class _NodesPageState extends State<NodesPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final state = context.read<ProxyState>();
-      _hostController.text = state.nodesServerHost;
+      _hostController.text = state.nodesServerHost.isEmpty
+          ? state.config.serverHost
+          : state.nodesServerHost;
       _portController.text = state.nodesServerPort.toString();
       _keyController.text = state.nodesSessionKey ?? '';
     });
