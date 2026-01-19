@@ -1,0 +1,8 @@
+app_id: 8C7F7F7C-2B7B-4B91-8E7B-8B4A01F3C2C1
+publisher: acking-you
+publisher_url: https://github.com/acking-you/proxy-everything
+display_name: Proxy UI
+create_desktop_icon: true
+setup_icon_file: windows\runner\resources\app_icon.ico
+locales:
+  - en
