@@ -316,21 +316,18 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
-      - name: Build Windows app
+      - name: Build Windows app with fastforge
         run: |
+          dart pub global activate fastforge
           flutter pub get
-          flutter build windows --release
-
-      - name: Create ZIP
-        run: |
-          cd build/windows/x64/runner/Release
-          Compress-Archive -Path * -DestinationPath proxy-ui-windows-x64.zip
+          dart pub global run fastforge:main release --name production
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-zip
-          path: build/windows/x64/runner/Release/proxy-ui-windows-x64.zip
+          name: windows-packages
+          path: dist/**
+          if-no-files-found: warn
 
       - name: Generate download summary
         shell: bash
@@ -395,7 +392,7 @@ jobs:
       - name: Collect release files
         run: |
           mkdir -p release
-          find artifacts -type f \( -name "*.apk" -o -name "*.ipa" -o -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release/ \;
+          find artifacts -type f \( -name "*.apk" -o -name "*.ipa" -o -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" -o -name "*.msix" -o -name "*.appx" -o -name "*.appxbundle" \) -exec cp {} release/ \;
           ls -la release/
 
       - name: Create Release
@@ -403,6 +400,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           name: "Proxy UI ${{ github.event.inputs.release_tag }}"
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
           body: |
             # Proxy UI Release ${{ github.event.inputs.release_tag }}
 
@@ -414,6 +412,6 @@ jobs:
             - **Android**: APK files for different architectures
             - **iOS**: Unsigned IPA (for development/sideloading)
             - **macOS**: DMG installer
-            - **Windows**: ZIP portable version
+            - **Windows**: Installer (fastforge) or portable package
             - **Linux**: tar.gz archive
           files: release/*
