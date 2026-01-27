@@ -318,7 +318,9 @@ class _NodesPageState extends State<NodesPage> {
       orElse: () => state.groups.first,
     );
     final nodeIdSet = group.nodeIds.toSet();
-    return state.nodes.where((node) => nodeIdSet.contains(node.nodeId)).toList();
+    return state.nodes
+        .where((node) => nodeIdSet.contains(node.nodeId))
+        .toList();
   }
 
   Widget _buildGroupSelector(ProxyState state) {
@@ -410,11 +412,7 @@ class _NodesPageState extends State<NodesPage> {
     );
   }
 
-  Widget _buildNodeCard(
-    BuildContext context,
-    ProxyState state,
-    NodeInfo node,
-  ) {
+  Widget _buildNodeCard(BuildContext context, ProxyState state, NodeInfo node) {
     final isCurrent = state.isCurrentNode(node);
     final canPing = isCurrent && state.isRunning;
 
@@ -443,9 +441,7 @@ class _NodesPageState extends State<NodesPage> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onPrimaryContainer,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                       ),
                     ),
                   ),
@@ -525,9 +521,7 @@ class _NodesPageState extends State<NodesPage> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.speed, size: 18),
                     label: const Text('Ping'),
@@ -547,9 +541,7 @@ class _NodesPageState extends State<NodesPage> {
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.swap_horiz, size: 18),
                     label: const Text('Switch'),
