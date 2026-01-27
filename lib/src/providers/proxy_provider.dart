@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../ffi/proxy_ffi.dart';
 import '../ffi/proxy_service.dart';
+import '../models/node_group_model.dart';
 import '../models/node_model.dart';
 import '../models/proxy_config.dart';
 import '../services/subscription_service.dart';
@@ -34,6 +35,8 @@ class ProxyState extends ChangeNotifier {
   bool _isLoadingNodes = false;
   String? _nodesError;
   String? _currentNodeId; // Track which node is currently connected
+  List<NodeGroupModel> _groups = [];
+  String? _groupsError;
 
   // Independent node server config
   String _nodesServerHost = '';
@@ -66,6 +69,8 @@ class ProxyState extends ChangeNotifier {
   bool get isLoadingNodes => _isLoadingNodes;
   String? get nodesError => _nodesError;
   String? get currentNodeId => _currentNodeId;
+  List<NodeGroupModel> get groups => _groups;
+  String? get groupsError => _groupsError;
   String get nodesServerHost => _nodesServerHost;
   int get nodesServerPort => _nodesServerPort;
   String? get nodesSessionKey => _nodesSessionKey;
@@ -214,18 +219,37 @@ class ProxyState extends ChangeNotifier {
 
     _isLoadingNodes = true;
     _nodesError = null;
+    _groupsError = null;
     notifyListeners();
 
     try {
-      _nodes = await _service.getServerNodes(
+      final nodesFuture = _service.getServerNodes(
         serverHost: _nodesServerHost,
         serverPort: _nodesServerPort,
         sessionKey: _nodesSessionKey?.isEmpty ?? true ? null : _nodesSessionKey,
       );
-      _nodesError = null;
-    } catch (e) {
-      _nodesError = e.toString();
-      _nodes = [];
+
+      final groupsFuture = _service.getServerGroups(
+        serverHost: _nodesServerHost,
+        serverPort: _nodesServerPort,
+        sessionKey: _nodesSessionKey?.isEmpty ?? true ? null : _nodesSessionKey,
+      );
+
+      try {
+        _nodes = await nodesFuture;
+        _nodesError = null;
+      } catch (e) {
+        _nodesError = e.toString();
+        _nodes = [];
+      }
+
+      try {
+        _groups = await groupsFuture;
+        _groupsError = null;
+      } catch (e) {
+        _groupsError = e.toString();
+        _groups = [];
+      }
     } finally {
       _isLoadingNodes = false;
       notifyListeners();

@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/node_group_model.dart';
 import '../models/node_model.dart';
 import 'proxy_ffi.dart';
 
@@ -287,6 +288,65 @@ class ProxyService {
     }
   }
 
+  // Isolate entry point for group listing
+  static Future<Map<String, dynamic>> _getServerGroupsIsolate(
+    Map<String, dynamic> params,
+  ) async {
+    final ffi = ProxyFFI();
+    final serverHost = params['serverHost'] as String;
+    final serverPort = params['serverPort'] as int;
+    final sessionKey = params['sessionKey'] as String?;
+    final timeoutMs = params['timeoutMs'] as int;
+
+    final hostPtr = serverHost.toNativeUtf8();
+    final keyPtr = sessionKey?.toNativeUtf8() ?? nullptr;
+
+    try {
+      final result = ffi.proxyGetServerGroups(
+        hostPtr,
+        serverPort,
+        keyPtr,
+        timeoutMs,
+      );
+
+      try {
+        if (result.success == 1) {
+          final groups = <Map<String, dynamic>>[];
+          for (int i = 0; i < result.count; i++) {
+            final group = (result.groups + i).ref;
+            final nodeIds = <String>[];
+            for (int j = 0; j < group.nodeIdsCount; j++) {
+              final nodeIdPtr = group.nodeIds.elementAt(j).value;
+              nodeIds.add(nodeIdPtr.toDartString());
+            }
+            groups.add({
+              'groupId': group.groupId.toDartString(),
+              'name': group.name.toDartString(),
+              'nodeIds': nodeIds,
+              'createdAtMs': group.createdAtMs,
+            });
+          }
+          return {'success': true, 'groups': groups};
+        } else {
+          final error = result.error.toDartString();
+          return {'success': false, 'error': error};
+        }
+      } finally {
+        // Free the GroupsResult allocated by Rust
+        final resultPtr = calloc<GroupsResult>();
+        resultPtr.ref.success = result.success;
+        resultPtr.ref.groups = result.groups;
+        resultPtr.ref.count = result.count;
+        resultPtr.ref.error = result.error;
+        ffi.proxyFreeGroupsResult(resultPtr);
+        calloc.free(resultPtr);
+      }
+    } finally {
+      calloc.free(hostPtr);
+      if (keyPtr != nullptr) calloc.free(keyPtr);
+    }
+  }
+
   /// Get all nodes from server with geo location info.
   Future<List<NodeInfo>> getServerNodes({
     required String serverHost,
@@ -316,6 +376,37 @@ class ProxyService {
           .toList();
     } else {
       throw Exception(result['error'] ?? 'Failed to get nodes');
+    }
+  }
+
+  /// Get all node groups from server.
+  Future<List<NodeGroupModel>> getServerGroups({
+    required String serverHost,
+    required int serverPort,
+    String? sessionKey,
+    int timeoutMs = 10000,
+  }) async {
+    final result = await compute(_getServerGroupsIsolate, {
+      'serverHost': serverHost,
+      'serverPort': serverPort,
+      'sessionKey': sessionKey,
+      'timeoutMs': timeoutMs,
+    });
+
+    if (result['success'] == true) {
+      final groupsList = result['groups'] as List;
+      return groupsList
+          .map(
+            (g) => NodeGroupModel(
+              groupId: g['groupId'],
+              name: g['name'],
+              nodeIds: List<String>.from(g['nodeIds'] as List),
+              createdAt: DateTime.fromMillisecondsSinceEpoch(g['createdAtMs']),
+            ),
+          )
+          .toList();
+    } else {
+      throw Exception(result['error'] ?? 'Failed to get groups');
     }
   }
 }

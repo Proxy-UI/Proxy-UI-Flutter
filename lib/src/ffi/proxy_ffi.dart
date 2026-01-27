@@ -26,11 +26,32 @@ final class NodeInfoWithGeo extends Struct {
   external Pointer<Utf8> region;
 }
 
+/// NodeGroupInfo structure from FFI.
+final class NodeGroupInfo extends Struct {
+  external Pointer<Utf8> groupId;
+  external Pointer<Utf8> name;
+  external Pointer<Pointer<Utf8>> nodeIds;
+  @Size()
+  external int nodeIdsCount;
+  @Int64()
+  external int createdAtMs;
+}
+
 /// NodesResult structure from FFI.
 final class NodesResult extends Struct {
   @Int32()
   external int success;
   external Pointer<NodeInfoWithGeo> nodes;
+  @Size()
+  external int count;
+  external Pointer<Utf8> error;
+}
+
+/// GroupsResult structure from FFI.
+final class GroupsResult extends Struct {
+  @Int32()
+  external int success;
+  external Pointer<NodeGroupInfo> groups;
   @Size()
   external int count;
   external Pointer<Utf8> error;
@@ -144,6 +165,22 @@ typedef _ProxyGetServerNodesDart =
       int timeoutMs,
     );
 
+// proxy_get_server_groups
+typedef _ProxyGetServerGroupsNative =
+    GroupsResult Function(
+      Pointer<Utf8> serverHost,
+      Uint16 serverPort,
+      Pointer<Utf8> sessionKey,
+      Uint32 timeoutMs,
+    );
+typedef _ProxyGetServerGroupsDart =
+    GroupsResult Function(
+      Pointer<Utf8> serverHost,
+      int serverPort,
+      Pointer<Utf8> sessionKey,
+      int timeoutMs,
+    );
+
 // proxy_free_latency_result
 typedef _ProxyFreeLatencyResultNative =
     Void Function(Pointer<LatencyResult> result);
@@ -154,6 +191,12 @@ typedef _ProxyFreeLatencyResultDart =
 typedef _ProxyFreeNodesResultNative =
     Void Function(Pointer<NodesResult> result);
 typedef _ProxyFreeNodesResultDart = void Function(Pointer<NodesResult> result);
+
+// proxy_free_groups_result
+typedef _ProxyFreeGroupsResultNative =
+    Void Function(Pointer<GroupsResult> result);
+typedef _ProxyFreeGroupsResultDart =
+    void Function(Pointer<GroupsResult> result);
 
 /// FFI bindings for proxy library.
 class ProxyFFI {
@@ -243,6 +286,11 @@ class ProxyFFI {
         'proxy_get_server_nodes',
       );
 
+  late final proxyGetServerGroups = lib
+      .lookupFunction<_ProxyGetServerGroupsNative, _ProxyGetServerGroupsDart>(
+        'proxy_get_server_groups',
+      );
+
   late final proxyFreeLatencyResult = lib
       .lookupFunction<
         _ProxyFreeLatencyResultNative,
@@ -252,5 +300,10 @@ class ProxyFFI {
   late final proxyFreeNodesResult = lib
       .lookupFunction<_ProxyFreeNodesResultNative, _ProxyFreeNodesResultDart>(
         'proxy_free_nodes_result',
+      );
+
+  late final proxyFreeGroupsResult = lib
+      .lookupFunction<_ProxyFreeGroupsResultNative, _ProxyFreeGroupsResultDart>(
+        'proxy_free_groups_result',
       );
 }
