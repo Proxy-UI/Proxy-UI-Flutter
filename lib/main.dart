@@ -69,6 +69,7 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
   void dispose() {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       windowManager.removeListener(this);
+      TrayService.instance.dispose();
     }
     super.dispose();
   }
@@ -77,6 +78,7 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
   Future<void> onWindowClose() async {
     // Hide to tray instead of closing
     await windowManager.hide();
+    await TrayService.instance.refreshMenu();
   }
 
   @override

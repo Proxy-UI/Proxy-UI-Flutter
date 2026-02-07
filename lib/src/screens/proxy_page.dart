@@ -39,10 +39,16 @@ class _ProxyPageState extends State<ProxyPage> {
   }
 
   void _toggleProxy(ProxyState state) async {
+    if (state.isProxyOperationInProgress) return;
+
     if (state.isRunning) {
-      state.stop();
+      final success = state.stop();
       if (mounted) {
-        ToastUtils.showSuccess('Proxy stopped');
+        if (success) {
+          ToastUtils.showSuccess('Proxy stopped');
+        } else {
+          ToastUtils.showError(state.lastError ?? 'Failed to stop proxy');
+        }
       }
     } else {
       final success = await state.start();
@@ -80,7 +86,11 @@ class _ProxyPageState extends State<ProxyPage> {
           FilledButton(
             child: const Text('Okay'),
             onPressed: () {
-              final port = int.tryParse(_portController.text) ?? 1080;
+              final port = int.tryParse(_portController.text);
+              if (port == null || port < 1 || port > 65535) {
+                ToastUtils.showError('Invalid port number (1-65535)');
+                return;
+              }
               state.updateConfig(state.config.copyWith(localPort: port));
               Navigator.of(context).pop();
             },
@@ -147,7 +157,10 @@ class _ProxyPageState extends State<ProxyPage> {
                   child: FloatingActionButton.extended(
                     heroTag: 'port_fab',
                     icon: const Icon(Icons.network_wifi),
-                    onPressed: state.isRunning ? null : _showPortDialog,
+                    onPressed:
+                        state.isRunning || state.isProxyOperationInProgress
+                        ? null
+                        : _showPortDialog,
                     label: Text('Port: ${state.config.localPort}'),
                   ),
                 ),
@@ -166,7 +179,11 @@ class _ProxyPageState extends State<ProxyPage> {
                         children: [
                           FloatingActionButton.small(
                             heroTag: 'import_fab',
-                            onPressed: state.isRunning ? null : _importConfig,
+                            onPressed:
+                                state.isRunning ||
+                                    state.isProxyOperationInProgress
+                                ? null
+                                : _importConfig,
                             tooltip: 'Import from clipboard',
                             child: const Icon(Icons.file_download),
                           ),
@@ -183,7 +200,10 @@ class _ProxyPageState extends State<ProxyPage> {
                       FloatingActionButton.extended(
                         heroTag: 'config_fab',
                         icon: const Icon(Icons.settings),
-                        onPressed: state.isRunning ? null : _showConfigDialog,
+                        onPressed:
+                            state.isRunning || state.isProxyOperationInProgress
+                            ? null
+                            : _showConfigDialog,
                         label: const Text('Config'),
                       ),
                     ],
@@ -218,7 +238,9 @@ class _ProxyPageState extends State<ProxyPage> {
                       child: Switch(
                         thumbIcon: thumbIcon,
                         value: state.isRunning,
-                        onChanged: state.config.serverHost.isEmpty
+                        onChanged:
+                            state.config.serverHost.isEmpty ||
+                                state.isProxyOperationInProgress
                             ? null
                             : (_) => _toggleProxy(state),
                       ),

@@ -19,7 +19,7 @@ class ProxyConfigModel {
   ProxyConfigModel({
     this.serverHost = '',
     this.serverPort = 1081,
-    this.localPort = 10801,
+    this.localPort = 1080,
     this.sessionKey,
     this.autoProxy = true,
     this.reverseGeo = false,
@@ -41,17 +41,36 @@ class ProxyConfigModel {
     'setSystemProxy': setSystemProxy,
   };
 
+  static int _parsePort(dynamic value, int fallback) {
+    final parsed = value is int ? value : int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed < 1 || parsed > 65535) {
+      return fallback;
+    }
+    return parsed;
+  }
+
+  static bool _parseBool(dynamic value, bool fallback) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is String) {
+      if (value.toLowerCase() == 'true') return true;
+      if (value.toLowerCase() == 'false') return false;
+    }
+    return fallback;
+  }
+
   factory ProxyConfigModel.fromJson(Map<String, dynamic> json) =>
       ProxyConfigModel(
-        serverHost: json['serverHost'] ?? '',
-        serverPort: json['serverPort'] ?? 1081,
-        localPort: json['localPort'] ?? 1080,
-        sessionKey: json['sessionKey'],
-        autoProxy: json['autoProxy'] ?? true,
-        reverseGeo: json['reverseGeo'] ?? false,
-        needCodecIps: json['needCodecIps'],
-        forceCodec: json['forceCodec'] ?? false,
-        setSystemProxy: json['setSystemProxy'] ?? isDesktop,
+        serverHost: (json['serverHost'] ?? '').toString(),
+        serverPort: _parsePort(json['serverPort'], 1081),
+        localPort: _parsePort(json['localPort'], 1080),
+        sessionKey: json['sessionKey']?.toString(),
+        autoProxy: _parseBool(json['autoProxy'], true),
+        reverseGeo: _parseBool(json['reverseGeo'], false),
+        needCodecIps: json['needCodecIps']?.toString(),
+        forceCodec: _parseBool(json['forceCodec'], false),
+        setSystemProxy: _parseBool(json['setSystemProxy'], isDesktop),
       );
 
   ProxyConfigModel copyWith({

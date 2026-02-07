@@ -103,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen>
               _BrightnessButton(themeState: themeState),
               _ColorSeedButton(themeState: themeState),
             ]
-          : [Container()],
+          : const [],
     );
   }
 

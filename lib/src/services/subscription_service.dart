@@ -14,6 +14,10 @@ class SubscriptionService {
   ProxyConfigModel? _config;
 
   Future<void> start(ProxyConfigModel config, int port) async {
+    if (_server != null) {
+      await stop();
+    }
+
     _config = config;
     _port = port;
 

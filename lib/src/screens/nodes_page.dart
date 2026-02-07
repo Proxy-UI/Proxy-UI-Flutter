@@ -44,18 +44,24 @@ class _NodesPageState extends State<NodesPage> {
     super.dispose();
   }
 
-  void _fetchNodes() {
+  Future<void> _fetchNodes() async {
     final state = context.read<ProxyState>();
+    final port = int.tryParse(_portController.text);
+    if (port == null || port < 1 || port > 65535) {
+      ToastUtils.showError('Invalid port number (1-65535)');
+      return;
+    }
+
     state.updateNodesServerConfig(
       host: _hostController.text.trim(),
-      port: int.tryParse(_portController.text) ?? 1081,
+      port: port,
       sessionKey: _keyController.text.trim(),
     );
-    state.fetchNodes();
+    await state.fetchNodes();
   }
 
   Future<void> _onRefresh() async {
-    _fetchNodes();
+    await _fetchNodes();
   }
 
   Future<void> _exportConfig(BuildContext context, NodeInfo node) async {
@@ -198,7 +204,9 @@ class _NodesPageState extends State<NodesPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: state.isLoadingNodes ? null : _fetchNodes,
+                          onPressed: state.isLoadingNodes
+                              ? null
+                              : () => _fetchNodes(),
                           icon: state.isLoadingNodes
                               ? const SizedBox(
                                   width: 18,

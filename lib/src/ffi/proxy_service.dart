@@ -200,7 +200,9 @@ class ProxyService {
         if (result.success == 1) {
           return {'success': true, 'latencyMs': result.latencyMs};
         } else {
-          final error = result.error.toDartString();
+          final error = result.error == nullptr
+              ? 'Latency test failed'
+              : result.error.toDartString();
           return {'success': false, 'error': error};
         }
       } finally {
@@ -268,7 +270,9 @@ class ProxyService {
           }
           return {'success': true, 'nodes': nodes};
         } else {
-          final error = result.error.toDartString();
+          final error = result.error == nullptr
+              ? 'Failed to get nodes'
+              : result.error.toDartString();
           return {'success': false, 'error': error};
         }
       } finally {
@@ -316,7 +320,7 @@ class ProxyService {
             final group = (result.groups + i).ref;
             final nodeIds = <String>[];
             for (int j = 0; j < group.nodeIdsCount; j++) {
-              final nodeIdPtr = group.nodeIds.elementAt(j).value;
+              final nodeIdPtr = (group.nodeIds + j).value;
               nodeIds.add(nodeIdPtr.toDartString());
             }
             groups.add({
@@ -328,7 +332,9 @@ class ProxyService {
           }
           return {'success': true, 'groups': groups};
         } else {
-          final error = result.error.toDartString();
+          final error = result.error == nullptr
+              ? 'Failed to get groups'
+              : result.error.toDartString();
           return {'success': false, 'error': error};
         }
       } finally {

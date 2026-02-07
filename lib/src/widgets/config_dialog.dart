@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
-import '../models/proxy_config.dart';
 import '../utils/toast_utils.dart';
 
 /// Configuration dialog for proxy settings - simplified AlertDialog style
@@ -53,11 +52,23 @@ class _ConfigDialogState extends State<ConfigDialog> {
 
   void _save() {
     final state = context.read<ProxyState>();
+    final serverPort = int.tryParse(_serverPortController.text);
+    final localPort = int.tryParse(_localPortController.text);
+    if (serverPort == null || serverPort < 1 || serverPort > 65535) {
+      ToastUtils.showError('Invalid server port (1-65535)');
+      return;
+    }
+    if (localPort == null || localPort < 1 || localPort > 65535) {
+      ToastUtils.showError('Invalid local port (1-65535)');
+      return;
+    }
+
+    final currentConfig = state.config;
     state.updateConfig(
-      ProxyConfigModel(
+      currentConfig.copyWith(
         serverHost: _hostController.text.trim(),
-        serverPort: int.tryParse(_serverPortController.text) ?? 1081,
-        localPort: int.tryParse(_localPortController.text) ?? 1080,
+        serverPort: serverPort,
+        localPort: localPort,
         sessionKey: _sessionKeyController.text.isEmpty
             ? null
             : _sessionKeyController.text,

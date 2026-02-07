@@ -63,18 +63,30 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
   Widget _buildToggleButton(BuildContext context, ProxyState state) {
     return FilledButton.icon(
-      onPressed: () async {
-        if (state.subscriptionServiceRunning) {
-          await state.stopSubscriptionService();
-        } else {
-          await _showPortDialog(context, state);
-        }
-      },
-      icon: Icon(
-        state.subscriptionServiceRunning ? Icons.stop : Icons.play_arrow,
-      ),
+      onPressed: state.subscriptionServiceBusy
+          ? null
+          : () async {
+              if (state.subscriptionServiceRunning) {
+                await state.stopSubscriptionService();
+              } else {
+                await _showPortDialog(context, state);
+              }
+            },
+      icon: state.subscriptionServiceBusy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(
+              state.subscriptionServiceRunning ? Icons.stop : Icons.play_arrow,
+            ),
       label: Text(
-        state.subscriptionServiceRunning ? 'Stop Service' : 'Start Service',
+        state.subscriptionServiceBusy
+            ? 'Processing...'
+            : state.subscriptionServiceRunning
+            ? 'Stop Service'
+            : 'Start Service',
       ),
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 20),
@@ -85,43 +97,53 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
   Future<void> _showPortDialog(BuildContext context, ProxyState state) async {
     final controller = TextEditingController(text: _selectedPort.toString());
-    final result = await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Configure Port'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(
-            labelText: 'Port',
-            hintText: '8080',
-            helperText: 'Port number (1024-65535)',
+    try {
+      final result = await showDialog<int>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Configure Port'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Port',
+              hintText: '8080',
+              helperText: 'Port number (1024-65535)',
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final port = int.tryParse(controller.text);
+                if (port != null && port >= 1024 && port <= 65535) {
+                  Navigator.pop(context, port);
+                } else {
+                  ToastUtils.showError('Invalid port number (1024-65535)');
+                }
+              },
+              child: const Text('Start'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final port = int.tryParse(controller.text);
-              if (port != null && port >= 1024 && port <= 65535) {
-                Navigator.pop(context, port);
-              } else {
-                ToastUtils.showError('Invalid port number (1024-65535)');
-              }
-            },
-            child: const Text('Start'),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (result != null) {
-      _selectedPort = result;
-      await state.startSubscriptionService(port: result);
+      if (result != null) {
+        _selectedPort = result;
+        try {
+          await state.startSubscriptionService(port: result);
+        } catch (e) {
+          if (mounted) {
+            ToastUtils.showError('Failed to start service: $e');
+          }
+        }
+      }
+    } finally {
+      controller.dispose();
     }
   }
 
