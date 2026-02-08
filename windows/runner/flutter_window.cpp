@@ -65,6 +65,17 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
+    case WM_DISPLAYCHANGE:
+      // Display wake/switch can leave stale surfaces on some Windows GPUs.
+      flutter_controller_->ForceRedraw();
+      break;
+    case WM_POWERBROADCAST:
+      if (wparam == PBT_APMRESUMEAUTOMATIC ||
+          wparam == PBT_APMRESUMESUSPEND ||
+          wparam == PBT_APMRESUMECRITICAL) {
+        flutter_controller_->ForceRedraw();
+      }
+      break;
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);

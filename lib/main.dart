@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -50,10 +51,12 @@ class ProxyApp extends StatefulWidget {
   State<ProxyApp> createState() => _ProxyAppState();
 }
 
-class _ProxyAppState extends State<ProxyApp> with WindowListener {
+class _ProxyAppState extends State<ProxyApp>
+    with WindowListener, WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Initialize tray and window listener for desktop platforms
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -67,6 +70,7 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       windowManager.removeListener(this);
       TrayService.instance.dispose();
@@ -79,6 +83,16 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
     // Hide to tray instead of closing
     await windowManager.hide();
     await TrayService.instance.refreshMenu();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      unawaited(TrayService.instance.handleSystemResume());
+    }
   }
 
   @override
