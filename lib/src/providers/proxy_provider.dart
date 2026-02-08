@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../constants.dart';
+
 import '../ffi/proxy_ffi.dart';
 import '../ffi/proxy_service.dart';
 import '../models/node_group_model.dart';
@@ -59,8 +61,11 @@ class ProxyState extends ChangeNotifier {
   String? get lastError => _lastError;
   List<LogEntry> get logs => List.unmodifiable(_logs);
   int get minLogLevel => _minLogLevel;
-  List<LogEntry> get filteredLogs =>
-      _logs.where((e) => e.level >= _minLogLevel).toList();
+  List<LogEntry> get filteredLogs => _logs
+      .where(
+        (e) => LogLevel.includes(threshold: _minLogLevel, entryLevel: e.level),
+      )
+      .toList();
 
   // Subscription service getters
   bool get subscriptionServiceRunning => _subscriptionServiceRunning;
@@ -229,7 +234,7 @@ class ProxyState extends ChangeNotifier {
   }
 
   void setMinLogLevel(int level) {
-    _minLogLevel = level.clamp(0, 4);
+    _minLogLevel = LogLevel.normalize(level);
     _safeNotifyListeners();
   }
 

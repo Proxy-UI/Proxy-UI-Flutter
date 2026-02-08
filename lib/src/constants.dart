@@ -46,7 +46,28 @@ enum ColorSeed {
 
 /// Log level utilities
 class LogLevel {
+  static const int trace = 0;
+  static const int debug = 1;
+  static const int info = 2;
+  static const int warn = 3;
+  static const int error = 4;
+
   static const List<String> names = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
+
+  static int normalize(int level) {
+    if (level < trace) {
+      return trace;
+    }
+    if (level > error) {
+      return error;
+    }
+    return level;
+  }
+
+  // Threshold-based filtering: INFO means INFO/WARN/ERROR.
+  static bool includes({required int threshold, required int entryLevel}) {
+    return normalize(entryLevel) >= normalize(threshold);
+  }
 
   static Color getColor(int level, {bool isDark = true}) {
     switch (level) {
@@ -66,9 +87,19 @@ class LogLevel {
   }
 
   static String getName(int level) {
-    if (level >= 0 && level < names.length) {
-      return names[level];
+    final normalized = normalize(level);
+    if (normalized >= 0 && normalized < names.length) {
+      return names[normalized];
     }
     return 'UNKNOWN';
+  }
+
+  static String getThresholdLabel(int level) {
+    final normalized = normalize(level);
+    final base = getName(normalized);
+    if (normalized == error) {
+      return base;
+    }
+    return '$base+';
   }
 }

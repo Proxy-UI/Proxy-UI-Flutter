@@ -172,7 +172,7 @@ class _LogPageState extends State<LogPage> {
           ),
         ),
         const SizedBox(width: 12),
-        // Level 过滤
+        // Level 过滤（阈值，INFO+ 表示包含更高等级）
         _buildFilterDropdown(context, state, isDark),
         const SizedBox(width: 8),
         // 清除按钮
@@ -207,7 +207,7 @@ class _LogPageState extends State<LogPage> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(LogLevel.getName(index)),
+              Text(LogLevel.getThresholdLabel(index)),
             ],
           ),
         );
