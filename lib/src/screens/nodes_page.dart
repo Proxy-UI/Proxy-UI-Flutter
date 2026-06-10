@@ -20,8 +20,10 @@ class _NodesPageState extends State<NodesPage> {
   final _hostController = TextEditingController();
   final _portController = TextEditingController();
   final _keyController = TextEditingController();
+  final _searchController = TextEditingController();
   bool _showConfig = true;
   String? _selectedGroupId;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -41,7 +43,28 @@ class _NodesPageState extends State<NodesPage> {
     _hostController.dispose();
     _portController.dispose();
     _keyController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _saveControlServer() {
+    final state = context.read<ProxyState>();
+    final host = _hostController.text.trim();
+    final port = int.tryParse(_portController.text);
+    if (host.isEmpty) {
+      ToastUtils.showError('Host is required');
+      return;
+    }
+    if (port == null || port < 1 || port > 65535) {
+      ToastUtils.showError('Invalid port number (1-65535)');
+      return;
+    }
+    state.updateNodesServerConfig(
+      host: host,
+      port: port,
+      sessionKey: _keyController.text.trim(),
+    );
+    ToastUtils.showSuccess('Control server saved');
   }
 
   Future<void> _fetchNodes() async {
@@ -109,7 +132,7 @@ class _NodesPageState extends State<NodesPage> {
     });
 
     try {
-      await state.pingCurrentNode();
+      await state.pingNode(node);
       // No toast on success - latency is already displayed on the card
     } catch (e) {
       if (mounted) {
@@ -201,29 +224,44 @@ class _NodesPageState extends State<NodesPage> {
                         obscureText: true,
                       ),
                       const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: state.isLoadingNodes
-                              ? null
-                              : () => _fetchNodes(),
-                          icon: state.isLoadingNodes
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.refresh),
-                          label: const Text('Fetch Nodes'),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: state.isLoadingNodes
+                                  ? null
+                                  : _saveControlServer,
+                              icon: const Icon(Icons.save),
+                              label: const Text('Save'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: state.isLoadingNodes
+                                  ? null
+                                  : () => _fetchNodes(),
+                              icon: state.isLoadingNodes
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.refresh),
+                              label: const Text('Fetch Nodes'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],
                 ),
               ),
             ),
+            // Search bar (only when nodes are loaded)
+            if (state.nodes.isNotEmpty) _buildSearchBar(),
             // Nodes list
             Expanded(
               child: RefreshIndicator(
@@ -307,7 +345,7 @@ class _NodesPageState extends State<NodesPage> {
         if (state.groups.isNotEmpty) _buildGroupSelector(state),
         if (state.groups.isNotEmpty) const SizedBox(height: 12),
         if (filteredNodes.isEmpty)
-          _buildEmptyGroupState(state)
+          _buildEmptyResults(state)
         else
           ...filteredNodes.map((node) => _buildNodeCard(context, state, node)),
       ],
@@ -315,20 +353,88 @@ class _NodesPageState extends State<NodesPage> {
   }
 
   List<NodeInfo> _filterNodes(ProxyState state) {
-    if (_selectedGroupId == null) {
-      return state.nodes;
+    Iterable<NodeInfo> nodes = state.nodes;
+
+    // Group filter (chip selection)
+    if (_selectedGroupId != null && state.groups.isNotEmpty) {
+      final group = state.groups.firstWhere(
+        (g) => g.groupId == _selectedGroupId,
+        orElse: () => state.groups.first,
+      );
+      final nodeIdSet = group.nodeIds.toSet();
+      nodes = nodes.where((node) => nodeIdSet.contains(node.nodeId));
     }
-    if (state.groups.isEmpty) {
-      return state.nodes;
+
+    // Text search across country / region / IP / group name
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      nodes = nodes.where((node) => _matchesQuery(node, query, state));
     }
-    final group = state.groups.firstWhere(
-      (g) => g.groupId == _selectedGroupId,
-      orElse: () => state.groups.first,
+
+    return nodes.toList();
+  }
+
+  bool _matchesQuery(NodeInfo node, String query, ProxyState state) {
+    if (node.country.toLowerCase().contains(query) ||
+        node.region.toLowerCase().contains(query) ||
+        node.addr.toLowerCase().contains(query) ||
+        node.nodeId.toLowerCase().contains(query)) {
+      return true;
+    }
+    // Match against the names of groups this node belongs to
+    for (final group in state.groups) {
+      if (group.name.toLowerCase().contains(query) &&
+          group.nodeIds.contains(node.nodeId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Search by country, region, IP or group',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: 'Clear',
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+          border: const OutlineInputBorder(),
+        ),
+      ),
     );
-    final nodeIdSet = group.nodeIds.toSet();
-    return state.nodes
-        .where((node) => nodeIdSet.contains(node.nodeId))
-        .toList();
+  }
+
+  Widget _buildEmptyResults(ProxyState state) {
+    final query = _searchQuery.trim();
+    if (query.isNotEmpty) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.search_off),
+              const SizedBox(width: 8),
+              Expanded(child: Text('No nodes match "$query"')),
+            ],
+          ),
+        ),
+      );
+    }
+    return _buildEmptyGroupState(state);
   }
 
   Widget _buildGroupSelector(ProxyState state) {
@@ -422,7 +528,6 @@ class _NodesPageState extends State<NodesPage> {
 
   Widget _buildNodeCard(BuildContext context, ProxyState state, NodeInfo node) {
     final isCurrent = state.isCurrentNode(node);
-    final canPing = isCurrent && state.isRunning;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -494,7 +599,7 @@ class _NodesPageState extends State<NodesPage> {
                 'Latency: ${node.latencyMs}ms',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: _latencyColor(node.latencyMs!),
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -503,7 +608,9 @@ class _NodesPageState extends State<NodesPage> {
             const SizedBox(height: 12),
 
             // Action buttons
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 // Export Config button (always available)
                 ElevatedButton.icon(
@@ -517,30 +624,30 @@ class _NodesPageState extends State<NodesPage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
 
-                // Switch or Ping button
-                if (isCurrent && canPing)
-                  ElevatedButton.icon(
-                    onPressed: _pingLoading[node.nodeId] == true
-                        ? null
-                        : () => _pingNode(context, node),
-                    icon: _pingLoading[node.nodeId] == true
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.speed, size: 18),
-                    label: const Text('Ping'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                // Ping button (always available — no switching required)
+                ElevatedButton.icon(
+                  onPressed: _pingLoading[node.nodeId] == true
+                      ? null
+                      : () => _pingNode(context, node),
+                  icon: _pingLoading[node.nodeId] == true
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.speed, size: 18),
+                  label: const Text('Ping'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
-                  )
-                else if (!isCurrent)
+                  ),
+                ),
+
+                // Switch button (only for non-current nodes)
+                if (!isCurrent)
                   ElevatedButton.icon(
                     onPressed: _switchLoading[node.nodeId] == true
                         ? null
@@ -566,6 +673,12 @@ class _NodesPageState extends State<NodesPage> {
         ),
       ),
     );
+  }
+
+  Color _latencyColor(int ms) {
+    if (ms < 100) return Colors.green;
+    if (ms < 300) return Colors.orange;
+    return Colors.red;
   }
 
   String _formatLastSeen(DateTime lastSeen) {
