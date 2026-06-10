@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 import 'src/providers/proxy_provider.dart';
 import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
+import 'src/theme.dart';
 import 'src/services/tray_service.dart';
 
 void main() async {
@@ -103,16 +104,8 @@ class _ProxyAppState extends State<ProxyApp>
           title: 'Proxy With Flutter',
           debugShowCheckedModeBanner: false,
           themeMode: themeState.themeMode,
-          theme: ThemeData(
-            colorSchemeSeed: themeState.colorSeed.color,
-            useMaterial3: true,
-            brightness: Brightness.light,
-          ),
-          darkTheme: ThemeData(
-            colorSchemeSeed: themeState.colorSeed.color,
-            useMaterial3: true,
-            brightness: Brightness.dark,
-          ),
+          theme: AppTheme.light(themeState.colorSeed),
+          darkTheme: AppTheme.dark(themeState.colorSeed),
           home: const HomeScreen(),
         );
       },
