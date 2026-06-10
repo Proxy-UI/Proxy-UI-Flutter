@@ -334,44 +334,50 @@ class _ProxyPageState extends State<ProxyPage> {
         ),
         const SizedBox(height: mediumSpacing),
         // Server address pill (tap to copy)
-        Tooltip(
-          message: hasServer ? 'Tap to copy' : '',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap: hasServer ? () => _copyText(serverLabel) : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: scheme.outlineVariant.withValues(alpha: 0.6),
+        TooltipVisibility(
+          visible: hasServer,
+          child: Tooltip(
+            message: 'Tap to copy',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: hasServer ? () => _copyText(serverLabel) : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.dns_outlined,
-                    size: 14,
-                    color: scheme.onSurfaceVariant,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.6),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    serverLabel,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.dns_outlined,
+                      size: 14,
                       color: scheme.onSurfaceVariant,
                     ),
-                  ),
-                  if (hasServer) ...[
                     const SizedBox(width: 6),
-                    Icon(
-                      Icons.copy_rounded,
-                      size: 12,
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    Text(
+                      serverLabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
+                    if (hasServer) ...[
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.copy_rounded,
+                        size: 12,
+                        color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
