@@ -11,7 +11,7 @@ class ThemeState extends ChangeNotifier {
   static const String _modeKey = 'theme_mode';
 
   ThemeMode _themeMode = ThemeMode.system;
-  ColorSeed _colorSeed = ColorSeed.baseColor;
+  ColorSeed _colorSeed = ColorSeed.aurora;
   bool _isDisposed = false;
 
   ThemeMode get themeMode => _themeMode;

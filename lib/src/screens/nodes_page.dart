@@ -1,5 +1,6 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/node_model.dart';
@@ -45,6 +46,13 @@ class _NodesPageState extends State<NodesPage> {
     _keyController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _copyText(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ToastUtils.showSuccess('Copied $text');
+    }
   }
 
   void _saveControlServer() {
@@ -574,11 +582,39 @@ class _NodesPageState extends State<NodesPage> {
             ),
             const SizedBox(height: 8),
 
-            // Address
-            Text(
-              node.addr,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+            // Address (tap to copy)
+            Tooltip(
+              message: 'Tap to copy',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () => _copyText(node.addr),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          node.addr,
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.copy_rounded,
+                        size: 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 4),

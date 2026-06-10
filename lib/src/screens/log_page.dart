@@ -86,40 +86,38 @@ class _LogPageState extends State<LogPage> {
         }
         _lastKnownLogCount = currentLogCount;
 
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                // 工具栏
-                _buildToolbar(context, state, logs.length),
-                const SizedBox(height: 16),
-                // 日志卡片
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Card(
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12.0),
-                          child: _buildLogList(context, logs),
-                        ),
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // 工具栏
+              _buildToolbar(context, state, logs.length),
+              const SizedBox(height: 16),
+              // 日志卡片
+              Expanded(
+                child: Stack(
+                  children: [
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.0),
                       ),
-                      // 新日志提示按钮
-                      if (_newLogsCount > 0 && !_isAtBottom)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: _buildNewLogsButton(),
-                        ),
-                    ],
-                  ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12.0),
+                        child: _buildLogList(context, logs),
+                      ),
+                    ),
+                    // 新日志提示按钮
+                    if (_newLogsCount > 0 && !_isAtBottom)
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: _buildNewLogsButton(),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },

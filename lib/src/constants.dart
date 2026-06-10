@@ -29,7 +29,7 @@ const Curve navCurve = Curves.easeInOutCubicEmphasized;
 
 /// Color seed options
 enum ColorSeed {
-  baseColor('M3 Baseline', Color(0xff6750a4)),
+  aurora('Aurora', Color(0xFF22D3EE)),
   indigo('Indigo', Colors.indigo),
   blue('Blue', Colors.blue),
   teal('Teal', Colors.teal),

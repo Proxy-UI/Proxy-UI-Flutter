@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -6,8 +7,10 @@ import 'package:provider/provider.dart';
 
 import '../models/proxy_config.dart';
 import '../providers/proxy_provider.dart';
+import '../constants.dart';
 import '../utils/toast_utils.dart';
 import '../widgets/config_dialog.dart';
+import '../widgets/connect_button.dart';
 
 /// Proxy control page with simple switch and config FAB
 class ProxyPage extends StatefulWidget {
@@ -24,18 +27,47 @@ class _ProxyPageState extends State<ProxyPage> {
     text: '1080',
   );
 
-  final WidgetStateProperty<Icon?> thumbIcon =
-      WidgetStateProperty.resolveWith<Icon?>((states) {
-        if (states.contains(WidgetState.selected)) {
-          return const Icon(Icons.flight_takeoff);
-        }
-        return const Icon(Icons.flight_land);
-      });
+  // Connection duration ticker (display only).
+  bool _wasRunning = false;
+  DateTime? _connectedAt;
+  Timer? _ticker;
 
   @override
   void dispose() {
+    _ticker?.cancel();
     _portController.dispose();
     super.dispose();
+  }
+
+  // Track isRunning transitions to start/stop the 1s duration ticker.
+  void _syncConnectionTicker(bool running) {
+    if (running == _wasRunning) return;
+    _wasRunning = running;
+    if (running) {
+      _connectedAt = DateTime.now();
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      _connectedAt = null;
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  String _formatConnectedFor(Duration d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
+  }
+
+  Future<void> _copyText(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ToastUtils.showSuccess('Copied $text');
+    }
   }
 
   void _toggleProxy(ProxyState state) async {
@@ -146,8 +178,37 @@ class _ProxyPageState extends State<ProxyPage> {
   Widget build(BuildContext context) {
     return Consumer<ProxyState>(
       builder: (context, state, _) {
+        _syncConnectionTicker(state.isRunning);
+        final scheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Stack(
           children: [
+            // Aurora ambient behind the hero button while connected
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: state.isRunning ? 1 : 0,
+                  duration: longDuration,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        radius: 0.9,
+                        colors: [
+                          scheme.primary.withValues(
+                            alpha: isDark ? 0.14 : 0.10,
+                          ),
+                          scheme.secondary.withValues(
+                            alpha: isDark ? 0.06 : 0.04,
+                          ),
+                          scheme.secondary.withValues(alpha: 0),
+                        ],
+                        stops: const [0.0, 0.55, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             // Port FAB at bottom right
             Align(
               alignment: Alignment.bottomRight,
@@ -208,47 +269,120 @@ class _ProxyPageState extends State<ProxyPage> {
                 ),
               ),
             ),
-            // Center switch
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Status text
-                  Text(
-                    state.isRunning ? 'Connected' : 'Disconnected',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    state.config.serverHost.isEmpty
-                        ? 'Configure server first'
-                        : '${state.config.serverHost}:${state.config.serverPort}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Large switch
-                  Transform.scale(
-                    scale: 1.8,
-                    child: Switch(
-                      thumbIcon: thumbIcon,
-                      value: state.isRunning,
-                      onChanged:
-                          state.config.serverHost.isEmpty ||
-                              state.isProxyOperationInProgress
-                          ? null
-                          : (_) => _toggleProxy(state),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Hero connect button with status
+            Center(child: _buildHero(context, state, scheme)),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildHero(
+    BuildContext context,
+    ProxyState state,
+    ColorScheme scheme,
+  ) {
+    final busy = state.isProxyOperationInProgress;
+    final connected = state.isRunning;
+    final statusLabel = busy
+        ? (connected ? 'Stopping…' : 'Connecting…')
+        : (connected ? 'Connected' : 'Disconnected');
+    final statusColor = busy
+        ? scheme.tertiary
+        : (connected ? scheme.primary : scheme.onSurface);
+    final hasServer = state.config.serverHost.isNotEmpty;
+    final serverLabel = hasServer
+        ? '${state.config.serverHost}:${state.config.serverPort}'
+        : 'Configure server first';
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ConnectButton(
+          isRunning: connected,
+          isBusy: busy,
+          enabled: state.config.serverHost.isNotEmpty && !busy,
+          onPressed: () => _toggleProxy(state),
+        ),
+        const SizedBox(height: mediumSpacing),
+        AnimatedSwitcher(
+          duration: shortDuration,
+          child: Column(
+            key: ValueKey(statusLabel),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                statusLabel,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: statusColor,
+                ),
+              ),
+              if (connected && !busy && _connectedAt != null) ...[
+                const SizedBox(height: tinySpacing),
+                Text(
+                  _formatConnectedFor(DateTime.now().difference(_connectedAt!)),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: mediumSpacing),
+        // Server address pill (tap to copy)
+        TooltipVisibility(
+          visible: hasServer,
+          child: Tooltip(
+            message: 'Tap to copy',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: hasServer ? () => _copyText(serverLabel) : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.dns_outlined,
+                      size: 14,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      serverLabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (hasServer) ...[
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.copy_rounded,
+                        size: 12,
+                        color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
