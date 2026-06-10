@@ -146,110 +146,107 @@ class _ProxyPageState extends State<ProxyPage> {
   Widget build(BuildContext context) {
     return Consumer<ProxyState>(
       builder: (context, state, _) {
-        return Expanded(
-          child: Stack(
-            children: [
-              // Port FAB at bottom right
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: FloatingActionButton.extended(
-                    heroTag: 'port_fab',
-                    icon: const Icon(Icons.network_wifi),
-                    onPressed:
-                        state.isRunning || state.isProxyOperationInProgress
-                        ? null
-                        : _showPortDialog,
-                    label: Text('Port: ${state.config.localPort}'),
-                  ),
+        return Stack(
+          children: [
+            // Port FAB at bottom right
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: FloatingActionButton.extended(
+                  heroTag: 'port_fab',
+                  icon: const Icon(Icons.network_wifi),
+                  onPressed: state.isRunning || state.isProxyOperationInProgress
+                      ? null
+                      : _showPortDialog,
+                  label: Text('Port: ${state.config.localPort}'),
                 ),
               ),
-              // Config FAB at bottom left
-              Align(
-                alignment: Alignment.bottomLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FloatingActionButton.small(
-                            heroTag: 'import_fab',
-                            onPressed:
-                                state.isRunning ||
-                                    state.isProxyOperationInProgress
-                                ? null
-                                : _importConfig,
-                            tooltip: 'Import from clipboard',
-                            child: const Icon(Icons.file_download),
-                          ),
-                          const SizedBox(width: 8),
-                          FloatingActionButton.small(
-                            heroTag: 'export_fab',
-                            onPressed: _exportConfig,
-                            tooltip: 'Export to clipboard',
-                            child: const Icon(Icons.file_upload),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      FloatingActionButton.extended(
-                        heroTag: 'config_fab',
-                        icon: const Icon(Icons.settings),
-                        onPressed:
-                            state.isRunning || state.isProxyOperationInProgress
-                            ? null
-                            : _showConfigDialog,
-                        label: const Text('Config'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // Center switch
-              Center(
+            ),
+            // Config FAB at bottom left
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Status text
-                    Text(
-                      state.isRunning ? 'Connected' : 'Disconnected',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FloatingActionButton.small(
+                          heroTag: 'import_fab',
+                          onPressed:
+                              state.isRunning ||
+                                  state.isProxyOperationInProgress
+                              ? null
+                              : _importConfig,
+                          tooltip: 'Import from clipboard',
+                          child: const Icon(Icons.file_download),
+                        ),
+                        const SizedBox(width: 8),
+                        FloatingActionButton.small(
+                          heroTag: 'export_fab',
+                          onPressed: _exportConfig,
+                          tooltip: 'Export to clipboard',
+                          child: const Icon(Icons.file_upload),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      state.config.serverHost.isEmpty
-                          ? 'Configure server first'
-                          : '${state.config.serverHost}:${state.config.serverPort}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    // Large switch
-                    Transform.scale(
-                      scale: 1.8,
-                      child: Switch(
-                        thumbIcon: thumbIcon,
-                        value: state.isRunning,
-                        onChanged:
-                            state.config.serverHost.isEmpty ||
-                                state.isProxyOperationInProgress
-                            ? null
-                            : (_) => _toggleProxy(state),
-                      ),
+                    FloatingActionButton.extended(
+                      heroTag: 'config_fab',
+                      icon: const Icon(Icons.settings),
+                      onPressed:
+                          state.isRunning || state.isProxyOperationInProgress
+                          ? null
+                          : _showConfigDialog,
+                      label: const Text('Config'),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+            // Center switch
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Status text
+                  Text(
+                    state.isRunning ? 'Connected' : 'Disconnected',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    state.config.serverHost.isEmpty
+                        ? 'Configure server first'
+                        : '${state.config.serverHost}:${state.config.serverPort}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // Large switch
+                  Transform.scale(
+                    scale: 1.8,
+                    child: Switch(
+                      thumbIcon: thumbIcon,
+                      value: state.isRunning,
+                      onChanged:
+                          state.config.serverHost.isEmpty ||
+                              state.isProxyOperationInProgress
+                          ? null
+                          : (_) => _toggleProxy(state),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
