@@ -28,14 +28,19 @@
 
 ### 前置条件
 
-- Flutter 3.38.6+
-- 原生库（联系维护者获取）
+- **fvm**（管理 Flutter 版本）+ Flutter **3.38.6**（项目已固定）
+- 对应平台的原生库（从 Release 下载，或用 Rust 源码本地编译）
+
+> 详细环境搭建、原生库准备与各平台运行见 **[开发文档 docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**；
+> 目录结构 / 状态管理 / FFI / 代码风格等规范见 **[docs/CONVENTIONS.md](docs/CONVENTIONS.md)**。
 
 ### 本地开发
 
 ```bash
-flutter pub get
-flutter run
+fvm install 3.38.6              # 首次：安装项目固定的 Flutter 版本
+fvm use 3.38.6                  # 在本目录固定版本（生成 .fvmrc）
+fvm flutter pub get
+fvm flutter run -d windows      # 或 -d macos / -d linux / <设备 id>
 ```
 
 ### 触发发布构建
