@@ -36,6 +36,8 @@ class ProxyState extends ChangeNotifier {
 
   // Node management
   List<NodeInfo> _nodes = [];
+  // Persisted per-node ping latency (nodeId -> last measured ms).
+  final Map<String, int> _nodeLatencies = {};
   bool _isLoadingNodes = false;
   String? _nodesError;
   String? _currentNodeId; // Track which node is currently connected
@@ -50,6 +52,8 @@ class ProxyState extends ChangeNotifier {
 
   static const int maxLogs = 1000;
   static const String _configKey = 'proxy_config';
+  static const String _nodesConfigKey = 'nodes_server_config';
+  static const String _nodeLatencyKey = 'node_latencies';
 
   ProxyState() {
     _init();
@@ -96,6 +100,8 @@ class ProxyState extends ChangeNotifier {
       _service.initLogging();
       _logSubscription = ProxyService.logStream.listen(_onLog);
       await _loadConfig();
+      await _loadNodesConfig();
+      await _loadNodeLatencies();
     } catch (error, stackTrace) {
       debugPrint('ProxyState init failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -130,6 +136,75 @@ class ProxyState extends ChangeNotifier {
     } catch (error, stackTrace) {
       debugPrint('Failed to persist proxy config: $error');
       debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  // Load persisted control-server (nodes) config so it stays fixed across
+  // restarts and is never overwritten by proxy node selection.
+  Future<void> _loadNodesConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = prefs.getString(_nodesConfigKey);
+      if (json == null) return;
+      final map = jsonDecode(json) as Map<String, dynamic>;
+      _nodesServerHost = (map['host'] as String?) ?? _nodesServerHost;
+      _nodesServerPort = (map['port'] as int?) ?? _nodesServerPort;
+      final key = map['sessionKey'] as String?;
+      _nodesSessionKey = (key == null || key.isEmpty) ? null : key;
+      _safeNotifyListeners();
+    } catch (_) {
+      // Ignore invalid persisted nodes config
+    }
+  }
+
+  Future<void> _saveNodesConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _nodesConfigKey,
+        jsonEncode({
+          'host': _nodesServerHost,
+          'port': _nodesServerPort,
+          'sessionKey': _nodesSessionKey,
+        }),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Failed to persist nodes server config: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  // Per-node ping latency persistence (nodeId -> ms), retained across
+  // re-fetch and restart until the node is pinged again.
+  Future<void> _loadNodeLatencies() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = prefs.getString(_nodeLatencyKey);
+      if (json == null) return;
+      final map = jsonDecode(json) as Map<String, dynamic>;
+      _nodeLatencies
+        ..clear()
+        ..addAll(map.map((k, v) => MapEntry(k, (v as num).toInt())));
+    } catch (_) {
+      // Ignore invalid persisted latencies
+    }
+  }
+
+  Future<void> _saveNodeLatencies() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_nodeLatencyKey, jsonEncode(_nodeLatencies));
+    } catch (error, stackTrace) {
+      debugPrint('Failed to persist node latencies: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  // Reapply persisted latencies onto freshly fetched nodes.
+  void _applyPersistedLatencies() {
+    for (final node in _nodes) {
+      final ms = _nodeLatencies[node.nodeId];
+      if (ms != null) node.latencyMs = ms;
     }
   }
 
@@ -303,7 +378,10 @@ class ProxyState extends ChangeNotifier {
   void updateNodesServerConfig({String? host, int? port, String? sessionKey}) {
     if (host != null) _nodesServerHost = host;
     if (port != null) _nodesServerPort = port;
-    if (sessionKey != null) _nodesSessionKey = sessionKey;
+    if (sessionKey != null) {
+      _nodesSessionKey = sessionKey.isEmpty ? null : sessionKey;
+    }
+    unawaited(_saveNodesConfig());
     _safeNotifyListeners();
   }
 
@@ -340,6 +418,7 @@ class ProxyState extends ChangeNotifier {
 
       try {
         _nodes = await nodesFuture;
+        _applyPersistedLatencies();
         _nodesError = null;
       } catch (e) {
         _nodesError = e.toString();
@@ -377,6 +456,44 @@ class ProxyState extends ChangeNotifier {
     } catch (e) {
       rethrow;
     }
+  }
+
+  // Ping a specific node directly (TCP connect RTT) without switching.
+  // Works for any node regardless of whether the proxy is running, and does
+  // not disturb the currently active proxy. Result is stored in node.latencyMs.
+  Future<void> pingNode(NodeInfo node) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final socket = await Socket.connect(
+        node.host,
+        node.port,
+        timeout: const Duration(seconds: 5),
+      );
+      stopwatch.stop();
+      socket.destroy();
+      final ms = stopwatch.elapsedMilliseconds;
+      node.latencyMs = ms;
+      _nodeLatencies[node.nodeId] = ms;
+      unawaited(_saveNodeLatencies());
+      _safeNotifyListeners();
+    } on SocketException catch (e) {
+      _clearNodeLatency(node);
+      throw Exception('Unreachable: ${e.message}');
+    } on TimeoutException {
+      _clearNodeLatency(node);
+      throw Exception('Connection timeout');
+    } on FormatException catch (e) {
+      _clearNodeLatency(node);
+      throw Exception('Invalid address: ${e.message}');
+    }
+  }
+
+  // Clear a node's latency (on a failed ping) and drop the persisted value.
+  void _clearNodeLatency(NodeInfo node) {
+    node.latencyMs = null;
+    _nodeLatencies.remove(node.nodeId);
+    unawaited(_saveNodeLatencies());
+    _safeNotifyListeners();
   }
 
   // Export node config to clipboard (reuse existing export logic)
