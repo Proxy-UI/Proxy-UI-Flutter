@@ -28,14 +28,19 @@ A cross-platform Flutter GUI for encrypted proxy client.
 
 ### Prerequisites
 
-- Flutter 3.38.6+
-- Native libraries (contact maintainer)
+- **fvm** (manages the Flutter version) + Flutter **3.38.6** (pinned)
+- Platform native libraries (downloaded from Releases, or built locally from the Rust sources)
+
+> See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** for full environment setup, native-library preparation and per-platform run instructions;
+> see **[docs/CONVENTIONS.md](docs/CONVENTIONS.md)** for project structure / state management / FFI / coding conventions.
 
 ### Local Development
 
 ```bash
-flutter pub get
-flutter run
+fvm install 3.38.6              # first time: install the pinned Flutter version
+fvm use 3.38.6                  # pin the version for this directory (creates .fvmrc)
+fvm flutter pub get
+fvm flutter run -d windows      # or -d macos / -d linux / <device id>
 ```
 
 ### Trigger Release Build

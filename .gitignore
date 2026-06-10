@@ -44,8 +44,11 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Native libraries (downloaded during CI)
+# Native libraries (downloaded during CI / built locally)
 /native/
+
+# FVM (Flutter Version Management) — commit .fvmrc, ignore the local SDK symlinks
+.fvm/
 
 # CocoaPods
 **/ios/Pods/
