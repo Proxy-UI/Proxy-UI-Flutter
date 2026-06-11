@@ -400,7 +400,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           name: "Proxy UI ${{ github.event.inputs.release_tag }}"
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          draft: false
           body: |
             # Proxy UI Release ${{ github.event.inputs.release_tag }}
 
