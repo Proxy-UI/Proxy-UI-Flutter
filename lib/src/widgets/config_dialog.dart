@@ -20,6 +20,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late TextEditingController _localPortController;
   late TextEditingController _sessionKeyController;
   late bool _autoProxy;
+  late bool _udpEnabled;
   late bool _reverseGeo;
   late bool _forceCodec;
 
@@ -38,6 +39,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
       text: config.sessionKey ?? '',
     );
     _autoProxy = config.autoProxy;
+    _udpEnabled = config.udpEnabled;
     _reverseGeo = config.reverseGeo;
     _forceCodec = config.forceCodec;
   }
@@ -62,8 +64,11 @@ class _ConfigDialogState extends State<ConfigDialog> {
             ? null
             : _sessionKeyController.text,
         autoProxy: _autoProxy,
+        udpEnabled: _udpEnabled,
         reverseGeo: _reverseGeo,
+        needCodecIps: state.config.needCodecIps,
         forceCodec: _forceCodec,
+        setSystemProxy: state.config.setSystemProxy,
       ),
     );
     Navigator.of(context).pop();
@@ -148,6 +153,12 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 subtitle: const Text('Route traffic based on geo-location'),
                 value: _autoProxy,
                 onChanged: (v) => setState(() => _autoProxy = v),
+              ),
+              SwitchListTile(
+                title: const Text('SOCKS5 UDP'),
+                subtitle: const Text('Accept UDP traffic on the local port'),
+                value: _udpEnabled,
+                onChanged: (v) => setState(() => _udpEnabled = v),
               ),
               SwitchListTile(
                 title: const Text('Reverse Geo'),

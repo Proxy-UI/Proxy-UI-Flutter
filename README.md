@@ -7,6 +7,8 @@ A cross-platform Flutter GUI for encrypted proxy client.
 - **Proxy Control**: One-tap start/stop proxy with visual status indicator
 - **Configuration**: Server host, port, session key, and local port settings
 - **Auto Proxy**: Geo-based routing (CN direct, others proxy)
+- **SOCKS5 UDP**: Toggle RFC 1928 UDP relay on the same local proxy port
+- **Subscriptions**: Export UDP-aware Clash and Shadowrocket configurations
 - **Real-time Logs**: Colored log viewer with level filtering (TRACE/DEBUG/INFO/WARN/ERROR)
 - **Theme Switching**: 4 color themes (Cyberpunk, Sunset, Ocean, Forest)
 - **Dark/Light Mode**: Toggle between dark and light appearance

@@ -106,6 +106,31 @@ final class ProxyConfig extends Struct {
   external int setSystemProxy; // desktop only: 0 = disabled, 1 = set system proxy
 }
 
+/// Versioned proxy configuration with explicit SOCKS5 UDP control.
+///
+/// The legacy structure remains declared because `proxy_start` is still part
+/// of the public native ABI for older application builds.
+final class ProxyConfigV2 extends Struct {
+  external Pointer<Utf8> serverHost;
+  @Uint16()
+  external int serverPort;
+  @Uint16()
+  external int localPort;
+  external Pointer<Utf8> sessionKey;
+  @Int32()
+  external int autoProxy;
+  @Int32()
+  external int reverseGeo;
+  external Pointer<Utf8> cacheDir;
+  external Pointer<Utf8> needCodecIps;
+  @Int32()
+  external int forceCodec;
+  @Int32()
+  external int setSystemProxy;
+  @Int32()
+  external int enableUdp;
+}
+
 // FFI function signatures
 typedef _ProxySetLogCallbackNative =
     Void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
@@ -122,6 +147,11 @@ typedef _ProxyStartNative =
     Int32 Function(Pointer<Void> handle, Pointer<ProxyConfig> config);
 typedef _ProxyStartDart =
     int Function(Pointer<Void> handle, Pointer<ProxyConfig> config);
+
+typedef _ProxyStartV2Native =
+    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV2> config);
+typedef _ProxyStartV2Dart =
+    int Function(Pointer<Void> handle, Pointer<ProxyConfigV2> config);
 
 typedef _ProxyStopNative = Int32 Function(Pointer<Void> handle);
 typedef _ProxyStopDart = int Function(Pointer<Void> handle);
@@ -258,6 +288,9 @@ class ProxyFFI {
 
   late final proxyStart = lib
       .lookupFunction<_ProxyStartNative, _ProxyStartDart>('proxy_start');
+
+  late final proxyStartV2 = lib
+      .lookupFunction<_ProxyStartV2Native, _ProxyStartV2Dart>('proxy_start_v2');
 
   late final proxyStop = lib.lookupFunction<_ProxyStopNative, _ProxyStopDart>(
     'proxy_stop',

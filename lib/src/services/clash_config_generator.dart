@@ -16,7 +16,7 @@ proxies:
     type: socks5
     server: 127.0.0.1
     port: $localPort
-    udp: false
+    udp: ${config.udpEnabled}
 
 proxy-groups:
   - name: "PROXY"

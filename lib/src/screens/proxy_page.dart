@@ -211,6 +211,17 @@ class _ProxyPageState extends State<ProxyPage> {
                         ).colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      state.config.udpEnabled
+                          ? 'SOCKS5 TCP + UDP'
+                          : 'SOCKS5 TCP only',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: state.config.udpEnabled
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                     const SizedBox(height: 32),
                     // Large switch
                     Transform.scale(

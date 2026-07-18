@@ -90,6 +90,7 @@ class ProxyService {
     int localPort = 1080,
     String? sessionKey,
     bool autoProxy = true,
+    bool udpEnabled = true,
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
@@ -99,7 +100,7 @@ class ProxyService {
     destroy();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfig>();
+    final config = calloc<ProxyConfigV2>();
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
@@ -119,6 +120,7 @@ class ProxyService {
       }
 
       config.ref.autoProxy = autoProxy ? 1 : 0;
+      config.ref.enableUdp = udpEnabled ? 1 : 0;
       config.ref.reverseGeo = reverseGeo ? 1 : 0;
 
       // Mobile platforms need cache_dir for auto-proxy
@@ -146,7 +148,7 @@ class ProxyService {
           ? 1
           : 0;
 
-      return _ffi.proxyStart(_handle!, config);
+      return _ffi.proxyStartV2(_handle!, config);
     } finally {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);

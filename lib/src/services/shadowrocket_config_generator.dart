@@ -20,7 +20,7 @@ class ShadowrocketConfigGenerator {
       'dns-server = system',
       '',
       '[Proxy]',
-      'LocalProxy = socks5, 127.0.0.1, $localPort',
+      'LocalProxy = socks5, 127.0.0.1, $localPort, udp=${config.udpEnabled ? 1 : 0}',
       '',
       '[Rule]',
       'DOMAIN-SUFFIX,$serverHost,DIRECT',

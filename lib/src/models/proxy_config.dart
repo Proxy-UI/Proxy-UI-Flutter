@@ -7,6 +7,7 @@ class ProxyConfigModel {
   int localPort;
   String? sessionKey;
   bool autoProxy;
+  bool udpEnabled;
   bool reverseGeo;
   String? needCodecIps;
   bool forceCodec;
@@ -22,6 +23,7 @@ class ProxyConfigModel {
     this.localPort = 10801,
     this.sessionKey,
     this.autoProxy = true,
+    this.udpEnabled = true,
     this.reverseGeo = false,
     this.needCodecIps,
     this.forceCodec = false,
@@ -35,6 +37,7 @@ class ProxyConfigModel {
     'localPort': localPort,
     'sessionKey': sessionKey,
     'autoProxy': autoProxy,
+    'udpEnabled': udpEnabled,
     'reverseGeo': reverseGeo,
     'needCodecIps': needCodecIps,
     'forceCodec': forceCodec,
@@ -48,6 +51,9 @@ class ProxyConfigModel {
         localPort: json['localPort'] ?? 1080,
         sessionKey: json['sessionKey'],
         autoProxy: json['autoProxy'] ?? true,
+        // Imported configurations created by older versions keep the
+        // historical behavior, where SOCKS5 UDP was always available.
+        udpEnabled: json['udpEnabled'] ?? true,
         reverseGeo: json['reverseGeo'] ?? false,
         needCodecIps: json['needCodecIps'],
         forceCodec: json['forceCodec'] ?? false,
@@ -60,6 +66,7 @@ class ProxyConfigModel {
     int? localPort,
     String? sessionKey,
     bool? autoProxy,
+    bool? udpEnabled,
     bool? reverseGeo,
     String? needCodecIps,
     bool? forceCodec,
@@ -70,6 +77,7 @@ class ProxyConfigModel {
     localPort: localPort ?? this.localPort,
     sessionKey: sessionKey ?? this.sessionKey,
     autoProxy: autoProxy ?? this.autoProxy,
+    udpEnabled: udpEnabled ?? this.udpEnabled,
     reverseGeo: reverseGeo ?? this.reverseGeo,
     needCodecIps: needCodecIps ?? this.needCodecIps,
     forceCodec: forceCodec ?? this.forceCodec,
