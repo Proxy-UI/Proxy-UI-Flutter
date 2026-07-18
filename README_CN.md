@@ -28,14 +28,34 @@
 
 ### 前置条件
 
-- Flutter 3.38.6+
-- 原生库（联系维护者获取）
+- [FVM](https://fvm.app/) 4.x
+- Visual Studio 2022，并安装“使用 C++ 的桌面开发”工作负载（Windows）
+- 父级 `proxy-everything` 仓库指定的 Rust 工具链
+
+项目通过 `.fvmrc` 固定使用 Flutter 3.38.6。请勿直接调用全局安装的
+`flutter` 或 `dart`，统一使用 `fvm flutter` 和 `fvm dart`，确保本地与
+CI 使用同一 SDK。
 
 ### 本地开发
 
 ```bash
-flutter pub get
-flutter run
+fvm install
+fvm flutter pub get
+fvm flutter run -d windows
+```
+
+桌面 UI 依赖 Rust 编译生成的 `http_proxy` 原生库。在 Windows 上从父级
+仓库开发时，推荐从父级仓库根目录使用以下命令自动编译、放置 DLL 并启动
+Flutter：
+
+```powershell
+.\scripts\windows\run-ui.ps1
+```
+
+同时构建完整 Rust 工作区和 Windows UI：
+
+```powershell
+.\scripts\windows\build.ps1 -Configuration Release
 ```
 
 ### 触发发布构建

@@ -54,3 +54,6 @@ app.*.map.json
 **/ios/Podfile.lock
 **/macos/Podfile
 **/macos/Podfile.lock
+
+# FVM Version Cache
+.fvm/

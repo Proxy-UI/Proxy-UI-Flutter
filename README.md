@@ -28,14 +28,34 @@ A cross-platform Flutter GUI for encrypted proxy client.
 
 ### Prerequisites
 
-- Flutter 3.38.6+
-- Native libraries (contact maintainer)
+- [FVM](https://fvm.app/) 4.x
+- Visual Studio 2022 with the Desktop development with C++ workload (Windows)
+- Rust toolchain from the parent `proxy-everything` repository
+
+Flutter is pinned to 3.38.6 in `.fvmrc`. Do not invoke a globally installed
+`flutter` or `dart`; use `fvm flutter` and `fvm dart` so local and CI builds use
+the same SDK.
 
 ### Local Development
 
 ```bash
-flutter pub get
-flutter run
+fvm install
+fvm flutter pub get
+fvm flutter run -d windows
+```
+
+The desktop app requires the Rust `http_proxy` native library. When developing
+from the parent repository on Windows, the recommended command builds and
+stages the DLL before starting Flutter. Run it from the parent repository root:
+
+```powershell
+.\scripts\windows\run-ui.ps1
+```
+
+Build the complete Rust workspace and Windows UI together with:
+
+```powershell
+.\scripts\windows\build.ps1 -Configuration Release
 ```
 
 ### Trigger Release Build

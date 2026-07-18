@@ -316,7 +316,7 @@ class ProxyService {
             final group = (result.groups + i).ref;
             final nodeIds = <String>[];
             for (int j = 0; j < group.nodeIdsCount; j++) {
-              final nodeIdPtr = group.nodeIds.elementAt(j).value;
+              final nodeIdPtr = (group.nodeIds + j).value;
               nodeIds.add(nodeIdPtr.toDartString());
             }
             groups.add({
