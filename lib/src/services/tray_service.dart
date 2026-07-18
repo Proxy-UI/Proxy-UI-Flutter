@@ -5,10 +5,14 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import '../providers/proxy_provider.dart';
 
+enum _TrayStatus { connected, disconnected, error }
+
 class TrayService with TrayListener {
   static TrayService? _instance;
   BuildContext? _context;
   bool _isWindowVisible = true;
+  _TrayStatus? _currentIconStatus;
+  int? _currentMenuSignature;
 
   TrayService._();
 
@@ -21,7 +25,7 @@ class TrayService with TrayListener {
     _context = context;
     trayManager.addListener(this);
 
-    await _updateTrayIcon(false);
+    await _updateTrayIcon(_TrayStatus.disconnected);
     await _updateTrayMenu();
 
     if (_context != null) {
@@ -32,17 +36,33 @@ class TrayService with TrayListener {
   void _onProxyStateChanged() {
     if (_context != null) {
       final proxyState = _context!.read<ProxyState>();
-      _updateTrayIcon(proxyState.isRunning);
+      _updateTrayIcon(_statusFor(proxyState));
       _updateTrayMenu();
     }
   }
 
-  Future<void> _updateTrayIcon(bool isRunning) async {
-    final iconName = isRunning ? 'tray_icon' : 'tray_icon_inactive';
+  _TrayStatus _statusFor(ProxyState proxyState) {
+    if (proxyState.isRunning) return _TrayStatus.connected;
+    if (proxyState.lastError != null) return _TrayStatus.error;
+    return _TrayStatus.disconnected;
+  }
+
+  Future<void> _updateTrayIcon(_TrayStatus status) async {
+    // ProxyState also notifies for every log line. Avoid repeatedly replacing
+    // the native tray icon when the connection state has not changed.
+    if (_currentIconStatus == status) return;
+    _currentIconStatus = status;
+
+    final (iconName, tooltipStatus) = switch (status) {
+      _TrayStatus.connected => ('tray_icon', 'Connected'),
+      _TrayStatus.disconnected => ('tray_icon_inactive', 'Disconnected'),
+      _TrayStatus.error => ('tray_icon_error', 'Connection error'),
+    };
     final iconPath = Platform.isWindows
         ? 'assets/tray/$iconName.ico'
         : 'assets/tray/$iconName.png';
     await trayManager.setIcon(iconPath);
+    await trayManager.setToolTip('Proxy Everything - $tooltipStatus');
   }
 
   Future<void> _updateTrayMenu() async {
@@ -51,8 +71,21 @@ class TrayService with TrayListener {
     final proxyState = _context!.read<ProxyState>();
     final isRunning = proxyState.isRunning;
     final config = proxyState.config;
+    final status = _statusFor(proxyState);
+    final menuSignature = Object.hash(
+      _isWindowVisible,
+      status,
+      config.serverHost,
+      config.serverPort,
+    );
+    if (_currentMenuSignature == menuSignature) return;
+    _currentMenuSignature = menuSignature;
 
-    final statusLabel = isRunning ? 'Proxy: Connected' : 'Proxy: Disconnected';
+    final statusLabel = switch (status) {
+      _TrayStatus.connected => 'Proxy: Connected',
+      _TrayStatus.disconnected => 'Proxy: Disconnected',
+      _TrayStatus.error => 'Proxy: Connection error',
+    };
     final serverLabel = 'Server: ${config.serverHost}:${config.serverPort}';
 
     final menu = Menu(
