@@ -38,16 +38,41 @@ class LogEntry {
   }
 }
 
+/// One live process instance used to reconstruct application parent/child trees.
+class TunProcessInstance {
+  final int pid;
+  final int? parentPid;
+  final String? executablePath;
+
+  const TunProcessInstance({
+    required this.pid,
+    this.parentPid,
+    this.executablePath,
+  });
+
+  factory TunProcessInstance.fromJson(Map<String, dynamic> json) {
+    return TunProcessInstance(
+      pid: (json['pid'] as num?)?.toInt() ?? 0,
+      parentPid: (json['parent_pid'] as num?)?.toInt(),
+      executablePath: json['executable_path'] as String?,
+    );
+  }
+}
+
 /// Grouped Windows process information returned by the native TUN picker API.
 class TunProcessInfo {
   final String name;
   final List<int> pids;
   final List<String> executablePaths;
+  final List<TunProcessInstance> instances;
+  final Uint8List? iconPng;
 
   const TunProcessInfo({
     required this.name,
     required this.pids,
     required this.executablePaths,
+    this.instances = const [],
+    this.iconPng,
   });
 
   factory TunProcessInfo.fromJson(Map<String, dynamic> json) {
@@ -60,7 +85,22 @@ class TunProcessInfo {
       executablePaths: (json['executable_paths'] as List<dynamic>? ?? const [])
           .whereType<String>()
           .toList(growable: false),
+      instances: (json['instances'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(TunProcessInstance.fromJson)
+          .where((instance) => instance.pid > 0)
+          .toList(growable: false),
+      iconPng: _decodeProcessIcon(json['icon_png_base64']),
     );
+  }
+}
+
+Uint8List? _decodeProcessIcon(Object? encoded) {
+  if (encoded is! String || encoded.isEmpty) return null;
+  try {
+    return base64Decode(encoded);
+  } on FormatException {
+    return null;
   }
 }
 

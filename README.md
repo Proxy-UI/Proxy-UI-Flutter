@@ -68,7 +68,9 @@ requests UAC and relaunches the same GUI elevated without a terminal window.
 The switch reports enabled only after Wintun and route setup are ready. The TUN
 process picker is available before and during a connection. Native code protects
 the resolved remote proxy routes and always excludes the UI executable itself
-to prevent a capture loop.
+to prevent a capture loop. The picker displays Windows executable icons and
+expandable launcher/child-process trees; choosing a parent application bypasses
+all descendants without persisting volatile child PIDs.
 
 ### Trigger Release Build
 
