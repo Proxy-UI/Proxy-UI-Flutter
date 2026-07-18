@@ -117,8 +117,28 @@ class _ProxyPageState extends State<ProxyPage> {
         enabled ? 'TUN mode enabled' : 'TUN mode disabled',
       );
     } else {
-      ToastUtils.showError(state.lastError ?? 'Failed to change TUN mode');
+      await _showTunErrorDialog(state.lastError ?? 'Failed to change TUN mode');
     }
+  }
+
+  Future<void> _showTunErrorDialog(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.error_outline),
+        title: const Text('TUN setup failed'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: SelectableText(message),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _exportConfig() async {

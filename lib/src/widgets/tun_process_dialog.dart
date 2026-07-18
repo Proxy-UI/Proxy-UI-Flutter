@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../ffi/proxy_service.dart';
 import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
 
@@ -16,7 +17,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
   final _searchController = TextEditingController();
   final _manualController = TextEditingController();
   final Set<String> _selected = {};
-  List<String> _processes = const [];
+  List<TunProcessInfo> _processes = const [];
   String? _selfProcess;
   bool _loading = true;
   bool _saving = false;
@@ -46,14 +47,35 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     final options = context.read<ProxyState>().getTunProcessOptions();
     if (!mounted) return;
 
-    final names = <String>{...options.processes.map(_normalize), ..._selected};
+    final processes = <String, TunProcessInfo>{
+      for (final process in options.processes)
+        _normalize(process.name): process,
+    };
     final selfProcess = options.selfProcess == null
         ? null
         : _normalize(options.selfProcess!);
     if (selfProcess != null && selfProcess.isNotEmpty) {
-      names.add(selfProcess);
+      processes.putIfAbsent(
+        selfProcess,
+        () => TunProcessInfo(
+          name: selfProcess,
+          pids: const [],
+          executablePaths: const [],
+        ),
+      );
     }
-    final sorted = names.where((name) => name.isNotEmpty).toList()..sort();
+    for (final name in _selected) {
+      processes.putIfAbsent(
+        name,
+        () => TunProcessInfo(
+          name: name,
+          pids: const [],
+          executablePaths: const [],
+        ),
+      );
+    }
+    final sorted = processes.values.toList()
+      ..sort((left, right) => left.name.compareTo(right.name));
     setState(() {
       _processes = sorted;
       _selfProcess = selfProcess;
@@ -66,8 +88,11 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     if (name.isEmpty) return;
     setState(() {
       _selected.add(name);
-      if (!_processes.contains(name)) {
-        _processes = [..._processes, name]..sort();
+      if (!_processes.any((process) => process.name == name)) {
+        _processes = [
+          ..._processes,
+          TunProcessInfo(name: name, pids: const [], executablePaths: const []),
+        ]..sort((left, right) => left.name.compareTo(right.name));
       }
       _manualController.clear();
     });
@@ -84,7 +109,9 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     setState(() => _saving = false);
     if (success) {
       Navigator.of(context).pop();
-      ToastUtils.showSuccess('TUN bypass updated');
+      ToastUtils.showSuccess(
+        'Bypass applied; affected connections are reconnecting',
+      );
     } else {
       ToastUtils.showError(
         context.read<ProxyState>().lastError ?? 'Failed to update TUN bypass',
@@ -95,16 +122,33 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
   @override
   Widget build(BuildContext context) {
     final query = _normalize(_searchController.text);
-    final visible = _processes
-        .where((name) => query.isEmpty || name.contains(query))
-        .toList(growable: false);
+    final visible = _processes.where((process) {
+      if (query.isEmpty) return true;
+      return process.name.contains(query) ||
+          process.executablePaths.any(
+            (path) => path.toLowerCase().contains(query),
+          ) ||
+          process.pids.any((pid) => pid.toString().contains(query));
+    }).toList();
+    visible.sort((left, right) {
+      final leftSelected =
+          (_selected.contains(left.name) || left.name == _selfProcess) ? 0 : 1;
+      final rightSelected =
+          (_selected.contains(right.name) || right.name == _selfProcess)
+          ? 0
+          : 1;
+      final selectedOrder = leftSelected.compareTo(rightSelected);
+      return selectedOrder != 0
+          ? selectedOrder
+          : left.name.compareTo(right.name);
+    });
 
     return AlertDialog(
       title: Row(
         children: [
           const Icon(Icons.security_outlined),
           const SizedBox(width: 12),
-          const Expanded(child: Text('TUN Process Bypass')),
+          const Expanded(child: Text('Bypass Applications')),
           IconButton(
             onPressed: _loading ? null : _loadProcesses,
             tooltip: 'Refresh processes',
@@ -123,6 +167,14 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
               decoration: const InputDecoration(
                 labelText: 'Search processes',
                 prefixIcon: Icon(Icons.search),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${_selected.length + (_selfProcess == null ? 0 : 1)} selected',
+                style: Theme.of(context).textTheme.labelLarge,
               ),
             ),
             const SizedBox(height: 12),
@@ -154,19 +206,34 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                   : ListView.builder(
                       itemCount: visible.length,
                       itemBuilder: (context, index) {
-                        final name = visible[index];
+                        final process = visible[index];
+                        final name = process.name;
                         final isSelf = name == _selfProcess;
+                        final instanceLabel = process.pids.isEmpty
+                            ? 'Not currently running'
+                            : process.pids.length == 1
+                            ? 'PID ${process.pids.single}'
+                            : '${process.pids.length} processes | PIDs ${process.pids.take(3).join(', ')}${process.pids.length > 3 ? ', ...' : ''}';
+                        final path = process.executablePaths.isEmpty
+                            ? null
+                            : process.executablePaths.first;
                         return CheckboxListTile(
                           dense: true,
                           secondary: Icon(
                             isSelf
                                 ? Icons.verified_user_outlined
-                                : Icons.apps_outlined,
+                                : Icons.window_outlined,
                           ),
-                          title: Text(name),
-                          subtitle: isSelf
-                              ? const Text('Current process (required)')
-                              : null,
+                          title: Text('$name.exe'),
+                          subtitle: Text(
+                            [
+                              if (isSelf) 'Current process | always bypassed',
+                              if (!isSelf) instanceLabel,
+                              if (path != null) path,
+                            ].join('\n'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           value: isSelf || _selected.contains(name),
                           onChanged: isSelf
                               ? null

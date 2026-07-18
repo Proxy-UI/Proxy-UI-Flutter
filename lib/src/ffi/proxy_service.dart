@@ -38,6 +38,32 @@ class LogEntry {
   }
 }
 
+/// Grouped Windows process information returned by the native TUN picker API.
+class TunProcessInfo {
+  final String name;
+  final List<int> pids;
+  final List<String> executablePaths;
+
+  const TunProcessInfo({
+    required this.name,
+    required this.pids,
+    required this.executablePaths,
+  });
+
+  factory TunProcessInfo.fromJson(Map<String, dynamic> json) {
+    return TunProcessInfo(
+      name: json['name'] as String? ?? '',
+      pids: (json['pids'] as List<dynamic>? ?? const [])
+          .whereType<num>()
+          .map((pid) => pid.toInt())
+          .toList(growable: false),
+      executablePaths: (json['executable_paths'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+    );
+  }
+}
+
 /// High-level proxy service wrapping FFI calls.
 class ProxyService {
   final ProxyFFI _ffi = ProxyFFI();
@@ -186,12 +212,46 @@ class ProxyService {
     }
   }
 
+  /// List grouped process names, PIDs, and executable paths for the picker.
+  List<TunProcessInfo> listTunProcessDetails() {
+    final pointer = _ffi.proxyListTunProcessesV2();
+    if (pointer == nullptr) return const [];
+    try {
+      final decoded = jsonDecode(pointer.toDartString());
+      if (decoded is! List<dynamic>) return const [];
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(TunProcessInfo.fromJson)
+          .where((process) => process.name.isNotEmpty)
+          .toList(growable: false);
+    } finally {
+      _ffi.proxyFreeString(pointer);
+    }
+  }
+
   /// Return the executable name native code always excludes from TUN.
   String? get tunSelfProcess {
     final pointer = _ffi.proxyGetTunSelfProcess();
     if (pointer == nullptr) return null;
     try {
       return pointer.toDartString();
+    } finally {
+      _ffi.proxyFreeString(pointer);
+    }
+  }
+
+  /// Detailed native failure for the last operation on this handle.
+  ///
+  /// The numeric ABI result is intentionally coarse and stable. This string
+  /// carries actionable TUN stage, adapter, route, and Windows error context.
+  String? get lastError {
+    final handle = _handle;
+    if (handle == null || handle == nullptr) return null;
+    final pointer = _ffi.proxyGetLastError(handle);
+    if (pointer == nullptr) return null;
+    try {
+      final message = pointer.toDartString().trim();
+      return message.isEmpty ? null : message;
     } finally {
       _ffi.proxyFreeString(pointer);
     }

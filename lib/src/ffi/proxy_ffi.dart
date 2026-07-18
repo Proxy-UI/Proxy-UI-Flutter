@@ -196,6 +196,11 @@ typedef _ProxyStartTunDart =
 typedef _ProxyGetStringNative = Pointer<Utf8> Function();
 typedef _ProxyGetStringDart = Pointer<Utf8> Function();
 
+typedef _ProxyGetHandleStringNative =
+    Pointer<Utf8> Function(Pointer<Void> handle);
+typedef _ProxyGetHandleStringDart =
+    Pointer<Utf8> Function(Pointer<Void> handle);
+
 typedef _ProxyStopNative = Int32 Function(Pointer<Void> handle);
 typedef _ProxyStopDart = int Function(Pointer<Void> handle);
 
@@ -375,9 +380,19 @@ class ProxyFFI {
         'proxy_list_tun_processes',
       );
 
+  late final proxyListTunProcessesV2 = lib
+      .lookupFunction<_ProxyGetStringNative, _ProxyGetStringDart>(
+        'proxy_list_tun_processes_v2',
+      );
+
   late final proxyGetTunSelfProcess = lib
       .lookupFunction<_ProxyGetStringNative, _ProxyGetStringDart>(
         'proxy_get_tun_self_process',
+      );
+
+  late final proxyGetLastError = lib
+      .lookupFunction<_ProxyGetHandleStringNative, _ProxyGetHandleStringDart>(
+        'proxy_get_last_error',
       );
 
   late final proxyStop = lib.lookupFunction<_ProxyStopNative, _ProxyStopDart>(

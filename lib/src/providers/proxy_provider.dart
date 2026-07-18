@@ -198,9 +198,10 @@ class ProxyState extends ChangeNotifier {
 
   /// Retrieve process candidates and the executable that native code protects
   /// from removal. Process enumeration is only exposed by the Windows UI.
-  ({List<String> processes, String? selfProcess}) getTunProcessOptions() {
+  ({List<TunProcessInfo> processes, String? selfProcess})
+  getTunProcessOptions() {
     return (
-      processes: _service.listTunProcesses(),
+      processes: _service.listTunProcessDetails(),
       selfProcess: _service.tunSelfProcess,
     );
   }
@@ -210,7 +211,7 @@ class ProxyState extends ChangeNotifier {
     if (_isRunning && _isTunRunning) {
       final result = _service.setTunBypassProcesses(processes);
       if (result != ProxyResult.ok) {
-        _lastError = ProxyResult.message(result);
+        _lastError = _service.lastError ?? ProxyResult.message(result);
         notifyListeners();
         return false;
       }
@@ -257,7 +258,7 @@ class ProxyState extends ChangeNotifier {
           : await _service.stopTun();
       if (result != ProxyResult.ok &&
           !(result == ProxyResult.notRunning && !enabled)) {
-        _lastError = ProxyResult.message(result);
+        _lastError = _service.lastError ?? ProxyResult.message(result);
         return false;
       }
       _isTunRunning = enabled;
