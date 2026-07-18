@@ -11,6 +11,7 @@ A cross-platform Flutter GUI for encrypted proxy client.
 - **Windows TUN**: Capture device TCP/UDP with runtime process exclusions
 - **Subscriptions**: Export UDP-aware Clash and Shadowrocket configurations
 - **Real-time Logs**: Colored log viewer with level filtering (TRACE/DEBUG/INFO/WARN/ERROR)
+- **Desktop Log Files**: Hourly log files with three-day retention and one-click folder access
 - **Theme Switching**: 4 color themes (Cyberpunk, Sunset, Ocean, Forest)
 - **Dark/Light Mode**: Toggle between dark and light appearance
 - **Responsive Layout**: Adapts to phone, tablet, and desktop screens

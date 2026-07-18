@@ -12,12 +12,14 @@ import '../models/node_catalog_preferences.dart';
 import '../models/node_group_model.dart';
 import '../models/node_model.dart';
 import '../models/proxy_config.dart';
+import '../services/desktop_log_service.dart';
 import '../services/node_latency_service.dart';
 import '../services/subscription_service.dart';
 
 /// Proxy state provider for UI.
 class ProxyState extends ChangeNotifier {
   final ProxyService _service;
+  final DesktopLogService _desktopLogService;
   ProxyConfigModel _config = ProxyConfigModel();
   bool _isRunning = false;
   bool _isTunRunning = false;
@@ -55,9 +57,13 @@ class ProxyState extends ChangeNotifier {
   static const String _legacyNodeLatenciesKey = 'node_latencies';
   final bool _enableTunOnStartup;
 
-  ProxyState({bool enableTunOnStartup = false, ProxyService? service})
-    : _enableTunOnStartup = enableTunOnStartup,
-      _service = service ?? ProxyService() {
+  ProxyState({
+    bool enableTunOnStartup = false,
+    ProxyService? service,
+    DesktopLogService? desktopLogService,
+  }) : _enableTunOnStartup = enableTunOnStartup,
+       _service = service ?? ProxyService(),
+       _desktopLogService = desktopLogService ?? DesktopLogService() {
     _init();
   }
 
@@ -89,6 +95,7 @@ class ProxyState extends ChangeNotifier {
   String? get nodesSessionKey => _nodeCatalogPreferences.sessionKey;
   bool get sortNodesByLatency => _nodeCatalogPreferences.sortByLatency;
   bool get isInitialized => _isInitialized;
+  bool get hasLocalLogStorage => _desktopLogService.enabled;
 
   Future<void> _init() async {
     _service.initLogging();
@@ -103,6 +110,7 @@ class ProxyState extends ChangeNotifier {
 
   void _onLog(LogEntry entry) {
     _logs.add(entry);
+    unawaited(_persistLog(entry));
     if (_logs.length > maxLogs) {
       _logs.removeAt(0);
     }
@@ -119,6 +127,18 @@ class ProxyState extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  Future<void> _persistLog(LogEntry entry) async {
+    try {
+      await _desktopLogService.write(entry);
+    } on FileSystemException catch (error) {
+      debugPrint('Failed to persist desktop log: ${error.message}');
+    } catch (error) {
+      debugPrint('Failed to persist desktop log: $error');
+    }
+  }
+
+  Future<void> openLogDirectory() => _desktopLogService.openLogDirectory();
 
   Future<void> _loadConfig() async {
     final prefs = await SharedPreferences.getInstance();
@@ -713,6 +733,7 @@ class ProxyState extends ChangeNotifier {
     _nodeCatalogSaveTimer?.cancel();
     unawaited(_saveNodeCatalogPreferences());
     _logSubscription?.cancel();
+    unawaited(_desktopLogService.dispose());
     _service.dispose();
     _subscriptionService?.stop();
     super.dispose();

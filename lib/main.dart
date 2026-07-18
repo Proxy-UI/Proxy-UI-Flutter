@@ -7,15 +7,23 @@ import 'package:window_manager/window_manager.dart';
 import 'src/providers/proxy_provider.dart';
 import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
+import 'src/services/desktop_log_service.dart';
 import 'src/services/tray_service.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
   final enableTunOnStartup = arguments.contains('--enable-tun');
+  final desktopLogService = DesktopLogService();
 
   // Initialize window manager for desktop platforms
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
+
+    try {
+      await desktopLogService.initialize();
+    } catch (error) {
+      debugPrint('Failed to initialize desktop logging: $error');
+    }
 
     final windowOptions = WindowOptions(
       size: Size(1280, 720),
@@ -41,7 +49,10 @@ void main(List<String> arguments) async {
       child: MultiProvider(
         providers: [
           ChangeNotifierProvider(
-            create: (_) => ProxyState(enableTunOnStartup: enableTunOnStartup),
+            create: (_) => ProxyState(
+              enableTunOnStartup: enableTunOnStartup,
+              desktopLogService: desktopLogService,
+            ),
           ),
           ChangeNotifierProvider(create: (_) => ThemeState()),
         ],

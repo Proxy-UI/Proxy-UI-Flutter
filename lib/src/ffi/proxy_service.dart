@@ -17,8 +17,8 @@ class LogEntry {
   final String message;
   final DateTime timestamp;
 
-  LogEntry({required this.level, required this.message})
-    : timestamp = DateTime.now();
+  LogEntry({required this.level, required this.message, DateTime? timestamp})
+    : timestamp = timestamp ?? DateTime.now();
 
   String get levelName {
     switch (level) {
