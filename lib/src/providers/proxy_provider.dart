@@ -18,6 +18,8 @@ class ProxyState extends ChangeNotifier {
   final ProxyService _service = ProxyService();
   ProxyConfigModel _config = ProxyConfigModel();
   bool _isRunning = false;
+  bool _isTunRunning = false;
+  bool _isTunBusy = false;
   String? _lastError;
   final List<LogEntry> _logs = [];
   StreamSubscription<LogEntry>? _logSubscription;
@@ -45,13 +47,17 @@ class ProxyState extends ChangeNotifier {
 
   static const int maxLogs = 1000;
   static const String _configKey = 'proxy_config';
+  final bool _enableTunOnStartup;
 
-  ProxyState() {
+  ProxyState({bool enableTunOnStartup = false})
+    : _enableTunOnStartup = enableTunOnStartup {
     _init();
   }
 
   ProxyConfigModel get config => _config;
   bool get isRunning => _isRunning;
+  bool get isTunRunning => _isTunRunning;
+  bool get isTunBusy => _isTunBusy;
   String? get lastError => _lastError;
   List<LogEntry> get logs => List.unmodifiable(_logs);
   int get minLogLevel => _minLogLevel;
@@ -91,6 +97,11 @@ class ProxyState extends ChangeNotifier {
     // in a connected state after the worker has stopped.
     if (_isRunning && !_service.isRunning) {
       _isRunning = false;
+      _isTunRunning = false;
+    } else if (_isTunRunning && !_service.isTunRunning) {
+      _isTunRunning = false;
+      _config = _config.copyWith(tunEnabled: false);
+      unawaited(_saveConfig());
     }
     notifyListeners();
   }
@@ -101,11 +112,32 @@ class ProxyState extends ChangeNotifier {
     if (configJson != null) {
       try {
         _config = ProxyConfigModel.fromJson(jsonDecode(configJson));
+        if (!_enableTunOnStartup && _config.tunEnabled) {
+          // TUN changes system routes and is intentionally not restored after a
+          // normal app launch. It must be enabled explicitly for each session.
+          _config = _config.copyWith(tunEnabled: false);
+          await _saveConfig();
+        }
         notifyListeners();
       } catch (_) {
         // Ignore invalid config
       }
     }
+    if (_enableTunOnStartup) {
+      unawaited(_resumeElevatedTun());
+    }
+  }
+
+  Future<void> _resumeElevatedTun() async {
+    // The unelevated instance releases the local port immediately after it
+    // launches this process. Retry briefly so the handoff never reports a
+    // false bind failure while the old listener is shutting down.
+    for (var attempt = 0; attempt < 20 && !_isRunning; attempt++) {
+      if (await start()) break;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    if (!_isRunning) return;
+    await setTunEnabled(true);
   }
 
   Future<void> _saveConfig() async {
@@ -120,6 +152,11 @@ class ProxyState extends ChangeNotifier {
   }
 
   Future<bool> start() async {
+    if (_isTunBusy) {
+      _lastError = 'Wait for TUN setup to finish';
+      notifyListeners();
+      return false;
+    }
     // Stop first if already running to apply new config
     if (_isRunning) {
       stop();
@@ -138,7 +175,9 @@ class ProxyState extends ChangeNotifier {
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
-      tunEnabled: _config.tunEnabled,
+      // UI TUN has an independent lifecycle and starts only after this call
+      // proves that the local HTTP/SOCKS5 port is listening.
+      tunEnabled: false,
       tunBypassProcesses: _config.tunBypassProcesses,
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
@@ -168,7 +207,7 @@ class ProxyState extends ChangeNotifier {
 
   /// Persist and, when TUN is active, immediately apply process exclusions.
   Future<bool> updateTunBypassProcesses(List<String> processes) async {
-    if (_isRunning && _config.tunEnabled) {
+    if (_isRunning && _isTunRunning) {
       final result = _service.setTunBypassProcesses(processes);
       if (result != ProxyResult.ok) {
         _lastError = ProxyResult.message(result);
@@ -182,12 +221,78 @@ class ProxyState extends ChangeNotifier {
     return true;
   }
 
+  /// Enable or disable TUN without tearing down the local proxy listener.
+  ///
+  /// Returns `null` when an unelevated Windows instance successfully launched
+  /// its elevated replacement. The caller should then close the old window.
+  Future<bool?> setTunEnabled(bool enabled) async {
+    if (_isTunBusy) return false;
+    if (enabled == _isTunRunning) return true;
+    if (enabled && !_isRunning) {
+      _lastError = 'Start the local proxy before enabling TUN mode';
+      notifyListeners();
+      return false;
+    }
+
+    _isTunBusy = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      if (enabled && Platform.isWindows && !_service.isElevated) {
+        _config = _config.copyWith(tunEnabled: true);
+        await _saveConfig();
+        final result = _service.relaunchElevatedForTun();
+        if (result == ProxyResult.ok) {
+          return null;
+        }
+        _config = _config.copyWith(tunEnabled: false);
+        await _saveConfig();
+        _lastError =
+            'Administrator permission was not granted. TUN mode was not changed.';
+        return false;
+      }
+
+      final result = enabled
+          ? await _service.startTun(_config.tunBypassProcesses)
+          : await _service.stopTun();
+      if (result != ProxyResult.ok &&
+          !(result == ProxyResult.notRunning && !enabled)) {
+        _lastError = ProxyResult.message(result);
+        return false;
+      }
+      _isTunRunning = enabled;
+      _config = _config.copyWith(tunEnabled: enabled);
+      await _saveConfig();
+      return true;
+    } finally {
+      _isTunBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Release the local port after the elevated replacement has been accepted.
+  /// Keep `tunEnabled` persisted so the new process knows to complete TUN setup.
+  void stopForElevationHandoff() {
+    if (_isRunning) {
+      _service.stop();
+    }
+    _isRunning = false;
+    _isTunRunning = false;
+    notifyListeners();
+  }
+
   bool stop() {
+    if (_isTunBusy) return false;
     if (!_isRunning) return true;
 
+    // `proxy_stop` cancels the TUN child token before the local listener token,
+    // so no separate blocking FFI call is needed on whole-proxy shutdown.
     final result = _service.stop();
     if (result == ProxyResult.ok || result == ProxyResult.notRunning) {
       _isRunning = false;
+      _isTunRunning = false;
+      _config = _config.copyWith(tunEnabled: false);
+      unawaited(_saveConfig());
       notifyListeners();
       return true;
     } else {

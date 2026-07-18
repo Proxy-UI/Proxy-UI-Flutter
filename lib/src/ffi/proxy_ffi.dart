@@ -188,6 +188,11 @@ typedef _ProxySetTunBypassProcessesNative =
 typedef _ProxySetTunBypassProcessesDart =
     int Function(Pointer<Void> handle, Pointer<Utf8> processes);
 
+typedef _ProxyStartTunNative =
+    Int32 Function(Pointer<Void> handle, Pointer<Utf8> processes);
+typedef _ProxyStartTunDart =
+    int Function(Pointer<Void> handle, Pointer<Utf8> processes);
+
 typedef _ProxyGetStringNative = Pointer<Utf8> Function();
 typedef _ProxyGetStringDart = Pointer<Utf8> Function();
 
@@ -199,6 +204,9 @@ typedef _ProxyDestroyDart = void Function(Pointer<Void> handle);
 
 typedef _ProxyIsRunningNative = Int32 Function(Pointer<Void> handle);
 typedef _ProxyIsRunningDart = int Function(Pointer<Void> handle);
+
+typedef _ProxyNoArgResultNative = Int32 Function();
+typedef _ProxyNoArgResultDart = int Function();
 
 typedef _ProxyFreeStringNative = Void Function(Pointer<Utf8> s);
 typedef _ProxyFreeStringDart = void Function(Pointer<Utf8> s);
@@ -338,6 +346,29 @@ class ProxyFFI {
         _ProxySetTunBypassProcessesNative,
         _ProxySetTunBypassProcessesDart
       >('proxy_set_tun_bypass_processes');
+
+  late final proxyStartTun = lib
+      .lookupFunction<_ProxyStartTunNative, _ProxyStartTunDart>(
+        'proxy_start_tun',
+      );
+
+  late final proxyStopTun = lib
+      .lookupFunction<_ProxyStopNative, _ProxyStopDart>('proxy_stop_tun');
+
+  late final proxyIsTunRunning = lib
+      .lookupFunction<_ProxyIsRunningNative, _ProxyIsRunningDart>(
+        'proxy_is_tun_running',
+      );
+
+  late final proxyIsElevated = lib
+      .lookupFunction<_ProxyNoArgResultNative, _ProxyNoArgResultDart>(
+        'proxy_is_elevated',
+      );
+
+  late final proxyRelaunchElevatedForTun = lib
+      .lookupFunction<_ProxyNoArgResultNative, _ProxyNoArgResultDart>(
+        'proxy_relaunch_elevated_for_tun',
+      );
 
   late final proxyListTunProcesses = lib
       .lookupFunction<_ProxyGetStringNative, _ProxyGetStringDart>(

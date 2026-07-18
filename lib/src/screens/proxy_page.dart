@@ -103,6 +103,24 @@ class _ProxyPageState extends State<ProxyPage> {
     );
   }
 
+  Future<void> _toggleTun(ProxyState state, bool enabled) async {
+    final result = await state.setTunEnabled(enabled);
+    if (!mounted) return;
+    if (result == null) {
+      ToastUtils.showInfo('Restarting with administrator privileges for TUN');
+      state.stopForElevationHandoff();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      exit(0);
+    }
+    if (result) {
+      ToastUtils.showSuccess(
+        enabled ? 'TUN mode enabled' : 'TUN mode disabled',
+      );
+    } else {
+      ToastUtils.showError(state.lastError ?? 'Failed to change TUN mode');
+    }
+  }
+
   void _exportConfig() async {
     final state = context.read<ProxyState>();
     final json = jsonEncode(state.config.toJson());
@@ -157,17 +175,6 @@ class _ProxyPageState extends State<ProxyPage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      if (Platform.isWindows) ...[
-                        FloatingActionButton.extended(
-                          heroTag: 'tun_process_fab',
-                          icon: const Icon(Icons.security_outlined),
-                          onPressed: _showTunProcessDialog,
-                          label: Text(
-                            'TUN Bypass (${state.config.tunBypassProcesses.length})',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
                       FloatingActionButton.extended(
                         heroTag: 'port_fab',
                         icon: const Icon(Icons.network_wifi),
@@ -218,53 +225,153 @@ class _ProxyPageState extends State<ProxyPage> {
               ),
               // Center switch
               Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Status text
-                    Text(
-                      state.isRunning ? 'Connected' : 'Disconnected',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      state.config.serverHost.isEmpty
-                          ? 'Configure server first'
-                          : '${state.config.serverHost}:${state.config.serverPort}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 96),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Status text
+                      Text(
+                        state.isRunning ? 'Connected' : 'Disconnected',
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      state.config.tunEnabled
-                          ? state.config.udpEnabled
-                                ? 'TUN / TCP + UDP'
-                                : 'TUN / TCP only'
-                          : state.config.udpEnabled
-                          ? 'SOCKS5 TCP + UDP'
-                          : 'SOCKS5 TCP only',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: state.config.udpEnabled
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      const SizedBox(height: 8),
+                      Text(
+                        state.config.serverHost.isEmpty
+                            ? 'Configure server first'
+                            : '${state.config.serverHost}:${state.config.serverPort}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    // Large switch
-                    Transform.scale(
-                      scale: 1.8,
-                      child: Switch(
-                        thumbIcon: thumbIcon,
-                        value: state.isRunning,
-                        onChanged: state.config.serverHost.isEmpty
-                            ? null
-                            : (_) => _toggleProxy(state),
+                      const SizedBox(height: 8),
+                      Text(
+                        state.isTunRunning
+                            ? state.config.udpEnabled
+                                  ? 'TUN / TCP + UDP'
+                                  : 'TUN / TCP only'
+                            : state.config.udpEnabled
+                            ? 'SOCKS5 TCP + UDP'
+                            : 'SOCKS5 TCP only',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: state.config.udpEnabled
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                            ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 32),
+                      // Large switch
+                      Transform.scale(
+                        scale: 1.8,
+                        child: Switch(
+                          thumbIcon: thumbIcon,
+                          value: state.isRunning,
+                          onChanged:
+                              state.config.serverHost.isEmpty || state.isTunBusy
+                              ? null
+                              : (_) => _toggleProxy(state),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: 420,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainer,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: state.isTunRunning
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                state.isTunRunning
+                                    ? Icons.shield
+                                    : Icons.shield_outlined,
+                                color: state.isTunRunning
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'TUN Mode',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      state.isTunBusy
+                                          ? 'Configuring adapter and routes...'
+                                          : !state.isRunning
+                                          ? 'Start the local proxy first'
+                                          : state.isTunRunning
+                                          ? 'All traffic -> 127.0.0.1:${state.config.localPort}'
+                                          : 'Device traffic capture is off',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              if (Platform.isWindows)
+                                IconButton(
+                                  onPressed: state.isTunBusy
+                                      ? null
+                                      : _showTunProcessDialog,
+                                  icon: const Icon(Icons.security_outlined),
+                                  tooltip:
+                                      'TUN bypass processes (${state.config.tunBypassProcesses.length})',
+                                ),
+                              if (state.isTunBusy)
+                                const SizedBox.square(
+                                  dimension: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              else
+                                Switch(
+                                  value: state.isTunRunning,
+                                  onChanged: state.isRunning
+                                      ? (enabled) => _toggleTun(state, enabled)
+                                      : null,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

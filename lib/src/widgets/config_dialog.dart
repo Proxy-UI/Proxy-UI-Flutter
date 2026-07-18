@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -23,7 +21,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late TextEditingController _sessionKeyController;
   late bool _autoProxy;
   late bool _udpEnabled;
-  late bool _tunEnabled;
   late bool _reverseGeo;
   late bool _forceCodec;
 
@@ -43,7 +40,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
     );
     _autoProxy = config.autoProxy;
     _udpEnabled = config.udpEnabled;
-    _tunEnabled = config.tunEnabled;
     _reverseGeo = config.reverseGeo;
     _forceCodec = config.forceCodec;
   }
@@ -69,7 +65,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
             : _sessionKeyController.text,
         autoProxy: _autoProxy,
         udpEnabled: _udpEnabled,
-        tunEnabled: _tunEnabled,
+        tunEnabled: state.config.tunEnabled,
         tunBypassProcesses: state.config.tunBypassProcesses,
         reverseGeo: _reverseGeo,
         needCodecIps: state.config.needCodecIps,
@@ -166,13 +162,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 value: _udpEnabled,
                 onChanged: (v) => setState(() => _udpEnabled = v),
               ),
-              if (Platform.isWindows)
-                SwitchListTile(
-                  title: const Text('TUN Mode'),
-                  secondary: const Icon(Icons.vpn_lock_outlined),
-                  value: _tunEnabled,
-                  onChanged: (v) => setState(() => _tunEnabled = v),
-                ),
               SwitchListTile(
                 title: const Text('Reverse Geo'),
                 subtitle: const Text('Reverse geo-location routing logic'),

@@ -9,8 +9,9 @@ import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
 import 'src/services/tray_service.dart';
 
-void main() async {
+void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  final enableTunOnStartup = arguments.contains('--enable-tun');
 
   // Initialize window manager for desktop platforms
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -34,7 +35,9 @@ void main() async {
     ToastificationWrapper(
       child: MultiProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => ProxyState()),
+          ChangeNotifierProvider(
+            create: (_) => ProxyState(enableTunOnStartup: enableTunOnStartup),
+          ),
           ChangeNotifierProvider(create: (_) => ThemeState()),
         ],
         child: const ProxyApp(),

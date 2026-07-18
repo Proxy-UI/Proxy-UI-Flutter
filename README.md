@@ -62,10 +62,13 @@ Build the complete Rust workspace and Windows UI together with:
 .\scripts\windows\build.ps1 -Configuration Release
 ```
 
-The Windows executable requests administrator privileges at launch because
-creating Wintun and changing routes requires elevation. The TUN process picker
-is available before and during a connection. Native code always excludes the
-UI executable itself to prevent a capture loop.
+The Windows executable normally runs without administrator privileges. Start
+the local proxy first, then use the top-level TUN switch; only that action
+requests UAC and relaunches the same GUI elevated without a terminal window.
+The switch reports enabled only after Wintun and route setup are ready. The TUN
+process picker is available before and during a connection. Native code protects
+the resolved remote proxy routes and always excludes the UI executable itself
+to prevent a capture loop.
 
 ### Trigger Release Build
 

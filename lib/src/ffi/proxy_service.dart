@@ -210,6 +210,56 @@ class ProxyService {
     }
   }
 
+  static int _startTunIsolate(Map<String, dynamic> params) {
+    final ffi = ProxyFFI();
+    final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
+    final processes = (params['processes'] as List<dynamic>).cast<String>();
+    final pointer = processes.isEmpty
+        ? nullptr
+        : jsonEncode(processes).toNativeUtf8();
+    try {
+      return ffi.proxyStartTun(handle, pointer);
+    } finally {
+      if (pointer != nullptr) calloc.free(pointer);
+    }
+  }
+
+  /// Enable TUN only after the local proxy listener has started. Native setup
+  /// can wait for adapter and route readiness, so it runs outside the UI isolate.
+  Future<int> startTun(List<String> processes) async {
+    if (_handle == null) return ProxyResult.notRunning;
+    return compute(_startTunIsolate, {
+      'handleAddress': _handle!.address,
+      'processes': processes,
+    });
+  }
+
+  static int _stopTunIsolate(int handleAddress) {
+    final ffi = ProxyFFI();
+    return ffi.proxyStopTun(Pointer<Void>.fromAddress(handleAddress));
+  }
+
+  /// Stop TUN capture without stopping the local HTTP/SOCKS5 listener. Route
+  /// cleanup can briefly block, so it also stays outside the UI isolate.
+  Future<int> stopTun() async {
+    if (_handle == null) return ProxyResult.notRunning;
+    return compute(_stopTunIsolate, _handle!.address);
+  }
+
+  bool get isTunRunning {
+    if (_handle == null) return false;
+    return _ffi.proxyIsTunRunning(_handle!) == 1;
+  }
+
+  /// Windows UAC helpers. A negative elevation result is treated as not
+  /// elevated so native startup still refuses route changes safely.
+  bool get isElevated => !Platform.isWindows || _ffi.proxyIsElevated() == 1;
+
+  int relaunchElevatedForTun() {
+    if (!Platform.isWindows) return ProxyResult.invalidParam;
+    return _ffi.proxyRelaunchElevatedForTun();
+  }
+
   /// Stop proxy.
   int stop() {
     if (_handle == null) return ProxyResult.invalidParam;
