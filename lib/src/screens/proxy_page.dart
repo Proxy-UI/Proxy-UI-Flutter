@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import '../models/proxy_config.dart';
 import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
 import '../widgets/config_dialog.dart';
+import '../widgets/tun_process_dialog.dart';
 
 /// Proxy control page with simple switch and config FAB
 class ProxyPage extends StatefulWidget {
@@ -94,6 +96,13 @@ class _ProxyPageState extends State<ProxyPage> {
     showDialog(context: context, builder: (context) => const ConfigDialog());
   }
 
+  void _showTunProcessDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const TunProcessDialog(),
+    );
+  }
+
   void _exportConfig() async {
     final state = context.read<ProxyState>();
     final json = jsonEncode(state.config.toJson());
@@ -144,11 +153,28 @@ class _ProxyPageState extends State<ProxyPage> {
                 alignment: Alignment.bottomRight,
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
-                  child: FloatingActionButton.extended(
-                    heroTag: 'port_fab',
-                    icon: const Icon(Icons.network_wifi),
-                    onPressed: state.isRunning ? null : _showPortDialog,
-                    label: Text('Port: ${state.config.localPort}'),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (Platform.isWindows) ...[
+                        FloatingActionButton.extended(
+                          heroTag: 'tun_process_fab',
+                          icon: const Icon(Icons.security_outlined),
+                          onPressed: _showTunProcessDialog,
+                          label: Text(
+                            'TUN Bypass (${state.config.tunBypassProcesses.length})',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      FloatingActionButton.extended(
+                        heroTag: 'port_fab',
+                        icon: const Icon(Icons.network_wifi),
+                        onPressed: state.isRunning ? null : _showPortDialog,
+                        label: Text('Port: ${state.config.localPort}'),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -213,7 +239,11 @@ class _ProxyPageState extends State<ProxyPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      state.config.udpEnabled
+                      state.config.tunEnabled
+                          ? state.config.udpEnabled
+                                ? 'TUN / TCP + UDP'
+                                : 'TUN / TCP only'
+                          : state.config.udpEnabled
                           ? 'SOCKS5 TCP + UDP'
                           : 'SOCKS5 TCP only',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(

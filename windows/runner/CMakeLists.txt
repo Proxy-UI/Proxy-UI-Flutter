@@ -20,6 +20,14 @@ add_executable(${BINARY_NAME} WIN32
 # that need different build settings.
 apply_standard_settings(${BINARY_NAME})
 
+# TUN setup changes system routes and creates a Wintun adapter. Request UAC
+# elevation on the existing GUI process; using the linker setting avoids a
+# conflicting default asInvoker fragment during manifest merging.
+if(MSVC)
+  target_link_options(${BINARY_NAME} PRIVATE
+    "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+endif()
+
 # Add preprocessor definitions for the build version.
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MAJOR=${FLUTTER_VERSION_MAJOR}")

@@ -86,6 +86,12 @@ class ProxyState extends ChangeNotifier {
     if (_logs.length > maxLogs) {
       _logs.removeAt(0);
     }
+    // Native TUN setup failures cancel the shared listener token. Reconcile
+    // the provider on the following native log instead of leaving the switch
+    // in a connected state after the worker has stopped.
+    if (_isRunning && !_service.isRunning) {
+      _isRunning = false;
+    }
     notifyListeners();
   }
 
@@ -132,6 +138,8 @@ class ProxyState extends ChangeNotifier {
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
+      tunEnabled: _config.tunEnabled,
+      tunBypassProcesses: _config.tunBypassProcesses,
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,
@@ -147,6 +155,31 @@ class ProxyState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// Retrieve process candidates and the executable that native code protects
+  /// from removal. Process enumeration is only exposed by the Windows UI.
+  ({List<String> processes, String? selfProcess}) getTunProcessOptions() {
+    return (
+      processes: _service.listTunProcesses(),
+      selfProcess: _service.tunSelfProcess,
+    );
+  }
+
+  /// Persist and, when TUN is active, immediately apply process exclusions.
+  Future<bool> updateTunBypassProcesses(List<String> processes) async {
+    if (_isRunning && _config.tunEnabled) {
+      final result = _service.setTunBypassProcesses(processes);
+      if (result != ProxyResult.ok) {
+        _lastError = ProxyResult.message(result);
+        notifyListeners();
+        return false;
+      }
+    }
+    _config = _config.copyWith(tunBypassProcesses: processes);
+    await _saveConfig();
+    notifyListeners();
+    return true;
   }
 
   bool stop() {
@@ -285,6 +318,8 @@ class ProxyState extends ChangeNotifier {
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
+      tunEnabled: _config.tunEnabled,
+      tunBypassProcesses: _config.tunBypassProcesses,
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,
@@ -324,6 +359,8 @@ class ProxyState extends ChangeNotifier {
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
+      tunEnabled: _config.tunEnabled,
+      tunBypassProcesses: _config.tunBypassProcesses,
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,

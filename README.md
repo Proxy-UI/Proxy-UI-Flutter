@@ -8,6 +8,7 @@ A cross-platform Flutter GUI for encrypted proxy client.
 - **Configuration**: Server host, port, session key, and local port settings
 - **Auto Proxy**: Geo-based routing (CN direct, others proxy)
 - **SOCKS5 UDP**: Toggle RFC 1928 UDP relay on the same local proxy port
+- **Windows TUN**: Capture device TCP/UDP with runtime process exclusions
 - **Subscriptions**: Export UDP-aware Clash and Shadowrocket configurations
 - **Real-time Logs**: Colored log viewer with level filtering (TRACE/DEBUG/INFO/WARN/ERROR)
 - **Theme Switching**: 4 color themes (Cyberpunk, Sunset, Ocean, Forest)
@@ -46,7 +47,8 @@ fvm flutter pub get
 fvm flutter run -d windows
 ```
 
-The desktop app requires the Rust `http_proxy` native library. When developing
+The desktop app requires the Rust `http_proxy` native library. Windows TUN mode
+also requires `wintun.dll`; the parent build scripts stage both DLLs. When developing
 from the parent repository on Windows, the recommended command builds and
 stages the DLL before starting Flutter. Run it from the parent repository root:
 
@@ -59,6 +61,11 @@ Build the complete Rust workspace and Windows UI together with:
 ```powershell
 .\scripts\windows\build.ps1 -Configuration Release
 ```
+
+The Windows executable requests administrator privileges at launch because
+creating Wintun and changing routes requires elevation. The TUN process picker
+is available before and during a connection. Native code always excludes the
+UI executable itself to prevent a capture loop.
 
 ### Trigger Release Build
 

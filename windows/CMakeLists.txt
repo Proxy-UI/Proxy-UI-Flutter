@@ -119,3 +119,9 @@ if(EXISTS "${PROXY_LIB_DIR}/http_proxy.dll")
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+if(EXISTS "${PROXY_LIB_DIR}/wintun.dll")
+  install(FILES "${PROXY_LIB_DIR}/wintun.dll"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()

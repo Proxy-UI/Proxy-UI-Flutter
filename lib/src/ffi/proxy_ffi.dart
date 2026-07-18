@@ -131,6 +131,31 @@ final class ProxyConfigV2 extends Struct {
   external int enableUdp;
 }
 
+/// Versioned proxy configuration with local TUN traffic capture.
+final class ProxyConfigV3 extends Struct {
+  external Pointer<Utf8> serverHost;
+  @Uint16()
+  external int serverPort;
+  @Uint16()
+  external int localPort;
+  external Pointer<Utf8> sessionKey;
+  @Int32()
+  external int autoProxy;
+  @Int32()
+  external int reverseGeo;
+  external Pointer<Utf8> cacheDir;
+  external Pointer<Utf8> needCodecIps;
+  @Int32()
+  external int forceCodec;
+  @Int32()
+  external int setSystemProxy;
+  @Int32()
+  external int enableUdp;
+  @Int32()
+  external int enableTun;
+  external Pointer<Utf8> tunBypassProcesses;
+}
+
 // FFI function signatures
 typedef _ProxySetLogCallbackNative =
     Void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
@@ -152,6 +177,19 @@ typedef _ProxyStartV2Native =
     Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV2> config);
 typedef _ProxyStartV2Dart =
     int Function(Pointer<Void> handle, Pointer<ProxyConfigV2> config);
+
+typedef _ProxyStartV3Native =
+    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV3> config);
+typedef _ProxyStartV3Dart =
+    int Function(Pointer<Void> handle, Pointer<ProxyConfigV3> config);
+
+typedef _ProxySetTunBypassProcessesNative =
+    Int32 Function(Pointer<Void> handle, Pointer<Utf8> processes);
+typedef _ProxySetTunBypassProcessesDart =
+    int Function(Pointer<Void> handle, Pointer<Utf8> processes);
+
+typedef _ProxyGetStringNative = Pointer<Utf8> Function();
+typedef _ProxyGetStringDart = Pointer<Utf8> Function();
 
 typedef _ProxyStopNative = Int32 Function(Pointer<Void> handle);
 typedef _ProxyStopDart = int Function(Pointer<Void> handle);
@@ -291,6 +329,25 @@ class ProxyFFI {
 
   late final proxyStartV2 = lib
       .lookupFunction<_ProxyStartV2Native, _ProxyStartV2Dart>('proxy_start_v2');
+
+  late final proxyStartV3 = lib
+      .lookupFunction<_ProxyStartV3Native, _ProxyStartV3Dart>('proxy_start_v3');
+
+  late final proxySetTunBypassProcesses = lib
+      .lookupFunction<
+        _ProxySetTunBypassProcessesNative,
+        _ProxySetTunBypassProcessesDart
+      >('proxy_set_tun_bypass_processes');
+
+  late final proxyListTunProcesses = lib
+      .lookupFunction<_ProxyGetStringNative, _ProxyGetStringDart>(
+        'proxy_list_tun_processes',
+      );
+
+  late final proxyGetTunSelfProcess = lib
+      .lookupFunction<_ProxyGetStringNative, _ProxyGetStringDart>(
+        'proxy_get_tun_self_process',
+      );
 
   late final proxyStop = lib.lookupFunction<_ProxyStopNative, _ProxyStopDart>(
     'proxy_stop',

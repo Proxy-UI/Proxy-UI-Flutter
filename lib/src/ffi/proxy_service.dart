@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -91,6 +92,8 @@ class ProxyService {
     String? sessionKey,
     bool autoProxy = true,
     bool udpEnabled = true,
+    bool tunEnabled = false,
+    List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
@@ -100,11 +103,12 @@ class ProxyService {
     destroy();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfigV2>();
+    final config = calloc<ProxyConfigV3>();
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
     Pointer<Utf8>? needCodecIpsPtr;
+    Pointer<Utf8>? tunBypassProcessesPtr;
 
     try {
       serverHostPtr = serverHost.toNativeUtf8();
@@ -121,6 +125,7 @@ class ProxyService {
 
       config.ref.autoProxy = autoProxy ? 1 : 0;
       config.ref.enableUdp = udpEnabled ? 1 : 0;
+      config.ref.enableTun = tunEnabled ? 1 : 0;
       config.ref.reverseGeo = reverseGeo ? 1 : 0;
 
       // Mobile platforms need cache_dir for auto-proxy
@@ -148,13 +153,60 @@ class ProxyService {
           ? 1
           : 0;
 
-      return _ffi.proxyStartV2(_handle!, config);
+      if (tunBypassProcesses.isNotEmpty) {
+        tunBypassProcessesPtr = jsonEncode(tunBypassProcesses).toNativeUtf8();
+        config.ref.tunBypassProcesses = tunBypassProcessesPtr;
+      } else {
+        config.ref.tunBypassProcesses = nullptr;
+      }
+
+      return _ffi.proxyStartV3(_handle!, config);
     } finally {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);
       if (cacheDirPtr != null) calloc.free(cacheDirPtr);
       if (needCodecIpsPtr != null) calloc.free(needCodecIpsPtr);
+      if (tunBypassProcessesPtr != null) {
+        calloc.free(tunBypassProcessesPtr);
+      }
       calloc.free(config);
+    }
+  }
+
+  /// List normalized running executable names available for TUN bypass.
+  List<String> listTunProcesses() {
+    final pointer = _ffi.proxyListTunProcesses();
+    if (pointer == nullptr) return const [];
+    try {
+      final decoded = jsonDecode(pointer.toDartString());
+      if (decoded is! List<dynamic>) return const [];
+      return decoded.whereType<String>().toList(growable: false);
+    } finally {
+      _ffi.proxyFreeString(pointer);
+    }
+  }
+
+  /// Return the executable name native code always excludes from TUN.
+  String? get tunSelfProcess {
+    final pointer = _ffi.proxyGetTunSelfProcess();
+    if (pointer == nullptr) return null;
+    try {
+      return pointer.toDartString();
+    } finally {
+      _ffi.proxyFreeString(pointer);
+    }
+  }
+
+  /// Apply a new TUN process policy without recreating the TUN device.
+  int setTunBypassProcesses(List<String> processes) {
+    if (_handle == null) return ProxyResult.notRunning;
+    final pointer = processes.isEmpty
+        ? nullptr
+        : jsonEncode(processes).toNativeUtf8();
+    try {
+      return _ffi.proxySetTunBypassProcesses(_handle!, pointer);
+    } finally {
+      if (pointer != nullptr) calloc.free(pointer);
     }
   }
 

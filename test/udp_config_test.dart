@@ -11,7 +11,25 @@ void main() {
     });
 
     expect(config.udpEnabled, isTrue);
+    expect(config.tunEnabled, isFalse);
+    expect(config.tunBypassProcesses, isEmpty);
     expect(config.toJson()['udpEnabled'], isTrue);
+  });
+
+  test('TUN process names are normalized and preserved by copyWith', () {
+    final config = ProxyConfigModel(
+      tunEnabled: true,
+      tunBypassProcesses: const [' Browser.EXE ', 'browser', 'curl.exe'],
+    );
+
+    expect(config.tunBypassProcesses, ['browser', 'curl']);
+    expect(config.toJson()['tunEnabled'], isTrue);
+    expect(
+      config
+          .copyWith(tunBypassProcesses: const ['Downloader.EXE'])
+          .tunBypassProcesses,
+      ['downloader'],
+    );
   });
 
   test('generated client subscriptions follow the UDP setting', () {

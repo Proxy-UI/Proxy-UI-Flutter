@@ -8,6 +8,8 @@ class ProxyConfigModel {
   String? sessionKey;
   bool autoProxy;
   bool udpEnabled;
+  bool tunEnabled;
+  List<String> tunBypassProcesses;
   bool reverseGeo;
   String? needCodecIps;
   bool forceCodec;
@@ -24,11 +26,14 @@ class ProxyConfigModel {
     this.sessionKey,
     this.autoProxy = true,
     this.udpEnabled = true,
+    this.tunEnabled = false,
+    List<String> tunBypassProcesses = const [],
     this.reverseGeo = false,
     this.needCodecIps,
     this.forceCodec = false,
     bool? setSystemProxy,
-  }) : setSystemProxy =
+  }) : tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
+       setSystemProxy =
            setSystemProxy ?? isDesktop; // default true only for desktop
 
   Map<String, dynamic> toJson() => {
@@ -38,6 +43,8 @@ class ProxyConfigModel {
     'sessionKey': sessionKey,
     'autoProxy': autoProxy,
     'udpEnabled': udpEnabled,
+    'tunEnabled': tunEnabled,
+    'tunBypassProcesses': tunBypassProcesses,
     'reverseGeo': reverseGeo,
     'needCodecIps': needCodecIps,
     'forceCodec': forceCodec,
@@ -54,6 +61,14 @@ class ProxyConfigModel {
         // Imported configurations created by older versions keep the
         // historical behavior, where SOCKS5 UDP was always available.
         udpEnabled: json['udpEnabled'] ?? true,
+        // TUN is opt-in so legacy configurations never start changing system
+        // routes after an application upgrade.
+        tunEnabled: json['tunEnabled'] ?? false,
+        tunBypassProcesses:
+            (json['tunBypassProcesses'] as List<dynamic>?)
+                ?.whereType<String>()
+                .toList() ??
+            const [],
         reverseGeo: json['reverseGeo'] ?? false,
         needCodecIps: json['needCodecIps'],
         forceCodec: json['forceCodec'] ?? false,
@@ -67,6 +82,8 @@ class ProxyConfigModel {
     String? sessionKey,
     bool? autoProxy,
     bool? udpEnabled,
+    bool? tunEnabled,
+    List<String>? tunBypassProcesses,
     bool? reverseGeo,
     String? needCodecIps,
     bool? forceCodec,
@@ -78,9 +95,25 @@ class ProxyConfigModel {
     sessionKey: sessionKey ?? this.sessionKey,
     autoProxy: autoProxy ?? this.autoProxy,
     udpEnabled: udpEnabled ?? this.udpEnabled,
+    tunEnabled: tunEnabled ?? this.tunEnabled,
+    tunBypassProcesses: tunBypassProcesses ?? this.tunBypassProcesses,
     reverseGeo: reverseGeo ?? this.reverseGeo,
     needCodecIps: needCodecIps ?? this.needCodecIps,
     forceCodec: forceCodec ?? this.forceCodec,
     setSystemProxy: setSystemProxy ?? this.setSystemProxy,
   );
+}
+
+List<String> _normalizeProcessNames(Iterable<String> names) {
+  final normalized = names
+      .map((name) => name.trim().toLowerCase())
+      .map(
+        (name) =>
+            name.endsWith('.exe') ? name.substring(0, name.length - 4) : name,
+      )
+      .where((name) => name.isNotEmpty)
+      .toSet()
+      .toList();
+  normalized.sort();
+  return normalized;
 }
