@@ -183,6 +183,19 @@ typedef _ProxyStartV3Native =
 typedef _ProxyStartV3Dart =
     int Function(Pointer<Void> handle, Pointer<ProxyConfigV3> config);
 
+typedef _ProxySwitchUpstreamNative =
+    Int32 Function(
+      Pointer<Void> handle,
+      Pointer<Utf8> serverHost,
+      Uint16 serverPort,
+    );
+typedef _ProxySwitchUpstreamDart =
+    int Function(
+      Pointer<Void> handle,
+      Pointer<Utf8> serverHost,
+      int serverPort,
+    );
+
 typedef _ProxySetTunBypassProcessesNative =
     Int32 Function(Pointer<Void> handle, Pointer<Utf8> processes);
 typedef _ProxySetTunBypassProcessesDart =
@@ -345,6 +358,11 @@ class ProxyFFI {
 
   late final proxyStartV3 = lib
       .lookupFunction<_ProxyStartV3Native, _ProxyStartV3Dart>('proxy_start_v3');
+
+  late final proxySwitchUpstream = lib
+      .lookupFunction<_ProxySwitchUpstreamNative, _ProxySwitchUpstreamDart>(
+        'proxy_switch_upstream',
+      );
 
   late final proxySetTunBypassProcesses = lib
       .lookupFunction<

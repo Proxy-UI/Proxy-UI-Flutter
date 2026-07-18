@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../constants.dart';
 import '../providers/theme_provider.dart';
+import '../widgets/app_window_title_bar.dart';
 import 'proxy_page.dart';
 import 'log_page.dart';
 import 'subscription_page.dart';
@@ -96,8 +99,25 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   PreferredSizeWidget createAppBar(ThemeState themeState) {
+    final isDesktop =
+        Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+    if (isDesktop) {
+      return AppWindowTitleBar(
+        title: 'Proxy With Flutter',
+        actions: curLayoutStatus.index <= LayoutStatus.small.index
+            ? [
+                _BrightnessButton(themeState: themeState, compact: true),
+                _ColorSeedButton(themeState: themeState, compact: true),
+              ]
+            : const [],
+      );
+    }
     return AppBar(
       title: const Text('Proxy With Flutter'),
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
       actions: curLayoutStatus.index <= LayoutStatus.small.index
           ? [
               _BrightnessButton(themeState: themeState),
@@ -163,10 +183,12 @@ class _BrightnessButton extends StatelessWidget {
   const _BrightnessButton({
     required this.themeState,
     this.showTooltipBelow = true,
+    this.compact = false,
   });
 
   final ThemeState themeState;
   final bool showTooltipBelow;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -179,21 +201,30 @@ class _BrightnessButton extends StatelessWidget {
             ? const Icon(Icons.dark_mode_outlined)
             : const Icon(Icons.light_mode_outlined),
         onPressed: themeState.toggleMode,
+        visualDensity: compact ? VisualDensity.compact : null,
+        constraints: compact
+            ? const BoxConstraints.tightFor(width: 40, height: 40)
+            : null,
       ),
     );
   }
 }
 
 class _ColorSeedButton extends StatelessWidget {
-  const _ColorSeedButton({required this.themeState});
+  const _ColorSeedButton({required this.themeState, this.compact = false});
 
   final ThemeState themeState;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton(
       icon: const Icon(Icons.palette_outlined),
       tooltip: 'Select a seed color',
+      padding: compact ? EdgeInsets.zero : const EdgeInsets.all(8),
+      constraints: compact
+          ? const BoxConstraints.tightFor(width: 40, height: 40)
+          : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       itemBuilder: (context) {
         return List.generate(ColorSeed.values.length, (index) {

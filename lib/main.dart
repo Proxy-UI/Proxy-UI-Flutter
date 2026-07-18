@@ -17,12 +17,17 @@ void main(List<String> arguments) async {
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
 
-    const windowOptions = WindowOptions(
+    final windowOptions = WindowOptions(
       size: Size(1280, 720),
       minimumSize: Size(800, 600),
       center: true,
+      backgroundColor: Colors.transparent,
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.normal,
+      title: 'Proxy With Flutter',
+      titleBarStyle: TitleBarStyle.hidden,
+      // macOS retains the native traffic lights inside the unified surface.
+      // Windows and Linux render matching controls in Flutter.
+      windowButtonVisibility: Platform.isMacOS,
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -100,6 +105,12 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
             useMaterial3: true,
             brightness: Brightness.dark,
           ),
+          builder: (context, child) {
+            if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+              return VirtualWindowFrame(child: child!);
+            }
+            return child!;
+          },
           home: const HomeScreen(),
         );
       },

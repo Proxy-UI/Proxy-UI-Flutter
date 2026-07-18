@@ -310,6 +310,21 @@ class ProxyService {
     }
   }
 
+  /// Replace the remote endpoint while preserving the bound local proxy port.
+  ///
+  /// Native code refuses this operation while TUN routes are active. The
+  /// provider therefore stops only TUN, switches this endpoint, and starts TUN
+  /// again so its mandatory remote route bypass follows the new node.
+  int switchUpstream({required String serverHost, required int serverPort}) {
+    if (_handle == null) return ProxyResult.notRunning;
+    final serverHostPtr = serverHost.toNativeUtf8();
+    try {
+      return _ffi.proxySwitchUpstream(_handle!, serverHostPtr, serverPort);
+    } finally {
+      calloc.free(serverHostPtr);
+    }
+  }
+
   static int _startTunIsolate(Map<String, dynamic> params) {
     final ffi = ProxyFFI();
     final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
