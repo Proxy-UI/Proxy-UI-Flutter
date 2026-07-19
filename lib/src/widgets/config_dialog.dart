@@ -67,6 +67,8 @@ class _ConfigDialogState extends State<ConfigDialog> {
         udpEnabled: _udpEnabled,
         tunEnabled: state.config.tunEnabled,
         tunBypassProcesses: state.config.tunBypassProcesses,
+        androidVpnRoutingMode: state.config.androidVpnRoutingMode,
+        androidVpnPackages: state.config.androidVpnPackages,
         reverseGeo: _reverseGeo,
         needCodecIps: state.config.needCodecIps,
         forceCodec: _forceCodec,

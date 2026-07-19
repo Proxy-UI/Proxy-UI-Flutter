@@ -32,6 +32,35 @@ void main() {
     );
   });
 
+  test(
+    'Android VPN application policy round-trips and normalizes packages',
+    () {
+      final config = ProxyConfigModel.fromJson({
+        'androidVpnRoutingMode': 'exclude',
+        'androidVpnPackages': [
+          ' com.example.browser ',
+          'com.example.browser',
+          'com.example.game',
+        ],
+      });
+
+      expect(config.androidVpnRoutingMode, AndroidVpnRoutingMode.exclude);
+      expect(config.androidVpnPackages, [
+        'com.example.browser',
+        'com.example.game',
+      ]);
+      expect(config.toJson()['androidVpnRoutingMode'], 'exclude');
+      expect(
+        config.copyWith(androidVpnRoutingMode: AndroidVpnRoutingMode.include),
+        isA<ProxyConfigModel>().having(
+          (value) => value.androidVpnRoutingMode,
+          'routing mode',
+          AndroidVpnRoutingMode.include,
+        ),
+      );
+    },
+  );
+
   test('generated client subscriptions follow the UDP setting', () {
     final enabled = ProxyConfigModel(
       serverHost: 'proxy.example.com',

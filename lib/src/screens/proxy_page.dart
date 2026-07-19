@@ -9,6 +9,7 @@ import '../models/proxy_config.dart';
 import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
 import '../widgets/config_dialog.dart';
+import '../widgets/android_vpn_app_dialog.dart';
 import '../widgets/tun_process_dialog.dart';
 
 /// Proxy control page with simple switch and config FAB
@@ -100,6 +101,13 @@ class _ProxyPageState extends State<ProxyPage> {
     showDialog(
       context: context,
       builder: (context) => const TunProcessDialog(),
+    );
+  }
+
+  void _showAndroidVpnAppDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const AndroidVpnAppDialog(),
     );
   }
 
@@ -269,7 +277,11 @@ class _ProxyPageState extends State<ProxyPage> {
                       const SizedBox(height: 8),
                       Text(
                         state.isTunRunning
-                            ? state.config.udpEnabled
+                            ? Platform.isAndroid
+                                  ? state.config.udpEnabled
+                                        ? 'VPN / TCP + UDP'
+                                        : 'VPN / TCP only'
+                                  : state.config.udpEnabled
                                   ? 'TUN / TCP + UDP'
                                   : 'TUN / TCP only'
                             : state.config.udpEnabled
@@ -336,7 +348,9 @@ class _ProxyPageState extends State<ProxyPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'TUN Mode',
+                                      Platform.isAndroid
+                                          ? 'VPN Service'
+                                          : 'TUN Mode',
                                       style: Theme.of(
                                         context,
                                       ).textTheme.titleSmall,
@@ -344,11 +358,17 @@ class _ProxyPageState extends State<ProxyPage> {
                                     const SizedBox(height: 2),
                                     Text(
                                       state.isTunBusy
-                                          ? 'Configuring adapter and routes...'
+                                          ? Platform.isAndroid
+                                                ? 'Configuring Android VPN...'
+                                                : 'Configuring adapter and routes...'
                                           : !state.isRunning
                                           ? 'Start the local proxy first'
                                           : state.isTunRunning
-                                          ? 'All traffic -> 127.0.0.1:${state.config.localPort}'
+                                          ? Platform.isAndroid
+                                                ? 'VPN traffic -> 127.0.0.1:${state.config.localPort}'
+                                                : 'All traffic -> 127.0.0.1:${state.config.localPort}'
+                                          : Platform.isAndroid
+                                          ? 'Android VPN is off'
                                           : 'Device traffic capture is off',
                                       style: Theme.of(context)
                                           .textTheme
@@ -371,6 +391,15 @@ class _ProxyPageState extends State<ProxyPage> {
                                   icon: const Icon(Icons.security_outlined),
                                   tooltip:
                                       'TUN bypass processes (${state.config.tunBypassProcesses.length})',
+                                ),
+                              if (Platform.isAndroid)
+                                IconButton(
+                                  onPressed: state.isTunBusy
+                                      ? null
+                                      : _showAndroidVpnAppDialog,
+                                  icon: const Icon(Icons.apps_outlined),
+                                  tooltip:
+                                      'VPN applications (${state.config.androidVpnPackages.length})',
                                 ),
                               if (state.isTunBusy)
                                 const SizedBox.square(

@@ -5,10 +5,12 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/node_group_model.dart';
 import '../models/node_model.dart';
+import '../services/android_vpn_service.dart';
 import 'proxy_ffi.dart';
 
 /// Log entry from native library.
@@ -109,6 +111,24 @@ class ProxyService {
   final ProxyFFI _ffi = ProxyFFI();
   Pointer<Void>? _handle;
   bool _loggingInitialized = false;
+  String? _platformLastError;
+  StreamSubscription<AndroidVpnStateEvent>? _androidVpnSubscription;
+
+  ProxyService() {
+    if (Platform.isAndroid) {
+      _androidVpnSubscription = AndroidVpnService.instance.states.listen((
+        event,
+      ) {
+        final handle = _handle;
+        if (!event.running && handle != null && handle != nullptr) {
+          _platformLastError = event.error;
+          if (_ffi.proxyIsTunRunning(handle) == 1) {
+            _ffi.proxyStopTun(handle);
+          }
+        }
+      });
+    }
+  }
 
   // Log callback handling
   static final _logController = StreamController<LogEntry>.broadcast();
@@ -165,6 +185,9 @@ class ProxyService {
     bool forceCodec = false,
     bool setSystemProxy = false,
   }) async {
+    if (Platform.isAndroid) {
+      await stopAndroidVpnInterface();
+    }
     // Always recreate handle to apply new config
     destroy();
     if (!create()) return ProxyResult.runtimeError;
@@ -285,6 +308,9 @@ class ProxyService {
   /// The numeric ABI result is intentionally coarse and stable. This string
   /// carries actionable TUN stage, adapter, route, and Windows error context.
   String? get lastError {
+    if (_platformLastError case final error? when error.trim().isNotEmpty) {
+      return error.trim();
+    }
     final handle = _handle;
     if (handle == null || handle == nullptr) return null;
     final pointer = _ffi.proxyGetLastError(handle);
@@ -349,6 +375,46 @@ class ProxyService {
     });
   }
 
+  static int _startAndroidTunIsolate(Map<String, int> params) {
+    final ffi = ProxyFFI();
+    return ffi.proxyStartAndroidTun(
+      Pointer<Void>.fromAddress(params['handleAddress']!),
+      params['tunFd']!,
+      params['mtu']!,
+    );
+  }
+
+  /// Establish Android's VpnService interface, then hand a duplicated TUN
+  /// descriptor to Rust. The service retains the original descriptor.
+  Future<int> startAndroidTun({
+    required String mode,
+    required List<String> packages,
+  }) async {
+    final handle = _handle;
+    if (!Platform.isAndroid || handle == null || handle == nullptr) {
+      return ProxyResult.notRunning;
+    }
+    _platformLastError = null;
+    try {
+      final interface = await AndroidVpnService.instance.startInterface(
+        mode: mode,
+        packages: packages,
+      );
+      final result = await compute(_startAndroidTunIsolate, {
+        'handleAddress': handle.address,
+        'tunFd': interface.fileDescriptor,
+        'mtu': interface.mtu,
+      });
+      if (result != ProxyResult.ok) {
+        await AndroidVpnService.instance.stopInterface();
+      }
+      return result;
+    } on PlatformException catch (error) {
+      _platformLastError = error.message ?? error.code;
+      return ProxyResult.runtimeError;
+    }
+  }
+
   static int _stopTunIsolate(int handleAddress) {
     final ffi = ProxyFFI();
     return ffi.proxyStopTun(Pointer<Void>.fromAddress(handleAddress));
@@ -359,6 +425,33 @@ class ProxyService {
   Future<int> stopTun() async {
     if (_handle == null) return ProxyResult.notRunning;
     return compute(_stopTunIsolate, _handle!.address);
+  }
+
+  Future<int> stopAndroidTun() async {
+    if (!Platform.isAndroid) return ProxyResult.invalidParam;
+    _platformLastError = null;
+    final result = await stopTun();
+    try {
+      await AndroidVpnService.instance.stopInterface();
+    } on PlatformException catch (error) {
+      _platformLastError = error.message ?? error.code;
+      return ProxyResult.runtimeError;
+    }
+    return result;
+  }
+
+  Future<List<AndroidVpnApplication>> listAndroidVpnApplications() {
+    if (!Platform.isAndroid) return Future.value(const []);
+    return AndroidVpnService.instance.listInstalledApps();
+  }
+
+  Future<void> stopAndroidVpnInterface() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await AndroidVpnService.instance.stopInterface();
+    } on PlatformException catch (error) {
+      _platformLastError = error.message ?? error.code;
+    }
   }
 
   bool get isTunRunning {
@@ -378,6 +471,9 @@ class ProxyService {
   /// Stop proxy.
   int stop() {
     if (_handle == null) return ProxyResult.invalidParam;
+    if (Platform.isAndroid) {
+      unawaited(AndroidVpnService.instance.stopInterface());
+    }
     return _ffi.proxyStop(_handle!);
   }
 
@@ -397,7 +493,11 @@ class ProxyService {
 
   /// Dispose resources.
   void dispose() {
+    if (_handle != null) {
+      stop();
+    }
     destroy();
+    _androidVpnSubscription?.cancel();
     _nativeCallable?.close();
   }
 

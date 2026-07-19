@@ -1,5 +1,22 @@
 import 'dart:io';
 
+enum AndroidVpnRoutingMode {
+  all('all'),
+  exclude('exclude'),
+  include('include');
+
+  final String wireName;
+
+  const AndroidVpnRoutingMode(this.wireName);
+
+  static AndroidVpnRoutingMode fromWireName(Object? value) {
+    return values.firstWhere(
+      (mode) => mode.wireName == value,
+      orElse: () => AndroidVpnRoutingMode.all,
+    );
+  }
+}
+
 /// Proxy configuration model.
 class ProxyConfigModel {
   String serverHost;
@@ -10,6 +27,8 @@ class ProxyConfigModel {
   bool udpEnabled;
   bool tunEnabled;
   List<String> tunBypassProcesses;
+  AndroidVpnRoutingMode androidVpnRoutingMode;
+  List<String> androidVpnPackages;
   bool reverseGeo;
   String? needCodecIps;
   bool forceCodec;
@@ -28,11 +47,14 @@ class ProxyConfigModel {
     this.udpEnabled = true,
     this.tunEnabled = false,
     List<String> tunBypassProcesses = const [],
+    this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
+    List<String> androidVpnPackages = const [],
     this.reverseGeo = false,
     this.needCodecIps,
     this.forceCodec = false,
     bool? setSystemProxy,
   }) : tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
+       androidVpnPackages = _normalizePackageNames(androidVpnPackages),
        setSystemProxy =
            setSystemProxy ?? isDesktop; // default true only for desktop
 
@@ -45,6 +67,8 @@ class ProxyConfigModel {
     'udpEnabled': udpEnabled,
     'tunEnabled': tunEnabled,
     'tunBypassProcesses': tunBypassProcesses,
+    'androidVpnRoutingMode': androidVpnRoutingMode.wireName,
+    'androidVpnPackages': androidVpnPackages,
     'reverseGeo': reverseGeo,
     'needCodecIps': needCodecIps,
     'forceCodec': forceCodec,
@@ -69,6 +93,14 @@ class ProxyConfigModel {
                 ?.whereType<String>()
                 .toList() ??
             const [],
+        androidVpnRoutingMode: AndroidVpnRoutingMode.fromWireName(
+          json['androidVpnRoutingMode'],
+        ),
+        androidVpnPackages:
+            (json['androidVpnPackages'] as List<dynamic>?)
+                ?.whereType<String>()
+                .toList() ??
+            const [],
         reverseGeo: json['reverseGeo'] ?? false,
         needCodecIps: json['needCodecIps'],
         forceCodec: json['forceCodec'] ?? false,
@@ -84,6 +116,8 @@ class ProxyConfigModel {
     bool? udpEnabled,
     bool? tunEnabled,
     List<String>? tunBypassProcesses,
+    AndroidVpnRoutingMode? androidVpnRoutingMode,
+    List<String>? androidVpnPackages,
     bool? reverseGeo,
     String? needCodecIps,
     bool? forceCodec,
@@ -97,11 +131,23 @@ class ProxyConfigModel {
     udpEnabled: udpEnabled ?? this.udpEnabled,
     tunEnabled: tunEnabled ?? this.tunEnabled,
     tunBypassProcesses: tunBypassProcesses ?? this.tunBypassProcesses,
+    androidVpnRoutingMode: androidVpnRoutingMode ?? this.androidVpnRoutingMode,
+    androidVpnPackages: androidVpnPackages ?? this.androidVpnPackages,
     reverseGeo: reverseGeo ?? this.reverseGeo,
     needCodecIps: needCodecIps ?? this.needCodecIps,
     forceCodec: forceCodec ?? this.forceCodec,
     setSystemProxy: setSystemProxy ?? this.setSystemProxy,
   );
+}
+
+List<String> _normalizePackageNames(Iterable<String> packages) {
+  final normalized = packages
+      .map((packageName) => packageName.trim())
+      .where((packageName) => packageName.isNotEmpty)
+      .toSet()
+      .toList();
+  normalized.sort();
+  return normalized;
 }
 
 List<String> _normalizeProcessNames(Iterable<String> names) {

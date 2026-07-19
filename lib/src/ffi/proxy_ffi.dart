@@ -206,6 +206,11 @@ typedef _ProxyStartTunNative =
 typedef _ProxyStartTunDart =
     int Function(Pointer<Void> handle, Pointer<Utf8> processes);
 
+typedef _ProxyStartAndroidTunNative =
+    Int32 Function(Pointer<Void> handle, Int32 tunFd, Uint16 mtu);
+typedef _ProxyStartAndroidTunDart =
+    int Function(Pointer<Void> handle, int tunFd, int mtu);
+
 typedef _ProxyGetStringNative = Pointer<Utf8> Function();
 typedef _ProxyGetStringDart = Pointer<Utf8> Function();
 
@@ -373,6 +378,11 @@ class ProxyFFI {
   late final proxyStartTun = lib
       .lookupFunction<_ProxyStartTunNative, _ProxyStartTunDart>(
         'proxy_start_tun',
+      );
+
+  late final proxyStartAndroidTun = lib
+      .lookupFunction<_ProxyStartAndroidTunNative, _ProxyStartAndroidTunDart>(
+        'proxy_start_android_tun',
       );
 
   late final proxyStopTun = lib

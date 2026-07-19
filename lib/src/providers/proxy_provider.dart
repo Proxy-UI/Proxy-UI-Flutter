@@ -13,6 +13,7 @@ import '../models/node_group_model.dart';
 import '../models/node_model.dart';
 import '../models/proxy_config.dart';
 import '../services/desktop_log_service.dart';
+import '../services/android_vpn_service.dart';
 import '../services/node_latency_service.dart';
 import '../services/subscription_service.dart';
 
@@ -123,6 +124,9 @@ class ProxyState extends ChangeNotifier {
     } else if (_isTunRunning && !_isTunBusy && !_service.isTunRunning) {
       _isTunRunning = false;
       _config = _config.copyWith(tunEnabled: false);
+      if (Platform.isAndroid) {
+        unawaited(_service.stopAndroidVpnInterface());
+      }
       unawaited(_saveConfig());
     }
     notifyListeners();
@@ -317,6 +321,93 @@ class ProxyState extends ChangeNotifier {
     return true;
   }
 
+  Future<List<AndroidVpnApplication>> listAndroidVpnApplications() {
+    return _service.listAndroidVpnApplications();
+  }
+
+  /// Persist Android's package policy. An active VPN interface must be
+  /// recreated because VpnService application rules are immutable after
+  /// `Builder.establish()`.
+  Future<bool> updateAndroidVpnPolicy(
+    AndroidVpnRoutingMode mode,
+    List<String> packages,
+  ) async {
+    if (!Platform.isAndroid) return false;
+    if (mode == AndroidVpnRoutingMode.include && packages.isEmpty) {
+      _lastError = 'Select at least one application for VPN-only mode';
+      notifyListeners();
+      return false;
+    }
+
+    final previous = _config;
+    final updated = _config.copyWith(
+      androidVpnRoutingMode: mode,
+      androidVpnPackages: packages,
+    );
+    if (!_isTunRunning) {
+      _config = updated;
+      await _saveConfig();
+      notifyListeners();
+      return true;
+    }
+    if (_isTunBusy) return false;
+
+    _isTunBusy = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      final stopResult = await _stopConfiguredTun();
+      if (stopResult != ProxyResult.ok &&
+          stopResult != ProxyResult.notRunning) {
+        _lastError = _service.lastError ?? ProxyResult.message(stopResult);
+        return false;
+      }
+
+      _config = updated;
+      final startResult = await _startConfiguredTun();
+      if (startResult == ProxyResult.ok) {
+        _isTunRunning = true;
+        _config = updated.copyWith(tunEnabled: true);
+        await _saveConfig();
+        return true;
+      }
+
+      final updateError =
+          _service.lastError ?? ProxyResult.message(startResult);
+      _config = previous;
+      final restoreResult = await _startConfiguredTun();
+      if (restoreResult == ProxyResult.ok) {
+        _isTunRunning = true;
+        _lastError = '$updateError Previous application policy was restored.';
+      } else {
+        _isTunRunning = false;
+        _config = previous.copyWith(tunEnabled: false);
+        _lastError =
+            '$updateError Previous application policy could not be restored: '
+            '${_service.lastError ?? ProxyResult.message(restoreResult)}';
+      }
+      await _saveConfig();
+      return false;
+    } finally {
+      _isTunBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<int> _startConfiguredTun() {
+    if (Platform.isAndroid) {
+      return _service.startAndroidTun(
+        mode: _config.androidVpnRoutingMode.wireName,
+        packages: _config.androidVpnPackages,
+      );
+    }
+    return _service.startTun(_config.tunBypassProcesses);
+  }
+
+  Future<int> _stopConfiguredTun() {
+    return Platform.isAndroid ? _service.stopAndroidTun() : _service.stopTun();
+  }
+
   /// Enable or disable TUN without tearing down the local proxy listener.
   ///
   /// Returns `null` when an unelevated Windows instance successfully launched
@@ -349,8 +440,8 @@ class ProxyState extends ChangeNotifier {
       }
 
       final result = enabled
-          ? await _service.startTun(_config.tunBypassProcesses)
-          : await _service.stopTun();
+          ? await _startConfiguredTun()
+          : await _stopConfiguredTun();
       if (result != ProxyResult.ok &&
           !(result == ProxyResult.notRunning && !enabled)) {
         _lastError = _service.lastError ?? ProxyResult.message(result);
@@ -535,6 +626,8 @@ class ProxyState extends ChangeNotifier {
       udpEnabled: _config.udpEnabled,
       tunEnabled: _config.tunEnabled,
       tunBypassProcesses: _config.tunBypassProcesses,
+      androidVpnRoutingMode: _config.androidVpnRoutingMode,
+      androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,
@@ -555,6 +648,8 @@ class ProxyState extends ChangeNotifier {
       udpEnabled: _config.udpEnabled,
       tunEnabled: _isTunRunning,
       tunBypassProcesses: _config.tunBypassProcesses,
+      androidVpnRoutingMode: _config.androidVpnRoutingMode,
+      androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,
@@ -620,7 +715,7 @@ class ProxyState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final stopResult = await _service.stopTun();
+      final stopResult = await _stopConfiguredTun();
       if (stopResult != ProxyResult.ok &&
           stopResult != ProxyResult.notRunning) {
         _lastError =
@@ -660,7 +755,8 @@ class ProxyState extends ChangeNotifier {
         );
       }
 
-      final startResult = await _service.startTun(newConfig.tunBypassProcesses);
+      _config = newConfig;
+      final startResult = await _startConfiguredTun();
       if (startResult != ProxyResult.ok) {
         final switchError =
             _service.lastError ??
@@ -704,9 +800,8 @@ class ProxyState extends ChangeNotifier {
     }
 
     if (rollbackError == null) {
-      final restoreResult = await _service.startTun(
-        previousConfig.tunBypassProcesses,
-      );
+      _config = previousConfig;
+      final restoreResult = await _startConfiguredTun();
       if (restoreResult != ProxyResult.ok) {
         rollbackError =
             _service.lastError ?? ProxyResult.message(restoreResult);
