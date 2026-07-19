@@ -240,7 +240,11 @@ class ProxyVpnService : VpnService() {
         private const val NOTIFICATION_ID = 4201
         private const val IPV4_ADDRESS = "172.19.0.1"
         private const val IPV6_ADDRESS = "fdfe:dcba:9876::1"
-        private const val VIRTUAL_DNS = "198.18.0.1"
+        // Keep the DNS portal outside tun2proxy's 198.18.0.0/15 fake-IP pool.
+        // Android probes VPN DNS servers with opportunistic DoT on port 853;
+        // overlapping the portal with a fake IP can route that probe to an
+        // unrelated hostname and destabilize Android's resolver state.
+        private const val VIRTUAL_DNS = "172.19.0.2"
 
         internal fun startIntent(context: Context, configuration: VpnConfiguration) =
             Intent(context, ProxyVpnService::class.java)

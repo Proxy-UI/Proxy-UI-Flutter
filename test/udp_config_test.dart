@@ -8,7 +8,9 @@ void main() {
     final config = ProxyConfigModel();
 
     expect(config.udpEnabled, isFalse);
+    expect(config.udpDirectFallback, isTrue);
     expect(config.toJson()['udpEnabled'], isFalse);
+    expect(config.toJson()['udpDirectFallback'], isTrue);
   });
 
   test('legacy config imports with UDP enabled', () {
@@ -18,9 +20,21 @@ void main() {
     });
 
     expect(config.udpEnabled, isTrue);
+    expect(config.udpDirectFallback, isTrue);
     expect(config.tunEnabled, isFalse);
     expect(config.tunBypassProcesses, isEmpty);
     expect(config.toJson()['udpEnabled'], isTrue);
+  });
+
+  test('strict TUN UDP blocking round-trips and survives copyWith', () {
+    final config = ProxyConfigModel.fromJson({
+      'udpEnabled': false,
+      'udpDirectFallback': false,
+    });
+
+    expect(config.udpDirectFallback, isFalse);
+    expect(config.toJson()['udpDirectFallback'], isFalse);
+    expect(config.copyWith(serverPort: 8443).udpDirectFallback, isFalse);
   });
 
   test('TUN process names are normalized and preserved by copyWith', () {

@@ -155,6 +155,7 @@ class _FakeProxyService extends ProxyService {
     String? sessionKey,
     bool autoProxy = true,
     bool udpEnabled = true,
+    bool udpDirectFallback = true,
     bool tunEnabled = false,
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,

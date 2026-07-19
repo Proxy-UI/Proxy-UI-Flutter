@@ -178,6 +178,7 @@ class ProxyService {
     String? sessionKey,
     bool autoProxy = true,
     bool udpEnabled = true,
+    bool udpDirectFallback = true,
     bool tunEnabled = false,
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
@@ -192,7 +193,7 @@ class ProxyService {
     destroy();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfigV3>();
+    final config = calloc<ProxyConfigV4>();
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
@@ -214,6 +215,7 @@ class ProxyService {
 
       config.ref.autoProxy = autoProxy ? 1 : 0;
       config.ref.enableUdp = udpEnabled ? 1 : 0;
+      config.ref.tunUdpDirectFallback = udpDirectFallback ? 1 : 0;
       config.ref.enableTun = tunEnabled ? 1 : 0;
       config.ref.reverseGeo = reverseGeo ? 1 : 0;
 
@@ -249,7 +251,7 @@ class ProxyService {
         config.ref.tunBypassProcesses = nullptr;
       }
 
-      return _ffi.proxyStartV3(_handle!, config);
+      return _ffi.proxyStartV4(_handle!, config);
     } finally {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);

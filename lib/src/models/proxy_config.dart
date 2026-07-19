@@ -25,6 +25,7 @@ class ProxyConfigModel {
   String? sessionKey;
   bool autoProxy;
   bool udpEnabled;
+  bool udpDirectFallback;
   bool tunEnabled;
   List<String> tunBypassProcesses;
   AndroidVpnRoutingMode androidVpnRoutingMode;
@@ -45,6 +46,7 @@ class ProxyConfigModel {
     this.sessionKey,
     this.autoProxy = true,
     this.udpEnabled = false,
+    this.udpDirectFallback = true,
     this.tunEnabled = false,
     List<String> tunBypassProcesses = const [],
     this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
@@ -65,6 +67,7 @@ class ProxyConfigModel {
     'sessionKey': sessionKey,
     'autoProxy': autoProxy,
     'udpEnabled': udpEnabled,
+    'udpDirectFallback': udpDirectFallback,
     'tunEnabled': tunEnabled,
     'tunBypassProcesses': tunBypassProcesses,
     'androidVpnRoutingMode': androidVpnRoutingMode.wireName,
@@ -85,6 +88,8 @@ class ProxyConfigModel {
         // Imported configurations created by older versions keep the
         // historical behavior, where SOCKS5 UDP was always available.
         udpEnabled: json['udpEnabled'] ?? true,
+        // Preserve the Mihomo-style direct fallback for imported configs.
+        udpDirectFallback: json['udpDirectFallback'] ?? true,
         // TUN is opt-in so legacy configurations never start changing system
         // routes after an application upgrade.
         tunEnabled: json['tunEnabled'] ?? false,
@@ -114,6 +119,7 @@ class ProxyConfigModel {
     String? sessionKey,
     bool? autoProxy,
     bool? udpEnabled,
+    bool? udpDirectFallback,
     bool? tunEnabled,
     List<String>? tunBypassProcesses,
     AndroidVpnRoutingMode? androidVpnRoutingMode,
@@ -129,6 +135,7 @@ class ProxyConfigModel {
     sessionKey: sessionKey ?? this.sessionKey,
     autoProxy: autoProxy ?? this.autoProxy,
     udpEnabled: udpEnabled ?? this.udpEnabled,
+    udpDirectFallback: udpDirectFallback ?? this.udpDirectFallback,
     tunEnabled: tunEnabled ?? this.tunEnabled,
     tunBypassProcesses: tunBypassProcesses ?? this.tunBypassProcesses,
     androidVpnRoutingMode: androidVpnRoutingMode ?? this.androidVpnRoutingMode,

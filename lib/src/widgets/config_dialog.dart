@@ -21,6 +21,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late TextEditingController _sessionKeyController;
   late bool _autoProxy;
   late bool _udpEnabled;
+  late bool _udpDirectFallback;
   late bool _reverseGeo;
   late bool _forceCodec;
 
@@ -40,6 +41,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
     );
     _autoProxy = config.autoProxy;
     _udpEnabled = config.udpEnabled;
+    _udpDirectFallback = config.udpDirectFallback;
     _reverseGeo = config.reverseGeo;
     _forceCodec = config.forceCodec;
   }
@@ -65,6 +67,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
             : _sessionKeyController.text,
         autoProxy: _autoProxy,
         udpEnabled: _udpEnabled,
+        udpDirectFallback: _udpDirectFallback,
         tunEnabled: state.config.tunEnabled,
         tunBypassProcesses: state.config.tunBypassProcesses,
         androidVpnRoutingMode: state.config.androidVpnRoutingMode,
@@ -160,9 +163,17 @@ class _ConfigDialogState extends State<ConfigDialog> {
               ),
               SwitchListTile(
                 title: const Text('SOCKS5 UDP'),
-                subtitle: const Text('Accept UDP traffic on the local port'),
+                subtitle: const Text('Proxy UDP through the server'),
                 value: _udpEnabled,
                 onChanged: (v) => setState(() => _udpEnabled = v),
+              ),
+              SwitchListTile(
+                title: const Text('Direct UDP fallback'),
+                subtitle: const Text(
+                  'When SOCKS5 UDP is off, send VPN/TUN UDP directly instead of blocking it',
+                ),
+                value: _udpDirectFallback,
+                onChanged: (v) => setState(() => _udpDirectFallback = v),
               ),
               SwitchListTile(
                 title: const Text('Reverse Geo'),

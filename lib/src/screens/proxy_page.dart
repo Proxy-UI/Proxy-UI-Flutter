@@ -190,10 +190,11 @@ class _ProxyPageState extends State<ProxyPage> {
 
   String _connectionModeLabel(ProxyState state) {
     if (state.isTunRunning) {
-      if (Platform.isAndroid) {
-        return state.config.udpEnabled ? 'VPN / TCP + UDP' : 'VPN / TCP only';
-      }
-      return state.config.udpEnabled ? 'TUN / TCP + UDP' : 'TUN / TCP only';
+      final capture = Platform.isAndroid ? 'VPN' : 'TUN';
+      if (state.config.udpEnabled) return '$capture / TCP + UDP proxy';
+      return state.config.udpDirectFallback
+          ? '$capture / TCP proxy + UDP direct'
+          : '$capture / TCP proxy + UDP blocked';
     }
     return state.config.udpEnabled ? 'SOCKS5 TCP + UDP' : 'SOCKS5 TCP only';
   }
@@ -287,6 +288,8 @@ class _ProxyPageState extends State<ProxyPage> {
                           const SizedBox(height: 2),
                           Text(
                             _connectionModeLabel(state),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: state.config.udpEnabled
                                   ? colors.primary
@@ -529,17 +532,7 @@ class _ProxyPageState extends State<ProxyPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        state.isTunRunning
-                            ? Platform.isAndroid
-                                  ? state.config.udpEnabled
-                                        ? 'VPN / TCP + UDP'
-                                        : 'VPN / TCP only'
-                                  : state.config.udpEnabled
-                                  ? 'TUN / TCP + UDP'
-                                  : 'TUN / TCP only'
-                            : state.config.udpEnabled
-                            ? 'SOCKS5 TCP + UDP'
-                            : 'SOCKS5 TCP only',
+                        _connectionModeLabel(state),
                         style: Theme.of(context).textTheme.labelMedium
                             ?.copyWith(
                               color: state.config.udpEnabled

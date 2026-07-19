@@ -274,6 +274,7 @@ class ProxyState extends ChangeNotifier {
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
+      udpDirectFallback: _config.udpDirectFallback,
       // UI TUN has an independent lifecycle and starts only after this call
       // proves that the local HTTP/SOCKS5 port is listening.
       tunEnabled: false,
@@ -624,6 +625,7 @@ class ProxyState extends ChangeNotifier {
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
+      udpDirectFallback: _config.udpDirectFallback,
       tunEnabled: _config.tunEnabled,
       tunBypassProcesses: _config.tunBypassProcesses,
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
@@ -646,6 +648,7 @@ class ProxyState extends ChangeNotifier {
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
+      udpDirectFallback: _config.udpDirectFallback,
       tunEnabled: _isTunRunning,
       tunBypassProcesses: _config.tunBypassProcesses,
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
