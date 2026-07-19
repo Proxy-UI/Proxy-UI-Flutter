@@ -82,22 +82,47 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final query = _searchController.text.trim().toLowerCase();
-    final applications = _applications
-        .where((application) {
-          return query.isEmpty ||
-              application.label.toLowerCase().contains(query) ||
-              application.packageName.toLowerCase().contains(query);
-        })
-        .toList(growable: false);
-    final selectable = _mode != AndroidVpnRoutingMode.all;
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    if (compact) {
+      return Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              onPressed: _saving ? null : () => Navigator.of(context).pop(),
+              tooltip: 'Close',
+              icon: const Icon(Icons.close),
+            ),
+            title: const Text('VPN applications'),
+            actions: [
+              IconButton(
+                onPressed: _loading ? null : _loadApplications,
+                tooltip: 'Refresh applications',
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          body: _buildContent(compact: true),
+          bottomNavigationBar: Material(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            child: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: _buildActions(),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return AlertDialog(
       title: Row(
         children: [
           const Icon(Icons.apps_outlined),
           const SizedBox(width: 12),
-          const Expanded(child: Text('VPN Applications')),
+          const Expanded(child: Text('VPN applications')),
           IconButton(
             onPressed: _loading ? null : _loadApplications,
             tooltip: 'Refresh applications',
@@ -107,99 +132,197 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
       ),
       content: SizedBox(
         width: 620,
-        height: MediaQuery.sizeOf(context).height * .68,
-        child: Column(
-          children: [
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<AndroidVpnRoutingMode>(
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
-                    value: AndroidVpnRoutingMode.all,
-                    icon: Icon(Icons.public),
-                    label: Text('All'),
-                    tooltip: 'All applications use VPN',
-                  ),
-                  ButtonSegment(
-                    value: AndroidVpnRoutingMode.exclude,
-                    icon: Icon(Icons.remove_circle_outline),
-                    label: Text('Bypass'),
-                    tooltip: 'Selected applications bypass VPN',
-                  ),
-                  ButtonSegment(
-                    value: AndroidVpnRoutingMode.include,
-                    icon: Icon(Icons.filter_alt_outlined),
-                    label: Text('Only'),
-                    tooltip: 'Only selected applications use VPN',
-                  ),
-                ],
-                selected: {_mode},
-                onSelectionChanged: _saving
-                    ? null
-                    : (selection) => setState(() => _mode = selection.single),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _searchController,
-              enabled: selectable,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: 'Search installed applications',
-                prefixIcon: const Icon(Icons.search),
-                suffixText: selectable ? '${_selected.length} selected' : null,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            Expanded(
-              child: !selectable
-                  ? const Center(child: Icon(Icons.shield_outlined, size: 52))
-                  : _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _loadError != null
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error_outline, size: 40),
-                          const SizedBox(height: 8),
-                          Text(
-                            _loadError!,
-                            textAlign: TextAlign.center,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: applications.length,
-                      itemBuilder: (context, index) =>
-                          _buildApplicationRow(applications[index]),
-                    ),
-            ),
-          ],
-        ),
+        height: (MediaQuery.sizeOf(context).height * .68)
+            .clamp(420.0, 640.0)
+            .toDouble(),
+        child: _buildContent(compact: false),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.save_outlined),
-          label: const Text('Apply'),
-        ),
-      ],
+      actions: _buildActions(),
     );
+  }
+
+  Widget _buildContent({required bool compact}) {
+    final query = _searchController.text.trim().toLowerCase();
+    final applications = _applications
+        .where((application) {
+          return query.isEmpty ||
+              application.label.toLowerCase().contains(query) ||
+              application.packageName.toLowerCase().contains(query);
+        })
+        .toList(growable: false);
+    final selectable = _mode != AndroidVpnRoutingMode.all;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(compact ? 16 : 0, 12, compact ? 16 : 0, 0),
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<AndroidVpnRoutingMode>(
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: compact ? VisualDensity.compact : null,
+                padding: WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: compact ? 8 : 16),
+                ),
+              ),
+              segments: [
+                ButtonSegment(
+                  value: AndroidVpnRoutingMode.all,
+                  icon: compact ? null : const Icon(Icons.public),
+                  label: const Text('All'),
+                  tooltip: 'All other applications use VPN',
+                ),
+                ButtonSegment(
+                  value: AndroidVpnRoutingMode.exclude,
+                  icon: compact
+                      ? null
+                      : const Icon(Icons.remove_circle_outline),
+                  label: const Text('Bypass'),
+                  tooltip: 'Selected applications bypass VPN',
+                ),
+                ButtonSegment(
+                  value: AndroidVpnRoutingMode.include,
+                  icon: compact ? null : const Icon(Icons.filter_alt_outlined),
+                  label: const Text('Only'),
+                  tooltip: 'Only selected applications use VPN',
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: _saving
+                  ? null
+                  : (selection) => setState(() => _mode = selection.single),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchController,
+            enabled: selectable,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Search apps',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: query.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                    ),
+              filled: true,
+              fillColor: colors.surfaceContainerHighest.withValues(alpha: .55),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                _loading
+                    ? 'Loading applications...'
+                    : '${applications.length} apps',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              if (selectable)
+                Text(
+                  '${_selected.length} selected',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          Expanded(
+            child: !selectable
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shield_outlined,
+                          size: 48,
+                          color: colors.primary,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'All other applications use VPN',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                  )
+                : _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _loadError != null
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, size: 40),
+                        const SizedBox(height: 8),
+                        Text(
+                          _loadError!,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  )
+                : applications.isEmpty
+                ? Center(
+                    child: Text(
+                      query.isEmpty
+                          ? 'No applications found'
+                          : 'No matching applications',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: applications.length,
+                    itemBuilder: (context, index) =>
+                        _buildApplicationRow(applications[index]),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildActions() {
+    return [
+      TextButton(
+        onPressed: _saving ? null : () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      const SizedBox(width: 8),
+      FilledButton.icon(
+        onPressed: _saving ? null : _save,
+        icon: _saving
+            ? const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.check),
+        label: const Text('Apply'),
+      ),
+    ];
   }
 
   Widget _buildApplicationRow(AndroidVpnApplication application) {
@@ -210,10 +333,12 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
               context,
             ).colorScheme.secondaryContainer.withValues(alpha: .38)
           : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
       child: InkWell(
+        borderRadius: BorderRadius.circular(6),
         onTap: () => _setSelected(application.packageName, !selected),
         child: SizedBox(
-          height: 68,
+          height: 64,
           child: Row(
             children: [
               Checkbox(
@@ -258,7 +383,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
                 const Tooltip(
                   message: 'System application',
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Icon(Icons.android, size: 20),
                   ),
                 ),

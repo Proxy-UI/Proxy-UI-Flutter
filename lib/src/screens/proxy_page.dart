@@ -107,6 +107,7 @@ class _ProxyPageState extends State<ProxyPage> {
   void _showAndroidVpnAppDialog() {
     showDialog(
       context: context,
+      useSafeArea: false,
       builder: (context) => const AndroidVpnAppDialog(),
     );
   }
@@ -187,10 +188,262 @@ class _ProxyPageState extends State<ProxyPage> {
     }
   }
 
+  String _connectionModeLabel(ProxyState state) {
+    if (state.isTunRunning) {
+      if (Platform.isAndroid) {
+        return state.config.udpEnabled ? 'VPN / TCP + UDP' : 'VPN / TCP only';
+      }
+      return state.config.udpEnabled ? 'TUN / TCP + UDP' : 'TUN / TCP only';
+    }
+    return state.config.udpEnabled ? 'SOCKS5 TCP + UDP' : 'SOCKS5 TCP only';
+  }
+
+  String _captureStatusLabel(ProxyState state) {
+    if (state.isTunBusy) {
+      return Platform.isAndroid ? 'Configuring VPN...' : 'Configuring TUN...';
+    }
+    if (!state.isRunning) return 'Start the proxy to enable';
+    if (state.isTunRunning) {
+      return Platform.isAndroid
+          ? 'Routing via 127.0.0.1:${state.config.localPort}'
+          : 'Capturing via 127.0.0.1:${state.config.localPort}';
+    }
+    return Platform.isAndroid
+        ? 'Device traffic is not captured'
+        : 'System traffic capture is off';
+  }
+
+  Widget _buildCompactLayout(
+    BuildContext context,
+    ProxyState state,
+    BoxConstraints constraints,
+  ) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final canToggleProxy =
+        state.config.serverHost.isNotEmpty && !state.isTunBusy;
+    final endpoint = state.config.serverHost.isEmpty
+        ? 'Configure a server to get started'
+        : '${state.config.serverHost}:${state.config.serverPort}';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: (constraints.maxHeight - 32).clamp(0, double.infinity),
+        ),
+        child: IntrinsicHeight(
+          child: Column(
+            children: [
+              AnimatedContainer(
+                key: const Key('compact-connection-panel'),
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: state.isRunning
+                      ? colors.primaryContainer.withValues(alpha: .32)
+                      : colors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: state.isRunning
+                            ? colors.primaryContainer
+                            : colors.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        state.isRunning
+                            ? Icons.cloud_done_outlined
+                            : Icons.cloud_off_outlined,
+                        color: state.isRunning
+                            ? colors.onPrimaryContainer
+                            : colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            state.isRunning ? 'Connected' : 'Disconnected',
+                            style: theme.textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            endpoint,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _connectionModeLabel(state),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: state.config.udpEnabled
+                                  ? colors.primary
+                                  : colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch(
+                      thumbIcon: thumbIcon,
+                      value: state.isRunning,
+                      onChanged: canToggleProxy
+                          ? (_) => _toggleProxy(state)
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                key: const Key('compact-vpn-panel'),
+                padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: state.isTunRunning
+                        ? colors.primary.withValues(alpha: .65)
+                        : colors.outlineVariant,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      state.isTunRunning ? Icons.shield : Icons.shield_outlined,
+                      color: state.isTunRunning
+                          ? colors.primary
+                          : colors.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            Platform.isAndroid ? 'VPN Service' : 'TUN Mode',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _captureStatusLabel(state),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (Platform.isAndroid)
+                      IconButton(
+                        onPressed: state.isTunBusy
+                            ? null
+                            : _showAndroidVpnAppDialog,
+                        icon: const Icon(Icons.apps_outlined),
+                        tooltip:
+                            'VPN applications (${state.config.androidVpnPackages.length})',
+                      ),
+                    if (Platform.isWindows)
+                      IconButton(
+                        onPressed: state.isTunBusy
+                            ? null
+                            : _showTunProcessDialog,
+                        icon: const Icon(Icons.security_outlined),
+                        tooltip:
+                            'TUN bypass processes (${state.config.tunBypassProcesses.length})',
+                      ),
+                    if (state.isTunBusy)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: SizedBox.square(
+                          dimension: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      Switch(
+                        value: state.isTunRunning,
+                        onChanged: state.isRunning
+                            ? (enabled) => _toggleTun(state, enabled)
+                            : null,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Spacer(),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: state.isRunning ? null : _showConfigDialog,
+                      icon: const Icon(Icons.settings_outlined),
+                      label: const Text('Config'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: state.isRunning ? null : _showPortDialog,
+                      icon: const Icon(Icons.lan_outlined),
+                      label: Text('Port ${state.config.localPort}'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: state.isRunning ? null : _importConfig,
+                      icon: const Icon(Icons.file_download_outlined),
+                      label: const Text('Import'),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: _exportConfig,
+                      icon: const Icon(Icons.file_upload_outlined),
+                      label: const Text('Export'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ProxyState>(
       builder: (context, state, _) {
+        if (MediaQuery.sizeOf(context).width < 600) {
+          return Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) =>
+                  _buildCompactLayout(context, state, constraints),
+            ),
+          );
+        }
         return Expanded(
           child: Stack(
             children: [

@@ -113,7 +113,9 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
     return AppBar(
-      title: const Text('Proxy With Flutter'),
+      title: Text(
+        Platform.isAndroid ? 'Proxy Everything' : 'Proxy With Flutter',
+      ),
       elevation: 0,
       scrolledUnderElevation: 0,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -373,6 +375,10 @@ class NavigationBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NavigationBar(
+      height: Platform.isAndroid ? 64 : null,
+      labelTextStyle: Platform.isAndroid
+          ? WidgetStatePropertyAll(Theme.of(context).textTheme.labelSmall)
+          : null,
       selectedIndex: selectedIndex,
       onDestinationSelected: onSelectItem,
       destinations: appBarDestinations,

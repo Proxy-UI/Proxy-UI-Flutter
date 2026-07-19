@@ -4,6 +4,13 @@ import 'package:proxy_ui/src/services/clash_config_generator.dart';
 import 'package:proxy_ui/src/services/shadowrocket_config_generator.dart';
 
 void main() {
+  test('new configurations keep UDP disabled by default', () {
+    final config = ProxyConfigModel();
+
+    expect(config.udpEnabled, isFalse);
+    expect(config.toJson()['udpEnabled'], isFalse);
+  });
+
   test('legacy config imports with UDP enabled', () {
     final config = ProxyConfigModel.fromJson({
       'serverHost': 'proxy.example.com',

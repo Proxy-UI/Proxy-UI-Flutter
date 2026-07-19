@@ -30,7 +30,7 @@ class NodeInfo {
     int localPort = 1080,
     String? sessionKey,
     bool autoProxy = true,
-    bool udpEnabled = true,
+    bool udpEnabled = false,
     bool tunEnabled = false,
     List<String> tunBypassProcesses = const [],
     AndroidVpnRoutingMode androidVpnRoutingMode = AndroidVpnRoutingMode.all,

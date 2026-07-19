@@ -44,7 +44,7 @@ class ProxyConfigModel {
     this.localPort = 10801,
     this.sessionKey,
     this.autoProxy = true,
-    this.udpEnabled = true,
+    this.udpEnabled = false,
     this.tunEnabled = false,
     List<String> tunBypassProcesses = const [],
     this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
