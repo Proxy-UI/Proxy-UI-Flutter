@@ -219,14 +219,11 @@ class ProxyService {
       config.ref.enableTun = tunEnabled ? 1 : 0;
       config.ref.reverseGeo = reverseGeo ? 1 : 0;
 
-      // Mobile platforms need cache_dir for auto-proxy
-      if (Platform.isAndroid || Platform.isIOS) {
-        final dir = await getApplicationDocumentsDirectory();
-        cacheDirPtr = dir.path.toNativeUtf8();
-        config.ref.cacheDir = cacheDirPtr;
-      } else {
-        config.ref.cacheDir = nullptr;
-      }
+      // A stable private support directory keeps auto-proxy and virtual-DNS
+      // state across process restarts and in-place upgrades on every platform.
+      final supportDir = await getApplicationSupportDirectory();
+      cacheDirPtr = supportDir.path.toNativeUtf8();
+      config.ref.cacheDir = cacheDirPtr;
 
       if (needCodecIps != null && needCodecIps.isNotEmpty) {
         needCodecIpsPtr = needCodecIps.toNativeUtf8();
@@ -402,12 +399,32 @@ class ProxyService {
         mode: mode,
         packages: packages,
       );
+      _logController.add(
+        LogEntry(level: 2, message: '[android_vpn] ${interface.diagnostics}'),
+      );
       final result = await compute(_startAndroidTunIsolate, {
         'handleAddress': handle.address,
         'tunFd': interface.fileDescriptor,
         'mtu': interface.mtu,
       });
-      if (result != ProxyResult.ok) {
+      if (result == ProxyResult.ok) {
+        final network = await AndroidVpnService.instance.waitForValidation();
+        _logController.add(
+          LogEntry(
+            level: network.validated ? 2 : 4,
+            message: '[android_vpn] ${network.diagnostics}',
+          ),
+        );
+        if (!network.validated) {
+          _platformLastError =
+              'Android did not validate the VPN network within 10 seconds: '
+              '${network.diagnostics}; Google Play and background update '
+              'schedulers may reject it before opening a connection.';
+          await compute(_stopTunIsolate, handle.address);
+          await AndroidVpnService.instance.stopInterface();
+          return ProxyResult.runtimeError;
+        }
+      } else {
         await AndroidVpnService.instance.stopInterface();
       }
       return result;

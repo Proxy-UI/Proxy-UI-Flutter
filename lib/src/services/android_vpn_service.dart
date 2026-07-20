@@ -28,8 +28,13 @@ class AndroidVpnApplication {
 class AndroidVpnInterface {
   final int fileDescriptor;
   final int mtu;
+  final String diagnostics;
 
-  const AndroidVpnInterface({required this.fileDescriptor, required this.mtu});
+  const AndroidVpnInterface({
+    required this.fileDescriptor,
+    required this.mtu,
+    required this.diagnostics,
+  });
 }
 
 class AndroidVpnStateEvent {
@@ -37,6 +42,16 @@ class AndroidVpnStateEvent {
   final String? error;
 
   const AndroidVpnStateEvent({required this.running, this.error});
+}
+
+class AndroidVpnNetworkState {
+  final bool validated;
+  final String diagnostics;
+
+  const AndroidVpnNetworkState({
+    required this.validated,
+    required this.diagnostics,
+  });
 }
 
 class AndroidVpnService {
@@ -86,6 +101,7 @@ class AndroidVpnService {
     return AndroidVpnInterface(
       fileDescriptor: fd,
       mtu: value?['mtu'] as int? ?? mtu,
+      diagnostics: value?['diagnostics'] as String? ?? 'unavailable',
     );
   }
 
@@ -95,6 +111,28 @@ class AndroidVpnService {
 
   Future<bool> get isRunning async =>
       await _channel.invokeMethod<bool>('getVpnState') ?? false;
+
+  Future<AndroidVpnNetworkState> get networkState async {
+    final value = await _channel.invokeMapMethod<Object?, Object?>(
+      'getVpnNetworkState',
+    );
+    return AndroidVpnNetworkState(
+      validated: value?['validated'] as bool? ?? false,
+      diagnostics: value?['diagnostics'] as String? ?? 'unavailable',
+    );
+  }
+
+  Future<AndroidVpnNetworkState> waitForValidation({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    var state = await networkState;
+    while (!state.validated && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      state = await networkState;
+    }
+    return state;
+  }
 
   Future<void> _handleNativeCall(MethodCall call) async {
     if (call.method != 'vpnStateChanged') return;

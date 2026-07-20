@@ -67,6 +67,12 @@ class MainActivity : FlutterActivity() {
             "startVpn" -> startVpn(call, result)
             "stopVpn" -> stopVpn(result)
             "getVpnState" -> result.success(ProxyVpnController.running)
+            "getVpnNetworkState" -> result.success(
+                mapOf(
+                    "validated" to ProxyVpnController.networkValidated,
+                    "diagnostics" to ProxyVpnController.networkDiagnostics,
+                ),
+            )
             else -> result.notImplemented()
         }
     }
@@ -99,9 +105,15 @@ class MainActivity : FlutterActivity() {
         result: MethodChannel.Result,
     ) {
         val accepted = ProxyVpnController.beginStart(
-            onSuccess = { fd ->
+            onSuccess = { fd, diagnostics ->
                 runOnUiThread {
-                    result.success(mapOf("fd" to fd, "mtu" to configuration.mtu))
+                    result.success(
+                        mapOf(
+                            "fd" to fd,
+                            "mtu" to configuration.mtu,
+                            "diagnostics" to diagnostics,
+                        ),
+                    )
                 }
             },
             onError = { error ->
