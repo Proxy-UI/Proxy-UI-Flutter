@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -26,9 +27,10 @@ class ProxyState extends ChangeNotifier {
   bool _isTunRunning = false;
   bool _isTunBusy = false;
   String? _lastError;
-  final List<LogEntry> _logs = [];
+  final ListQueue<LogEntry> _logs = ListQueue<LogEntry>();
   StreamSubscription<LogEntry>? _logSubscription;
-  int _minLogLevel = 0; // 0=trace, 1=debug, 2=info, 3=warn, 4=error
+  Timer? _logNotificationTimer;
+  int _minLogLevel = ProxyService.defaultLogLevel;
 
   // Subscription service
   SubscriptionService? _subscriptionService;
@@ -110,10 +112,10 @@ class ProxyState extends ChangeNotifier {
   }
 
   void _onLog(LogEntry entry) {
-    _logs.add(entry);
+    _logs.addLast(entry);
     unawaited(_persistLog(entry));
     if (_logs.length > maxLogs) {
-      _logs.removeAt(0);
+      _logs.removeFirst();
     }
     // Native TUN setup failures cancel the shared listener token. Reconcile
     // the provider on the following native log instead of leaving the switch
@@ -129,7 +131,13 @@ class ProxyState extends ChangeNotifier {
       }
       unawaited(_saveConfig());
     }
-    notifyListeners();
+    // Native traffic can produce hundreds of useful session logs per second.
+    // Rebuild the log page at a human-visible cadence instead of once per
+    // entry, which would compete with forwarding and game render threads.
+    _logNotificationTimer ??= Timer(const Duration(milliseconds: 100), () {
+      _logNotificationTimer = null;
+      notifyListeners();
+    });
   }
 
   Future<void> _persistLog(LogEntry entry) async {
@@ -497,6 +505,7 @@ class ProxyState extends ChangeNotifier {
 
   void setMinLogLevel(int level) {
     _minLogLevel = level.clamp(0, 4);
+    _service.setLogLevel(_minLogLevel);
     notifyListeners();
   }
 
@@ -829,6 +838,7 @@ class ProxyState extends ChangeNotifier {
   @override
   void dispose() {
     _nodeCatalogSaveTimer?.cancel();
+    _logNotificationTimer?.cancel();
     unawaited(_saveNodeCatalogPreferences());
     _logSubscription?.cancel();
     unawaited(_desktopLogService.dispose());

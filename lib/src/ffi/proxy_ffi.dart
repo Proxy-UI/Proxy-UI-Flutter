@@ -192,6 +192,9 @@ typedef _ProxySetLogCallbackDart =
 typedef _ProxyInitLoggingNative = Void Function();
 typedef _ProxyInitLoggingDart = void Function();
 
+typedef _ProxySetLogLevelNative = Void Function(Int32 level);
+typedef _ProxySetLogLevelDart = void Function(int level);
+
 typedef _ProxyCreateNative = Pointer<Void> Function();
 typedef _ProxyCreateDart = Pointer<Void> Function();
 
@@ -382,6 +385,11 @@ class ProxyFFI {
   late final proxyInitLogging = lib
       .lookupFunction<_ProxyInitLoggingNative, _ProxyInitLoggingDart>(
         'proxy_init_logging',
+      );
+
+  late final proxySetLogLevel = lib
+      .lookupFunction<_ProxySetLogLevelNative, _ProxySetLogLevelDart>(
+        'proxy_set_log_level',
       );
 
   late final proxyCreate = lib

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -94,4 +95,88 @@ void main() {
     expect(await nestedDirectory.exists(), isTrue);
     expect(openedPath, nestedDirectory.path);
   });
+
+  test('bounds pending writes and records a dropped-entry summary', () async {
+    final now = DateTime(2026, 7, 19, 14, 30);
+    final directoryGate = Completer<void>();
+    final service = DesktopLogService(
+      enabled: true,
+      maxPendingEntries: 2,
+      batchSize: 1,
+      directoryProvider: () async {
+        await directoryGate.future;
+        return directory;
+      },
+      clock: () => now,
+    );
+    addTearDown(service.dispose);
+
+    final writes = [
+      service.write(LogEntry(level: 2, message: 'first', timestamp: now)),
+      service.write(LogEntry(level: 2, message: 'second', timestamp: now)),
+      service.write(LogEntry(level: 2, message: 'dropped', timestamp: now)),
+    ];
+    directoryGate.complete();
+    await Future.wait(writes);
+
+    final log = File(
+      '${directory.path}${Platform.pathSeparator}proxy-ui-2026-07-19-14.log',
+    );
+    final contents = await log.readAsString();
+    expect(contents, contains('dropped 1 entries'));
+    expect(contents, isNot(contains('[INFO] dropped')));
+  });
+
+  test('stops an hourly file from growing without bound', () async {
+    final now = DateTime(2026, 7, 19, 14, 30);
+    final service = DesktopLogService(
+      enabled: true,
+      maxFileBytes: 180,
+      directoryProvider: () async => directory,
+      clock: () => now,
+    );
+    addTearDown(service.dispose);
+
+    await service.write(LogEntry(level: 2, message: 'a' * 100, timestamp: now));
+    await service.write(LogEntry(level: 2, message: 'b' * 100, timestamp: now));
+    await service.write(LogEntry(level: 2, message: 'c' * 100, timestamp: now));
+
+    final log = File(
+      '${directory.path}${Platform.pathSeparator}proxy-ui-2026-07-19-14.log',
+    );
+    final contents = await log.readAsString();
+    expect(contents, contains('Hourly log size limit reached'));
+    expect(contents, isNot(contains('c' * 100)));
+  });
+
+  test(
+    'removes oldest retained logs when total storage exceeds the cap',
+    () async {
+      final oldest = File(
+        '${directory.path}${Platform.pathSeparator}proxy-ui-2026-07-19-12.log',
+      );
+      final middle = File(
+        '${directory.path}${Platform.pathSeparator}proxy-ui-2026-07-19-13.log',
+      );
+      final newest = File(
+        '${directory.path}${Platform.pathSeparator}proxy-ui-2026-07-19-14.log',
+      );
+      await oldest.writeAsString('a' * 100);
+      await middle.writeAsString('b' * 100);
+      await newest.writeAsString('c' * 100);
+
+      final service = DesktopLogService(
+        enabled: true,
+        maxTotalBytes: 150,
+        directoryProvider: () async => directory,
+        clock: () => DateTime(2026, 7, 19, 14, 30),
+      );
+      addTearDown(service.dispose);
+      await service.initialize();
+
+      expect(await oldest.exists(), isFalse);
+      expect(await middle.exists(), isFalse);
+      expect(await newest.exists(), isTrue);
+    },
+  );
 }

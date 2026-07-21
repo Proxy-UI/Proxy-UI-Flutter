@@ -64,6 +64,9 @@ class TunProcessInstance {
 /// Grouped Windows process information returned by the native TUN picker API.
 class TunProcessInfo {
   final String name;
+  final String displayName;
+  final List<String> aliases;
+  final bool installed;
   final List<int> pids;
   final List<String> executablePaths;
   final List<TunProcessInstance> instances;
@@ -71,15 +74,23 @@ class TunProcessInfo {
 
   const TunProcessInfo({
     required this.name,
+    String? displayName,
+    this.aliases = const [],
+    this.installed = false,
     required this.pids,
     required this.executablePaths,
     this.instances = const [],
     this.iconPng,
-  });
+  }) : displayName = displayName ?? name;
 
   factory TunProcessInfo.fromJson(Map<String, dynamic> json) {
     return TunProcessInfo(
       name: json['name'] as String? ?? '',
+      displayName: json['display_name'] as String?,
+      aliases: (json['aliases'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      installed: json['installed'] as bool? ?? false,
       pids: (json['pids'] as List<dynamic>? ?? const [])
           .whereType<num>()
           .map((pid) => pid.toInt())
@@ -108,6 +119,8 @@ Uint8List? _decodeProcessIcon(Object? encoded) {
 
 /// High-level proxy service wrapping FFI calls.
 class ProxyService {
+  static const int defaultLogLevel = 2;
+
   final ProxyFFI _ffi = ProxyFFI();
   Pointer<Void>? _handle;
   bool _loggingInitialized = false;
@@ -144,8 +157,13 @@ class ProxyService {
     // Use NativeCallable.listener for thread-safe callbacks from native threads
     _nativeCallable = NativeCallable<LogCallbackNative>.listener(_logCallback);
     _ffi.proxySetLogCallback(_nativeCallable!.nativeFunction);
+    _ffi.proxySetLogLevel(defaultLogLevel);
     _ffi.proxyInitLogging();
     _loggingInitialized = true;
+  }
+
+  void setLogLevel(int level) {
+    _ffi.proxySetLogLevel(level.clamp(0, 4));
   }
 
   static void _logCallback(int level, Pointer<Utf8> message) {

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -13,10 +15,18 @@ class DesktopLogService {
   DesktopLogService({
     bool? enabled,
     this.retention = const Duration(days: 3),
+    this.maxPendingEntries = 4096,
+    this.maxFileBytes = 64 * 1024 * 1024,
+    this.maxTotalBytes = 512 * 1024 * 1024,
+    this.batchSize = 256,
     LogDirectoryProvider? directoryProvider,
     LogDirectoryOpener? directoryOpener,
     DateTime Function()? clock,
-  }) : enabled = enabled ?? _isDesktop,
+  }) : assert(maxPendingEntries > 0),
+       assert(maxFileBytes > 0),
+       assert(maxTotalBytes > 0),
+       assert(batchSize > 0),
+       enabled = enabled ?? _isDesktop,
        _directoryProvider = directoryProvider ?? _defaultDirectoryProvider,
        _directoryOpener = directoryOpener ?? _defaultDirectoryOpener,
        _clock = clock ?? DateTime.now;
@@ -25,14 +35,23 @@ class DesktopLogService {
 
   final bool enabled;
   final Duration retention;
+  final int maxPendingEntries;
+  final int maxFileBytes;
+  final int maxTotalBytes;
+  final int batchSize;
   final LogDirectoryProvider _directoryProvider;
   final LogDirectoryOpener _directoryOpener;
   final DateTime Function() _clock;
 
-  Future<void> _pendingWrite = Future<void>.value();
+  final ListQueue<_PendingLogWrite> _pendingWrites =
+      ListQueue<_PendingLogWrite>();
+  Completer<void>? _drainCompleter;
+  int _droppedPendingEntries = 0;
   Future<Directory>? _logDirectory;
   IOSink? _sink;
   String? _openHour;
+  int _openFileBytes = 0;
+  bool _fileLimitNoticeWritten = false;
   String? _lastCleanupHour;
   Future<void>? _cleanupOperation;
   bool _disposed = false;
@@ -69,10 +88,15 @@ class DesktopLogService {
   /// Queues one entry for ordered disk persistence.
   Future<void> write(LogEntry entry) {
     if (!enabled || _disposed) return Future<void>.value();
+    if (_pendingWrites.length >= maxPendingEntries) {
+      _droppedPendingEntries++;
+      return Future<void>.value();
+    }
 
-    final operation = _pendingWrite.then((_) => _writeEntry(entry));
-    _pendingWrite = operation.onError((_, _) {});
-    return operation;
+    final pending = _PendingLogWrite(entry);
+    _pendingWrites.addLast(pending);
+    _ensureDrain();
+    return pending.completer.future;
   }
 
   /// Creates the desktop log directory and applies retention at app startup.
@@ -92,33 +116,109 @@ class DesktopLogService {
     await _directoryOpener(directory.path);
   }
 
-  Future<void> _writeEntry(LogEntry entry) async {
-    final localTimestamp = entry.timestamp.toLocal();
-    final hour = _hourKey(localTimestamp);
-    final directory = await _ensureLogDirectory();
+  void _ensureDrain() {
+    if (_drainCompleter != null || _pendingWrites.isEmpty) return;
+    final completer = Completer<void>();
+    _drainCompleter = completer;
+    scheduleMicrotask(() async {
+      try {
+        await _drainPendingWrites();
+      } finally {
+        if (!completer.isCompleted) completer.complete();
+        if (identical(_drainCompleter, completer)) {
+          _drainCompleter = null;
+        }
+        if (_pendingWrites.isNotEmpty) _ensureDrain();
+      }
+    });
+  }
 
-    if (_sink != null && _openHour != hour) {
-      await _sink!.close();
-      _sink = null;
-      _openHour = null;
+  Future<void> _drainPendingWrites() async {
+    while (_pendingWrites.isNotEmpty) {
+      final batch = <_PendingLogWrite>[];
+      while (batch.length < batchSize && _pendingWrites.isNotEmpty) {
+        batch.add(_pendingWrites.removeFirst());
+      }
+      final dropped = _droppedPendingEntries;
+      _droppedPendingEntries = 0;
+      try {
+        await _writeBatch(batch.map((pending) => pending.entry), dropped);
+        for (final pending in batch) {
+          if (!pending.completer.isCompleted) pending.completer.complete();
+        }
+      } catch (error, stackTrace) {
+        for (final pending in batch) {
+          if (!pending.completer.isCompleted) {
+            pending.completer.completeError(error, stackTrace);
+          }
+        }
+      }
+      // Let UI and network events run between disk batches.
+      await Future<void>.delayed(Duration.zero);
     }
+  }
 
+  Future<void> _writeBatch(Iterable<LogEntry> entries, int dropped) async {
+    final directory = await _ensureLogDirectory();
     await _cleanupIfNeeded(directory, _clock());
 
-    if (_sink == null) {
-      final file = File(
-        '${directory.path}${Platform.pathSeparator}'
-        '$filePrefix-$hour.log',
+    final batch = entries.toList(growable: true);
+    if (dropped > 0) {
+      batch.insert(
+        0,
+        LogEntry(
+          level: 3,
+          message:
+              'Desktop log queue dropped $dropped entries to protect memory '
+              'while disk persistence was behind.',
+          timestamp: batch.isEmpty ? _clock() : batch.first.timestamp,
+        ),
       );
-      _sink = file.openWrite(mode: FileMode.append);
-      _openHour = hour;
     }
 
-    _sink!.writeln(
-      '${_formatTimestamp(localTimestamp)} '
-      '[${entry.levelName}] ${entry.message}',
+    for (final entry in batch) {
+      final localTimestamp = entry.timestamp.toLocal();
+      final hour = _hourKey(localTimestamp);
+      await _openSink(directory, hour);
+      _writeLine(entry, localTimestamp);
+    }
+    await _sink?.flush();
+  }
+
+  Future<void> _openSink(Directory directory, String hour) async {
+    if (_sink != null && _openHour == hour) return;
+    if (_sink != null) {
+      await _sink!.close();
+    }
+
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}$filePrefix-$hour.log',
     );
-    await _sink!.flush();
+    _openFileBytes = await file.exists() ? await file.length() : 0;
+    _fileLimitNoticeWritten = _openFileBytes >= maxFileBytes;
+    _sink = file.openWrite(mode: FileMode.append);
+    _openHour = hour;
+  }
+
+  void _writeLine(LogEntry entry, DateTime localTimestamp) {
+    final line = utf8.encode(
+      '${_formatTimestamp(localTimestamp)} '
+      '[${entry.levelName}] ${entry.message}\n',
+    );
+    if (_openFileBytes + line.length <= maxFileBytes) {
+      _sink!.add(line);
+      _openFileBytes += line.length;
+      return;
+    }
+
+    if (_fileLimitNoticeWritten) return;
+    _fileLimitNoticeWritten = true;
+    final marker = utf8.encode(
+      '${_formatTimestamp(localTimestamp)} [WARN] '
+      'Hourly log size limit reached; further entries are omitted.\n',
+    );
+    _sink!.add(marker);
+    _openFileBytes += marker.length;
   }
 
   Future<Directory> _ensureLogDirectory() async {
@@ -152,17 +252,39 @@ class DesktopLogService {
       '^$filePrefix-(\\d{4})-(\\d{2})-(\\d{2})-(\\d{2})\\.log\$',
     );
 
+    final retained = <({File file, DateTime hour, int bytes})>[];
     await for (final entity in directory.list()) {
       if (entity is! File) continue;
       final name = entity.uri.pathSegments.last;
-      if (name == '$filePrefix-$_openHour.log') continue;
       final match = pattern.firstMatch(name);
       if (match == null) continue;
 
       final fileHour = _parseHour(match);
-      if (fileHour != null && fileHour.isBefore(cutoffHour)) {
+      if (fileHour == null) continue;
+      if (name != '$filePrefix-$_openHour.log' &&
+          fileHour.isBefore(cutoffHour)) {
         await entity.delete();
+        continue;
       }
+      retained.add((
+        file: entity,
+        hour: fileHour,
+        bytes: await entity.length(),
+      ));
+    }
+
+    var totalBytes = retained.fold<int>(
+      0,
+      (total, entry) => total + entry.bytes,
+    );
+    retained.sort((left, right) => left.hour.compareTo(right.hour));
+    for (final entry in retained) {
+      if (totalBytes <= maxTotalBytes) break;
+      if (entry.file.uri.pathSegments.last == '$filePrefix-$_openHour.log') {
+        continue;
+      }
+      await entry.file.delete();
+      totalBytes -= entry.bytes;
     }
     _lastCleanupHour = _hourKey(localNow);
   }
@@ -236,12 +358,25 @@ class DesktopLogService {
     if (existing != null) return existing;
 
     _disposed = true;
-    final operation = _pendingWrite.then((_) async {
+    final operation = () async {
+      while (_pendingWrites.isNotEmpty || _drainCompleter != null) {
+        _ensureDrain();
+        final drain = _drainCompleter;
+        if (drain == null) break;
+        await drain.future;
+      }
       await _sink?.close();
       _sink = null;
       _openHour = null;
-    });
+    }();
     _disposeFuture = operation;
     return operation;
   }
+}
+
+class _PendingLogWrite {
+  _PendingLogWrite(this.entry);
+
+  final LogEntry entry;
+  final Completer<void> completer = Completer<void>();
 }

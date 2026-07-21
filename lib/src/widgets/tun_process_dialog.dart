@@ -6,6 +6,8 @@ import '../models/tun_process_tree.dart';
 import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
 
+enum _ProcessScope { all, running, installed }
+
 /// Windows process picker for the runtime-updatable TUN bypass policy.
 class TunProcessDialog extends StatefulWidget {
   const TunProcessDialog({super.key});
@@ -23,6 +25,8 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
   String? _selfProcess;
   bool _loading = true;
   bool _saving = false;
+  bool _initializedExpansion = false;
+  _ProcessScope _scope = _ProcessScope.all;
 
   @override
   void initState() {
@@ -83,6 +87,10 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
       _processes = sorted;
       _selfProcess = selfProcess;
       _removeInheritedSelections(forest);
+      if (!_initializedExpansion) {
+        _expanded.addAll(expandableTunProcessNames(forest));
+        _initializedExpansion = true;
+      }
       _expandSelectedPaths(forest);
       _loading = false;
     });
@@ -207,6 +215,34 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
               ),
             ),
             const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<_ProcessScope>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: _ProcessScope.all,
+                    icon: Icon(Icons.apps_outlined),
+                    label: Text('All'),
+                  ),
+                  ButtonSegment(
+                    value: _ProcessScope.running,
+                    icon: Icon(Icons.play_circle_outline),
+                    label: Text('Running'),
+                  ),
+                  ButtonSegment(
+                    value: _ProcessScope.installed,
+                    icon: Icon(Icons.inventory_2_outlined),
+                    label: Text('Installed'),
+                  ),
+                ],
+                selected: {_scope},
+                onSelectionChanged: (selection) => setState(() {
+                  _scope = selection.single;
+                }),
+              ),
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -273,17 +309,16 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     final rows = <_VisibleProcess>[];
 
     bool matches(TunProcessTreeNode node) {
-      final process = node.process;
-      return process.name.contains(query) ||
-          process.executablePaths.any(
-            (path) => path.toLowerCase().contains(query),
-          ) ||
-          process.pids.any((pid) => pid.toString().contains(query));
+      return tunProcessMatchesQuery(node.process, query);
     }
 
     bool subtreeMatches(TunProcessTreeNode node) {
-      return query.isEmpty ||
-          matches(node) ||
+      final scopeMatches = switch (_scope) {
+        _ProcessScope.all => true,
+        _ProcessScope.running => node.process.pids.isNotEmpty,
+        _ProcessScope.installed => node.process.installed,
+      };
+      return (scopeMatches && (query.isEmpty || matches(node))) ||
           node.children.any(subtreeMatches);
     }
 
@@ -335,12 +370,17 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
       if (inherited) 'Included by ${row.inheritedBy}.exe',
       if (!isSelf && !inherited)
         process.pids.isEmpty
-            ? 'Not currently running'
+            ? process.installed
+                  ? 'Installed | not currently running'
+                  : 'Not currently running'
             : process.pids.length == 1
             ? 'PID ${process.pids.single}'
             : '${process.pids.length} instances',
+      if (process.installed && process.pids.isNotEmpty) 'Installed',
       if (childApplications > 0)
         '$childApplications child applications | ${node.descendantInstanceCount} processes',
+      if (process.aliases.isNotEmpty)
+        'Registered as ${process.aliases.take(2).join(', ')}',
       if (path != null) path,
     ];
 
@@ -396,7 +436,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                         children: [
                           Expanded(
                             child: Text(
-                              '$name.exe',
+                              '${process.displayName}.exe',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodyLarge,

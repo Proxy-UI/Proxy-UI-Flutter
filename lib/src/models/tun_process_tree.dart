@@ -23,6 +23,49 @@ class TunProcessTreeNode {
       descendants.fold(0, (count, node) => count + node.process.pids.length);
 }
 
+/// Return every application group that can be expanded in the picker.
+///
+/// Process trees are expanded initially so leaf applications such as a game
+/// executable are not hidden several launcher levels deep.
+Set<String> expandableTunProcessNames(Iterable<TunProcessTreeNode> roots) {
+  final names = <String>{};
+
+  void visit(TunProcessTreeNode node) {
+    if (node.children.isNotEmpty) names.add(node.process.name);
+    for (final child in node.children) {
+      visit(child);
+    }
+  }
+
+  for (final root in roots) {
+    visit(root);
+  }
+  return names;
+}
+
+/// Match process identity, friendly name, path, PID, and common initialisms.
+bool tunProcessMatchesQuery(TunProcessInfo process, String query) {
+  final normalized = query.trim().toLowerCase();
+  if (normalized.isEmpty) return true;
+  if (process.name.contains(normalized) ||
+      process.displayName.toLowerCase().contains(normalized) ||
+      process.aliases.any(
+        (alias) => alias.toLowerCase().contains(normalized),
+      ) ||
+      process.executablePaths.any(
+        (path) => path.toLowerCase().contains(normalized),
+      ) ||
+      process.pids.any((pid) => pid.toString().contains(normalized))) {
+    return true;
+  }
+
+  final words = RegExp(
+    r'[a-z0-9]+',
+  ).allMatches(process.displayName.toLowerCase());
+  final initialism = words.map((match) => match.group(0)![0]).join();
+  return initialism.length > 1 && initialism.contains(normalized);
+}
+
 /// Reconstruct application trees from native PID/parent-PID snapshots.
 ///
 /// Windows system and shell processes form implementation roots for most GUI
