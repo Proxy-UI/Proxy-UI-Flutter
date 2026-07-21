@@ -330,8 +330,10 @@ class ProxyState extends ChangeNotifier {
     return true;
   }
 
-  Future<List<AndroidVpnApplication>> listAndroidVpnApplications() {
-    return _service.listAndroidVpnApplications();
+  Future<List<AndroidVpnApplication>> listAndroidVpnApplications({
+    bool forceRefresh = false,
+  }) {
+    return _service.listAndroidVpnApplications(forceRefresh: forceRefresh);
   }
 
   /// Persist Android's package policy. An active VPN interface must be

@@ -477,9 +477,13 @@ class ProxyService {
     return result;
   }
 
-  Future<List<AndroidVpnApplication>> listAndroidVpnApplications() {
+  Future<List<AndroidVpnApplication>> listAndroidVpnApplications({
+    bool forceRefresh = false,
+  }) {
     if (!Platform.isAndroid) return Future.value(const []);
-    return AndroidVpnService.instance.listInstalledApps();
+    return AndroidVpnService.instance.listInstalledApps(
+      forceRefresh: forceRefresh,
+    );
   }
 
   Future<void> stopAndroidVpnInterface() async {

@@ -10,16 +10,31 @@ import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.net.VpnService
 import android.os.Build
+import android.util.LruCache
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.util.Locale
+import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
     private var pendingStart: PendingStart? = null
+    private val applicationExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "vpn-application-catalog").apply { isDaemon = true }
+    }
+
+    @Volatile
+    private var installedApplicationsCache: List<Map<String, Any>>? = null
+    private val applicationIconCache =
+        object : LruCache<String, ByteArray>(APPLICATION_ICON_CACHE_BYTES) {
+            override fun sizeOf(
+                key: String,
+                value: ByteArray,
+            ): Int = value.size
+        }
 
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -63,7 +78,8 @@ class MainActivity : FlutterActivity() {
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "listInstalledApps" -> listInstalledApps(result)
+            "listInstalledApps" -> listInstalledApps(call, result)
+            "loadAppIcons" -> loadAppIcons(call, result)
             "startVpn" -> startVpn(call, result)
             "stopVpn" -> stopVpn(result)
             "getVpnState" -> result.success(ProxyVpnController.running)
@@ -161,42 +177,27 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun listInstalledApps(result: MethodChannel.Result) {
-        Thread {
+    private fun listInstalledApps(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val forceRefresh = call.argument<Boolean>("forceRefresh") ?: false
+        if (!forceRefresh) {
+            installedApplicationsCache?.let { cached ->
+                result.success(cached)
+                return
+            }
+        }
+
+        applicationExecutor.execute {
             try {
-                val packageManager = packageManager
-                val applications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    packageManager.getInstalledApplications(
-                        PackageManager.ApplicationInfoFlags.of(PackageManager.GET_META_DATA.toLong()),
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                if (forceRefresh) {
+                    installedApplicationsCache = null
+                    applicationIconCache.evictAll()
                 }
-                val rows = applications.asSequence()
-                    .filter { it.enabled && it.packageName != packageName }
-                    .filter {
-                        packageManager.checkPermission(
-                            Manifest.permission.INTERNET,
-                            it.packageName,
-                        ) == PackageManager.PERMISSION_GRANTED
-                    }
-                    .map { application ->
-                        val label = packageManager.getApplicationLabel(application).toString()
-                            .ifBlank { application.packageName }
-                        mapOf(
-                            "packageName" to application.packageName,
-                            "label" to label,
-                            "system" to ((application.flags and ApplicationInfo.FLAG_SYSTEM) != 0),
-                            "icon" to encodeIcon(packageManager.getApplicationIcon(application)),
-                        )
-                    }
-                    .sortedWith(
-                        compareBy<Map<String, Any?>> {
-                            (it["label"] as String).lowercase(Locale.getDefault())
-                        }.thenBy { it["packageName"] as String },
-                    )
-                    .toList()
+                val rows = installedApplicationsCache ?: queryInstalledApplications().also {
+                    installedApplicationsCache = it
+                }
                 runOnUiThread { result.success(rows) }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -207,19 +208,98 @@ class MainActivity : FlutterActivity() {
                     )
                 }
             }
-        }.start()
+        }
+    }
+
+    private fun queryInstalledApplications(): List<Map<String, Any>> {
+        val packages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getInstalledPackages(
+                PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+        }
+        return packages.asSequence()
+            .filter { packageInfo ->
+                packageInfo.requestedPermissions?.contains(Manifest.permission.INTERNET) == true
+            }
+            .mapNotNull { packageInfo ->
+                val application = packageInfo.applicationInfo ?: return@mapNotNull null
+                if (!application.enabled || application.packageName == packageName) {
+                    return@mapNotNull null
+                }
+                val label = packageManager.getApplicationLabel(application).toString()
+                    .ifBlank { application.packageName }
+                mapOf(
+                    "packageName" to application.packageName,
+                    "label" to label,
+                    "system" to ((application.flags and ApplicationInfo.FLAG_SYSTEM) != 0),
+                )
+            }
+            .sortedWith(
+                compareBy<Map<String, Any>> {
+                    (it.getValue("label") as String).lowercase(Locale.getDefault())
+                }.thenBy { it.getValue("packageName") as String },
+            )
+            .toList()
+    }
+
+    private fun loadAppIcons(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val packages = call.argument<List<String>>("packages")
+            .orEmpty()
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .filter { it != packageName }
+            .distinct()
+            .take(MAX_APPLICATION_ICON_BATCH)
+            .toList()
+        if (packages.isEmpty()) {
+            result.success(emptyMap<String, ByteArray>())
+            return
+        }
+
+        applicationExecutor.execute {
+            val icons = linkedMapOf<String, ByteArray>()
+            for (applicationPackage in packages) {
+                try {
+                    val icon = applicationIconCache.get(applicationPackage)
+                        ?: encodeIcon(packageManager.getApplicationIcon(applicationPackage)).also {
+                            applicationIconCache.put(applicationPackage, it)
+                        }
+                    icons[applicationPackage] = icon
+                } catch (_: PackageManager.NameNotFoundException) {
+                    // The package may have been removed after the catalog snapshot.
+                } catch (_: RuntimeException) {
+                    // A broken package resource must not delay the remaining icons.
+                }
+            }
+            runOnUiThread { result.success(icons) }
+        }
+    }
+
+    override fun onDestroy() {
+        applicationExecutor.shutdownNow()
+        super.onDestroy()
     }
 
     private fun encodeIcon(drawable: Drawable): ByteArray {
-        val size = 64
+        val size = APPLICATION_ICON_SIZE
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, size, size)
-        drawable.draw(canvas)
-        return ByteArrayOutputStream().use { output ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        return try {
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+            ByteArrayOutputStream(size * size).use { output ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                output.toByteArray()
+            }
+        } finally {
             bitmap.recycle()
-            output.toByteArray()
         }
     }
 
@@ -231,5 +311,8 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val CHANNEL = "com.proxyui.proxy_ui/vpn"
         const val VPN_PERMISSION_REQUEST = 4107
+        const val APPLICATION_ICON_SIZE = 48
+        const val APPLICATION_ICON_CACHE_BYTES = 4 * 1024 * 1024
+        const val MAX_APPLICATION_ICON_BATCH = 32
     }
 }

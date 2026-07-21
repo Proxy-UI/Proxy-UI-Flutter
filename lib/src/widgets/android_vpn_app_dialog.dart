@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -37,7 +39,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
     super.dispose();
   }
 
-  Future<void> _loadApplications() async {
+  Future<void> _loadApplications({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _loadError = null;
@@ -45,7 +47,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
     try {
       final applications = await context
           .read<ProxyState>()
-          .listAndroidVpnApplications();
+          .listAndroidVpnApplications(forceRefresh: forceRefresh);
       if (!mounted) return;
       setState(() => _applications = applications);
     } catch (error) {
@@ -95,7 +97,9 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
             title: const Text('VPN applications'),
             actions: [
               IconButton(
-                onPressed: _loading ? null : _loadApplications,
+                onPressed: _loading
+                    ? null
+                    : () => _loadApplications(forceRefresh: true),
                 tooltip: 'Refresh applications',
                 icon: const Icon(Icons.refresh),
               ),
@@ -124,7 +128,9 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
           const SizedBox(width: 12),
           const Expanded(child: Text('VPN applications')),
           IconButton(
-            onPressed: _loading ? null : _loadApplications,
+            onPressed: _loading
+                ? null
+                : () => _loadApplications(forceRefresh: true),
             tooltip: 'Refresh applications',
             icon: const Icon(Icons.refresh),
           ),
@@ -349,13 +355,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
               const SizedBox(width: 4),
               SizedBox.square(
                 dimension: 40,
-                child: application.iconPng == null
-                    ? const Icon(Icons.apps_outlined)
-                    : Image.memory(
-                        application.iconPng!,
-                        fit: BoxFit.contain,
-                        gaplessPlayback: true,
-                      ),
+                child: _AndroidVpnApplicationIcon(application: application),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -402,5 +402,55 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
         _selected.remove(packageName);
       }
     });
+  }
+}
+
+class _AndroidVpnApplicationIcon extends StatefulWidget {
+  const _AndroidVpnApplicationIcon({required this.application});
+
+  final AndroidVpnApplication application;
+
+  @override
+  State<_AndroidVpnApplicationIcon> createState() =>
+      _AndroidVpnApplicationIconState();
+}
+
+class _AndroidVpnApplicationIconState
+    extends State<_AndroidVpnApplicationIcon> {
+  Uint8List? _icon;
+
+  @override
+  void initState() {
+    super.initState();
+    _icon = widget.application.iconPng;
+    if (_icon == null) _loadIcon();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AndroidVpnApplicationIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.application.packageName != widget.application.packageName) {
+      _icon = widget.application.iconPng;
+      if (_icon == null) _loadIcon();
+    }
+  }
+
+  Future<void> _loadIcon() async {
+    final application = widget.application;
+    final icon = await AndroidVpnService.instance.loadApplicationIcon(
+      application.packageName,
+    );
+    if (!mounted || application.packageName != widget.application.packageName) {
+      return;
+    }
+    setState(() => _icon = icon);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _icon;
+    return icon == null
+        ? const Icon(Icons.apps_outlined)
+        : Image.memory(icon, fit: BoxFit.contain, gaplessPlayback: true);
   }
 }

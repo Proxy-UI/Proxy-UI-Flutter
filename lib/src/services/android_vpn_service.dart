@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class AndroidVpnApplication {
@@ -55,30 +57,145 @@ class AndroidVpnNetworkState {
 }
 
 class AndroidVpnService {
-  AndroidVpnService._() {
+  AndroidVpnService._(this._channel) {
     _channel.setMethodCallHandler(_handleNativeCall);
   }
 
-  static final AndroidVpnService instance = AndroidVpnService._();
+  static final AndroidVpnService instance = AndroidVpnService._(
+    _defaultChannel,
+  );
 
-  static const MethodChannel _channel = MethodChannel(
+  @visibleForTesting
+  AndroidVpnService.forTesting(MethodChannel channel) : this._(channel);
+
+  static const MethodChannel _defaultChannel = MethodChannel(
     'com.proxyui.proxy_ui/vpn',
   );
+  static const int _maxCachedIcons = 128;
+  static const int _maxIconBatchSize = 24;
+
+  final MethodChannel _channel;
   final StreamController<AndroidVpnStateEvent> _states =
       StreamController<AndroidVpnStateEvent>.broadcast();
+  final LinkedHashMap<String, Uint8List?> _iconCache = LinkedHashMap();
+  final LinkedHashSet<String> _queuedIcons = LinkedHashSet();
+  final Map<String, Completer<Uint8List?>> _pendingIcons = {};
+  List<AndroidVpnApplication>? _applicationCache;
+  Future<List<AndroidVpnApplication>>? _applicationRequest;
+  Timer? _iconBatchTimer;
 
   Stream<AndroidVpnStateEvent> get states => _states.stream;
 
-  Future<List<AndroidVpnApplication>> listInstalledApps() async {
+  Future<List<AndroidVpnApplication>> listInstalledApps({
+    bool forceRefresh = false,
+  }) {
+    final cached = _applicationCache;
+    if (!forceRefresh && cached != null) {
+      return Future.value(cached);
+    }
+    final pendingRequest = _applicationRequest;
+    if (!forceRefresh && pendingRequest != null) {
+      return pendingRequest;
+    }
+    if (forceRefresh) {
+      _applicationCache = null;
+      _iconCache.clear();
+    }
+
+    final request = _fetchInstalledApps(forceRefresh: forceRefresh);
+    _applicationRequest = request;
+    void clearRequest() {
+      if (identical(_applicationRequest, request)) _applicationRequest = null;
+    }
+
+    unawaited(
+      request.then<void>(
+        (_) => clearRequest(),
+        onError: (_, _) => clearRequest(),
+      ),
+    );
+    return request;
+  }
+
+  Future<List<AndroidVpnApplication>> _fetchInstalledApps({
+    required bool forceRefresh,
+  }) async {
     final values = await _channel.invokeListMethod<Object?>(
       'listInstalledApps',
+      {'forceRefresh': forceRefresh},
     );
-    return values
+    final applications =
+        values
             ?.whereType<Map<Object?, Object?>>()
             .map(AndroidVpnApplication.fromPlatform)
             .where((application) => application.packageName.isNotEmpty)
             .toList(growable: false) ??
         const [];
+    _applicationCache = applications;
+    return applications;
+  }
+
+  /// Load one visible application icon without blocking catalog discovery.
+  /// Requests produced by the same list frame are combined into one platform
+  /// call and both successful and unavailable icons are cached.
+  Future<Uint8List?> loadApplicationIcon(String packageName) {
+    if (_iconCache.containsKey(packageName)) {
+      final icon = _iconCache.remove(packageName);
+      _iconCache[packageName] = icon;
+      return Future.value(icon);
+    }
+    final pending = _pendingIcons[packageName];
+    if (pending != null) return pending.future;
+
+    final completer = Completer<Uint8List?>();
+    _pendingIcons[packageName] = completer;
+    _queuedIcons.add(packageName);
+    _iconBatchTimer ??= Timer(const Duration(milliseconds: 8), _flushIconBatch);
+    return completer.future;
+  }
+
+  Future<void> _flushIconBatch() async {
+    _iconBatchTimer = null;
+    final packages = _queuedIcons.take(_maxIconBatchSize).toList();
+    _queuedIcons.removeAll(packages);
+
+    Map<Object?, Object?>? values;
+    try {
+      values = await _channel.invokeMapMethod<Object?, Object?>(
+        'loadAppIcons',
+        {'packages': packages},
+      );
+    } on PlatformException {
+      // Icons are optional; a package resource failure keeps the placeholder.
+    }
+    for (final packageName in packages) {
+      final icon = values?[packageName] as Uint8List?;
+      _rememberIcon(packageName, icon);
+      _pendingIcons.remove(packageName)?.complete(icon);
+    }
+    if (_queuedIcons.isNotEmpty) {
+      _iconBatchTimer = Timer(Duration.zero, _flushIconBatch);
+    }
+  }
+
+  void _rememberIcon(String packageName, Uint8List? icon) {
+    _iconCache.remove(packageName);
+    _iconCache[packageName] = icon;
+    while (_iconCache.length > _maxCachedIcons) {
+      _iconCache.remove(_iconCache.keys.first);
+    }
+  }
+
+  @visibleForTesting
+  Future<void> disposeForTesting() async {
+    _iconBatchTimer?.cancel();
+    for (final completer in _pendingIcons.values) {
+      completer.complete(null);
+    }
+    _pendingIcons.clear();
+    _queuedIcons.clear();
+    _channel.setMethodCallHandler(null);
+    await _states.close();
   }
 
   Future<AndroidVpnInterface> startInterface({
