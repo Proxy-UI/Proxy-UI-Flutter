@@ -10,6 +10,7 @@ import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
 import '../widgets/config_dialog.dart';
 import '../widgets/android_vpn_app_dialog.dart';
+import '../widgets/lan_proxy_link.dart';
 import '../widgets/tun_process_dialog.dart';
 
 /// Proxy control page with simple switch and config FAB
@@ -388,6 +389,10 @@ class _ProxyPageState extends State<ProxyPage> {
                   ],
                 ),
               ),
+              if (state.config.allowLan) ...[
+                const SizedBox(height: 12),
+                LanProxyLink(port: state.config.localPort),
+              ],
               const SizedBox(height: 20),
               const Spacer(),
               Row(
@@ -404,7 +409,11 @@ class _ProxyPageState extends State<ProxyPage> {
                     child: OutlinedButton.icon(
                       onPressed: state.isRunning ? null : _showPortDialog,
                       icon: const Icon(Icons.lan_outlined),
-                      label: Text('Port ${state.config.localPort}'),
+                      label: Text(
+                        state.config.allowLan
+                            ? 'LAN ${state.config.localPort}'
+                            : 'Port ${state.config.localPort}',
+                      ),
                     ),
                   ),
                 ],
@@ -463,7 +472,11 @@ class _ProxyPageState extends State<ProxyPage> {
                         heroTag: 'port_fab',
                         icon: const Icon(Icons.network_wifi),
                         onPressed: state.isRunning ? null : _showPortDialog,
-                        label: Text('Port: ${state.config.localPort}'),
+                        label: Text(
+                          state.config.allowLan
+                              ? 'LAN: ${state.config.localPort}'
+                              : 'Port: ${state.config.localPort}',
+                        ),
                       ),
                     ],
                   ),
@@ -665,6 +678,13 @@ class _ProxyPageState extends State<ProxyPage> {
                           ),
                         ),
                       ),
+                      if (state.config.allowLan) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: 420,
+                          child: LanProxyLink(port: state.config.localPort),
+                        ),
+                      ],
                     ],
                   ),
                 ),

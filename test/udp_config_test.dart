@@ -9,8 +9,10 @@ void main() {
 
     expect(config.udpEnabled, isFalse);
     expect(config.udpDirectFallback, isTrue);
+    expect(config.allowLan, isFalse);
     expect(config.toJson()['udpEnabled'], isFalse);
     expect(config.toJson()['udpDirectFallback'], isTrue);
+    expect(config.toJson()['allowLan'], isFalse);
   });
 
   test('legacy config imports with UDP enabled', () {
@@ -23,7 +25,20 @@ void main() {
     expect(config.udpDirectFallback, isTrue);
     expect(config.tunEnabled, isFalse);
     expect(config.tunBypassProcesses, isEmpty);
+    expect(config.allowLan, isFalse);
     expect(config.toJson()['udpEnabled'], isTrue);
+  });
+
+  test('LAN exposure is opt-in and survives persistence and copyWith', () {
+    final config = ProxyConfigModel.fromJson({
+      'serverHost': 'proxy.example.com',
+      'allowLan': true,
+    });
+
+    expect(config.allowLan, isTrue);
+    expect(config.toJson()['allowLan'], isTrue);
+    expect(config.copyWith(serverPort: 8443).allowLan, isTrue);
+    expect(config.copyWith(allowLan: false).allowLan, isFalse);
   });
 
   test('strict TUN UDP blocking round-trips and survives copyWith', () {

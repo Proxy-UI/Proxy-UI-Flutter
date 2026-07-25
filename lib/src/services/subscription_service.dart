@@ -1,14 +1,18 @@
 import 'dart:io';
 
-import 'package:network_info_plus/network_info_plus.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
 import '../models/proxy_config.dart';
 import 'clash_config_generator.dart';
+import 'local_network_service.dart';
 import 'shadowrocket_config_generator.dart';
 
 class SubscriptionService {
+  SubscriptionService({LocalNetworkService? localNetworkService})
+    : _localNetworkService = localNetworkService ?? LocalNetworkService();
+
+  final LocalNetworkService _localNetworkService;
   HttpServer? _server;
   int _port = 8080;
   ProxyConfigModel? _config;
@@ -74,24 +78,16 @@ class SubscriptionService {
   }
 
   Future<String> getClashUrl() async {
-    final ip = await _getDeviceIp();
-    return 'http://$ip:$_port/clash';
+    return '${await _getBaseUrl()}/clash';
   }
 
   Future<String> getShadowrocketUrl({bool base64 = false}) async {
-    final ip = await _getDeviceIp();
-    return base64
-        ? 'http://$ip:$_port/shadowrocket/base64'
-        : 'http://$ip:$_port/shadowrocket';
+    final baseUrl = await _getBaseUrl();
+    return base64 ? '$baseUrl/shadowrocket/base64' : '$baseUrl/shadowrocket';
   }
 
-  Future<String> _getDeviceIp() async {
-    try {
-      final info = NetworkInfo();
-      final wifiIP = await info.getWifiIP();
-      return wifiIP ?? '127.0.0.1';
-    } catch (e) {
-      return '127.0.0.1';
-    }
+  Future<String> _getBaseUrl() async {
+    return await _localNetworkService.getHttpProxyUrl(_port) ??
+        'http://127.0.0.1:$_port';
   }
 }

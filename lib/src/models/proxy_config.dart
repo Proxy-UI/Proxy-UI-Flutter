@@ -22,6 +22,7 @@ class ProxyConfigModel {
   String serverHost;
   int serverPort;
   int localPort;
+  bool allowLan;
   String? sessionKey;
   bool autoProxy;
   bool udpEnabled;
@@ -43,6 +44,7 @@ class ProxyConfigModel {
     this.serverHost = '',
     this.serverPort = 1081,
     this.localPort = 10801,
+    this.allowLan = false,
     this.sessionKey,
     this.autoProxy = true,
     this.udpEnabled = false,
@@ -64,6 +66,7 @@ class ProxyConfigModel {
     'serverHost': serverHost,
     'serverPort': serverPort,
     'localPort': localPort,
+    'allowLan': allowLan,
     'sessionKey': sessionKey,
     'autoProxy': autoProxy,
     'udpEnabled': udpEnabled,
@@ -83,6 +86,8 @@ class ProxyConfigModel {
         serverHost: json['serverHost'] ?? '',
         serverPort: json['serverPort'] ?? 1081,
         localPort: json['localPort'] ?? 1080,
+        // LAN exposure is always opt-in, including imported legacy configs.
+        allowLan: json['allowLan'] ?? false,
         sessionKey: json['sessionKey'],
         autoProxy: json['autoProxy'] ?? true,
         // Imported configurations created by older versions keep the
@@ -116,6 +121,7 @@ class ProxyConfigModel {
     String? serverHost,
     int? serverPort,
     int? localPort,
+    bool? allowLan,
     String? sessionKey,
     bool? autoProxy,
     bool? udpEnabled,
@@ -132,6 +138,7 @@ class ProxyConfigModel {
     serverHost: serverHost ?? this.serverHost,
     serverPort: serverPort ?? this.serverPort,
     localPort: localPort ?? this.localPort,
+    allowLan: allowLan ?? this.allowLan,
     sessionKey: sessionKey ?? this.sessionKey,
     autoProxy: autoProxy ?? this.autoProxy,
     udpEnabled: udpEnabled ?? this.udpEnabled,

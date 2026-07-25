@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/proxy_provider.dart';
 import '../models/proxy_config.dart';
 import '../utils/toast_utils.dart';
+import 'lan_proxy_link.dart';
 
 /// Configuration dialog for proxy settings - simplified AlertDialog style
 class ConfigDialog extends StatefulWidget {
@@ -19,6 +20,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late TextEditingController _serverPortController;
   late TextEditingController _localPortController;
   late TextEditingController _sessionKeyController;
+  late bool _allowLan;
   late bool _autoProxy;
   late bool _udpEnabled;
   late bool _udpDirectFallback;
@@ -36,9 +38,11 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _localPortController = TextEditingController(
       text: config.localPort.toString(),
     );
+    _localPortController.addListener(_onLocalPortChanged);
     _sessionKeyController = TextEditingController(
       text: config.sessionKey ?? '',
     );
+    _allowLan = config.allowLan;
     _autoProxy = config.autoProxy;
     _udpEnabled = config.udpEnabled;
     _udpDirectFallback = config.udpDirectFallback;
@@ -48,11 +52,16 @@ class _ConfigDialogState extends State<ConfigDialog> {
 
   @override
   void dispose() {
+    _localPortController.removeListener(_onLocalPortChanged);
     _hostController.dispose();
     _serverPortController.dispose();
     _localPortController.dispose();
     _sessionKeyController.dispose();
     super.dispose();
+  }
+
+  void _onLocalPortChanged() {
+    if (_allowLan) setState(() {});
   }
 
   void _save() {
@@ -62,6 +71,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
         serverHost: _hostController.text.trim(),
         serverPort: int.tryParse(_serverPortController.text) ?? 1081,
         localPort: int.tryParse(_localPortController.text) ?? 1080,
+        allowLan: _allowLan,
         sessionKey: _sessionKeyController.text.isEmpty
             ? null
             : _sessionKeyController.text,
@@ -151,6 +161,22 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.lan_outlined),
+                title: const Text('Allow LAN'),
+                subtitle: const Text(
+                  'Listen on all interfaces. Use only on trusted networks.',
+                ),
+                value: _allowLan,
+                onChanged: (value) => setState(() => _allowLan = value),
+              ),
+              if (_allowLan) ...[
+                const SizedBox(height: 8),
+                LanProxyLink(
+                  port: int.tryParse(_localPortController.text) ?? 1080,
+                ),
+              ],
               const SizedBox(height: 24),
               // Options section
               Text('Options', style: Theme.of(context).textTheme.titleSmall),

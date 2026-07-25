@@ -183,6 +183,35 @@ final class ProxyConfigV4 extends Struct {
   external int tunUdpDirectFallback;
 }
 
+/// Versioned proxy configuration with optional LAN exposure.
+final class ProxyConfigV5 extends Struct {
+  external Pointer<Utf8> serverHost;
+  @Uint16()
+  external int serverPort;
+  @Uint16()
+  external int localPort;
+  external Pointer<Utf8> sessionKey;
+  @Int32()
+  external int autoProxy;
+  @Int32()
+  external int reverseGeo;
+  external Pointer<Utf8> cacheDir;
+  external Pointer<Utf8> needCodecIps;
+  @Int32()
+  external int forceCodec;
+  @Int32()
+  external int setSystemProxy;
+  @Int32()
+  external int enableUdp;
+  @Int32()
+  external int enableTun;
+  external Pointer<Utf8> tunBypassProcesses;
+  @Int32()
+  external int tunUdpDirectFallback;
+  @Int32()
+  external int allowLan;
+}
+
 // FFI function signatures
 typedef _ProxySetLogCallbackNative =
     Void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
@@ -217,6 +246,11 @@ typedef _ProxyStartV4Native =
     Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV4> config);
 typedef _ProxyStartV4Dart =
     int Function(Pointer<Void> handle, Pointer<ProxyConfigV4> config);
+
+typedef _ProxyStartV5Native =
+    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV5> config);
+typedef _ProxyStartV5Dart =
+    int Function(Pointer<Void> handle, Pointer<ProxyConfigV5> config);
 
 typedef _ProxySwitchUpstreamNative =
     Int32 Function(
@@ -406,6 +440,9 @@ class ProxyFFI {
 
   late final proxyStartV4 = lib
       .lookupFunction<_ProxyStartV4Native, _ProxyStartV4Dart>('proxy_start_v4');
+
+  late final proxyStartV5 = lib
+      .lookupFunction<_ProxyStartV5Native, _ProxyStartV5Dart>('proxy_start_v5');
 
   late final proxySwitchUpstream = lib
       .lookupFunction<_ProxySwitchUpstreamNative, _ProxySwitchUpstreamDart>(

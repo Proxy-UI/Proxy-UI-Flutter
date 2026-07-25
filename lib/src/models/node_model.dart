@@ -28,6 +28,7 @@ class NodeInfo {
   // Generate ProxyConfigModel for this node
   ProxyConfigModel toProxyConfig({
     int localPort = 1080,
+    bool allowLan = false,
     String? sessionKey,
     bool autoProxy = true,
     bool udpEnabled = false,
@@ -45,6 +46,7 @@ class NodeInfo {
       serverHost: host,
       serverPort: port,
       localPort: localPort,
+      allowLan: allowLan,
       sessionKey: sessionKey,
       autoProxy: autoProxy,
       udpEnabled: udpEnabled,

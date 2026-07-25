@@ -29,10 +29,12 @@ void main() {
           serverHost: 'old.example',
           serverPort: 1081,
           localPort: 18080,
+          allowLan: true,
           setSystemProxy: false,
         ),
       );
       expect(await state.start(), isTrue);
+      expect(service.lastAllowLan, isTrue);
       expect(await state.setTunEnabled(true), isTrue);
       service.calls.clear();
 
@@ -51,6 +53,7 @@ void main() {
       expect(state.config.serverHost, target.node.host);
       expect(state.config.serverPort, target.node.port);
       expect(state.config.localPort, 18080);
+      expect(state.config.allowLan, isTrue);
       expect(state.currentNodeId, 'new-node');
     },
   );
@@ -140,6 +143,7 @@ class _FakeProxyService extends ProxyService {
   final List<String> calls = [];
   final Queue<int> tunStartResults = Queue<int>();
   var listenerStartCount = 0;
+  var lastAllowLan = false;
   var _running = false;
   var _tunRunning = false;
   String? _error;
@@ -162,8 +166,10 @@ class _FakeProxyService extends ProxyService {
     String? needCodecIps,
     bool forceCodec = false,
     bool setSystemProxy = false,
+    bool allowLan = false,
   }) async {
     listenerStartCount++;
+    lastAllowLan = allowLan;
     _running = true;
     _error = null;
     return ProxyResult.ok;

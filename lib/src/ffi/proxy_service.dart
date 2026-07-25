@@ -203,6 +203,7 @@ class ProxyService {
     String? needCodecIps,
     bool forceCodec = false,
     bool setSystemProxy = false,
+    bool allowLan = false,
   }) async {
     if (Platform.isAndroid) {
       await stopAndroidVpnInterface();
@@ -211,7 +212,7 @@ class ProxyService {
     destroy();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfigV4>();
+    final config = calloc<ProxyConfigV5>();
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
@@ -236,6 +237,7 @@ class ProxyService {
       config.ref.tunUdpDirectFallback = udpDirectFallback ? 1 : 0;
       config.ref.enableTun = tunEnabled ? 1 : 0;
       config.ref.reverseGeo = reverseGeo ? 1 : 0;
+      config.ref.allowLan = allowLan ? 1 : 0;
 
       // A stable private support directory keeps auto-proxy and virtual-DNS
       // state across process restarts and in-place upgrades on every platform.
@@ -266,7 +268,7 @@ class ProxyService {
         config.ref.tunBypassProcesses = nullptr;
       }
 
-      return _ffi.proxyStartV4(_handle!, config);
+      return _ffi.proxyStartV5(_handle!, config);
     } finally {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);

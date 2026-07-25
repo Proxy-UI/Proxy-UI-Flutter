@@ -279,6 +279,7 @@ class ProxyState extends ChangeNotifier {
       serverHost: _config.serverHost,
       serverPort: _config.serverPort,
       localPort: _config.localPort,
+      allowLan: _config.allowLan,
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
@@ -633,6 +634,7 @@ class ProxyState extends ChangeNotifier {
     // Generate config for this node, preserving current settings
     final nodeConfig = node.toProxyConfig(
       localPort: _config.localPort,
+      allowLan: _config.allowLan,
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
@@ -656,6 +658,7 @@ class ProxyState extends ChangeNotifier {
   Future<bool> switchToNode(NodeInfo node) async {
     final newConfig = node.toProxyConfig(
       localPort: _config.localPort,
+      allowLan: _config.allowLan,
       sessionKey: _config.sessionKey,
       autoProxy: _config.autoProxy,
       udpEnabled: _config.udpEnabled,
