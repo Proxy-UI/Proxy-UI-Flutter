@@ -147,6 +147,10 @@ class ProxyService {
   static final _logController = StreamController<LogEntry>.broadcast();
   static Stream<LogEntry> get logStream => _logController.stream;
 
+  /// Pushes an entry through the same stream the native log callback uses.
+  @visibleForTesting
+  static void debugEmitLog(LogEntry entry) => _logController.add(entry);
+
   // NativeCallable for thread-safe callback from native code
   static NativeCallable<LogCallbackNative>? _nativeCallable;
 

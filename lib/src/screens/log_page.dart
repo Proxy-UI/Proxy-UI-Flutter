@@ -59,15 +59,14 @@ class _LogPageState extends State<LogPage> {
   }
 
   List<LogEntry> _getFilteredLogs(ProxyState state) {
-    var logs = state.filteredLogs;
-    if (_searchQuery.isNotEmpty) {
-      logs = logs
-          .where(
-            (e) => e.message.toLowerCase().contains(_searchQuery.toLowerCase()),
-          )
-          .toList();
-    }
-    return logs;
+    final logs = state.filteredLogs;
+    if (_searchQuery.isEmpty) return logs;
+    // Lower-cased once instead of once per entry, which is the difference
+    // between one allocation and a thousand on every rebuild.
+    final needle = _searchQuery.toLowerCase();
+    return logs
+        .where((e) => e.message.toLowerCase().contains(needle))
+        .toList(growable: false);
   }
 
   void _onSearchChanged(String value) {
@@ -93,52 +92,61 @@ class _LogPageState extends State<LogPage> {
   Widget build(BuildContext context) {
     return Consumer<ProxyState>(
       builder: (context, state, _) {
-        final logs = _getFilteredLogs(state);
-
-        // 检测新日志
-        final currentLogCount = state.logs.length;
-        if (currentLogCount > _lastKnownLogCount && !_isAtBottom) {
-          _newLogsCount += currentLogCount - _lastKnownLogCount;
-        }
-        _lastKnownLogCount = currentLogCount;
-
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                // 工具栏
-                _buildToolbar(context, state, logs.length),
-                const SizedBox(height: 16),
-                // 日志卡片
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Card(
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12.0),
-                          child: _buildLogList(context, logs),
-                        ),
-                      ),
-                      // 新日志提示按钮
-                      if (_newLogsCount > 0 && !_isAtBottom)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: _buildNewLogsButton(),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+        // Log arrivals come through their own notifier, so a traffic burst
+        // rebuilds this subtree only, and only while this page is on screen.
+        return ValueListenableBuilder<int>(
+          valueListenable: state.logRevision,
+          builder: (context, _, _) => _buildBody(context, state),
         );
       },
+    );
+  }
+
+  Widget _buildBody(BuildContext context, ProxyState state) {
+    final logs = _getFilteredLogs(state);
+
+    // 检测新日志
+    final currentLogCount = state.logCount;
+    if (currentLogCount > _lastKnownLogCount && !_isAtBottom) {
+      _newLogsCount += currentLogCount - _lastKnownLogCount;
+    }
+    _lastKnownLogCount = currentLogCount;
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // 工具栏
+            _buildToolbar(context, state, logs.length),
+            const SizedBox(height: 16),
+            // 日志卡片
+            Expanded(
+              child: Stack(
+                children: [
+                  Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12.0),
+                      child: _buildLogList(context, logs),
+                    ),
+                  ),
+                  // 新日志提示按钮
+                  if (_newLogsCount > 0 && !_isAtBottom)
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: _buildNewLogsButton(),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

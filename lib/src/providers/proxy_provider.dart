@@ -31,8 +31,18 @@ class ProxyState extends ChangeNotifier {
   bool _isTunBusy = false;
   String? _lastError;
   final ListQueue<LogEntry> _logs = ListQueue<LogEntry>();
+  List<LogEntry>? _filteredLogs;
   StreamSubscription<LogEntry>? _logSubscription;
   Timer? _logNotificationTimer;
+
+  /// Bumped when the log buffer changes.
+  ///
+  /// The log view listens to this rather than to the provider itself. Native
+  /// traffic produces hundreds of entries per second, and routing that through
+  /// `notifyListeners` rebuilt every screen and re-ran the tray update queue
+  /// ten times a second — including while the window was hidden to the tray,
+  /// which is where this app spends most of its life.
+  final ValueNotifier<int> logRevision = ValueNotifier<int>(0);
   int _minLogLevel = ProxyService.defaultLogLevel;
 
   // Subscription service
@@ -83,13 +93,21 @@ class ProxyState extends ChangeNotifier {
   bool get isTunRunning => _isTunRunning;
   bool get isTunBusy => _isTunBusy;
   String? get lastError => _lastError;
-  List<LogEntry> get logs => List.unmodifiable(_logs);
+  /// The buffered entry count. Reading this used to copy the whole buffer.
+  int get logCount => _logs.length;
   int get minLogLevel => _minLogLevel;
-  List<LogEntry> get filteredLogs => _logs
-      .where(
+
+  /// Entries at or above the current threshold.
+  ///
+  /// Cached because the log view reads this on every frame it rebuilds, and
+  /// re-filtering a full buffer per read is pure waste while traffic flows.
+  List<LogEntry> get filteredLogs {
+    return _filteredLogs ??= List<LogEntry>.unmodifiable(
+      _logs.where(
         (e) => LogLevel.includes(threshold: _minLogLevel, entryLevel: e.level),
-      )
-      .toList();
+      ),
+    );
+  }
 
   // Subscription service getters
   bool get subscriptionServiceRunning => _subscriptionServiceRunning;
@@ -138,6 +156,7 @@ class ProxyState extends ChangeNotifier {
 
   void _onLog(LogEntry entry) {
     _logs.addLast(entry);
+    _filteredLogs = null;
     unawaited(_persistLog(entry));
     if (_logs.length > maxLogs) {
       _logs.removeFirst();
@@ -145,9 +164,11 @@ class ProxyState extends ChangeNotifier {
     // Native TUN setup failures cancel the shared listener token. Reconcile
     // the provider on the following native log instead of leaving the switch
     // in a connected state after the worker has stopped.
+    var connectionChanged = false;
     if (_isRunning && !_service.isRunning) {
       _isRunning = false;
       _isTunRunning = false;
+      connectionChanged = true;
     } else if (_isTunRunning && !_isTunBusy && !_service.isTunRunning) {
       _isTunRunning = false;
       _config = _config.copyWith(tunEnabled: false);
@@ -155,13 +176,17 @@ class ProxyState extends ChangeNotifier {
         unawaited(_service.stopAndroidVpnInterface());
       }
       unawaited(_saveConfig());
+      connectionChanged = true;
     }
-    // Native traffic can produce hundreds of useful session logs per second.
-    // Rebuild the log page at a human-visible cadence instead of once per
-    // entry, which would compete with forwarding and game render threads.
+    // A dropped connection is rare and every screen wants to know at once.
+    if (connectionChanged) _safeNotifyListeners();
+
+    // A new log line is neither. Native traffic can produce hundreds per
+    // second, so announce it on a separate channel at a human-visible cadence;
+    // only the log view is listening.
     _logNotificationTimer ??= Timer(const Duration(milliseconds: 100), () {
       _logNotificationTimer = null;
-      _safeNotifyListeners();
+      if (!_isDisposed) logRevision.value++;
     });
   }
 
@@ -580,14 +605,18 @@ class ProxyState extends ChangeNotifier {
 
   void clearLogs() {
     _logs.clear();
+    _filteredLogs = null;
+    if (!_isDisposed) logRevision.value++;
     _safeNotifyListeners();
   }
 
   void setMinLogLevel(int level) {
     _minLogLevel = LogLevel.normalize(level);
+    _filteredLogs = null;
     // Also raise the native floor so the levels the UI filters out are never
     // shipped across the FFI boundary in the first place.
     _service.setLogLevel(_minLogLevel);
+    if (!_isDisposed) logRevision.value++;
     _safeNotifyListeners();
   }
 
@@ -987,6 +1016,7 @@ class ProxyState extends ChangeNotifier {
     unawaited(_desktopLogService.dispose());
     _service.dispose();
     unawaited(_subscriptionService?.stop() ?? Future<void>.value());
+    logRevision.dispose();
     super.dispose();
   }
 }
