@@ -67,6 +67,7 @@ class ProxyState extends ChangeNotifier {
   NodeCatalogPreferences _nodeCatalogPreferences =
       const NodeCatalogPreferences();
   Timer? _nodeCatalogSaveTimer;
+  final Set<String> _verifyingNodes = <String>{};
   bool _isInitialized = false;
   bool _isDisposed = false;
 
@@ -236,6 +237,14 @@ class ProxyState extends ChangeNotifier {
         nodeCatalogLoaded = true;
       } catch (_) {
         // Ignore damaged UI preferences and retain safe defaults.
+      }
+    }
+    // Show the last known catalogue straight away. Refreshing stays explicit,
+    // so opening the nodes page no longer costs a round trip to the server.
+    if (_nodeCatalogPreferences.nodes.isNotEmpty) {
+      _nodes = List<NodeInfo>.of(_nodeCatalogPreferences.nodes);
+      for (final node in _nodes) {
+        node.latencyMs = _nodeCatalogPreferences.latencyFor(node);
       }
     }
     if (!nodeCatalogLoaded) {
@@ -740,6 +749,12 @@ class ProxyState extends ChangeNotifier {
         for (final node in _nodes) {
           node.latencyMs = _nodeCatalogPreferences.latencyFor(node);
         }
+        // Cache the catalogue so the next visit to the nodes page starts from
+        // the last known servers instead of an empty list.
+        _nodeCatalogPreferences = _nodeCatalogPreferences.withCatalog(
+          _nodes,
+          DateTime.now(),
+        );
         _nodesError = null;
       } catch (e) {
         _nodesError = e.toString();
@@ -755,6 +770,75 @@ class ProxyState extends ChangeNotifier {
       }
     } finally {
       _isLoadingNodes = false;
+      _safeNotifyListeners();
+    }
+  }
+
+  NodeVerification? verificationFor(NodeInfo node) =>
+      _nodeCatalogPreferences.verificationFor(node);
+
+  /// The country to show for a node: what its traffic actually says, falling
+  /// back to what the catalogue claims.
+  String effectiveCountry(NodeInfo node) {
+    final verification = verificationFor(node);
+    if (verification != null &&
+        verification.isVerified &&
+        verification.countryCode.isNotEmpty) {
+      return verification.countryCode;
+    }
+    return node.country;
+  }
+
+  bool isVerifyingNode(NodeInfo node) => _verifyingNodes.contains(node.storageKey);
+
+  /// Ask an echo service, through this node, where its traffic leaves from.
+  ///
+  /// The catalogue reports where a server registered itself, which is not
+  /// necessarily where it egresses; only a real request through the node can
+  /// settle that. The answer is persisted, including a failure, because "this
+  /// node did not answer" is worth remembering too.
+  Future<NodeVerification?> verifyNode(NodeInfo node) async {
+    final key = node.storageKey;
+    if (_verifyingNodes.contains(key)) return null;
+    _verifyingNodes.add(key);
+    _safeNotifyListeners();
+
+    try {
+      final probe = await _service.probeNode(
+        serverHost: node.host,
+        serverPort: node.port,
+        forceCodec: _config.forceCodec,
+      );
+      final verification = NodeVerification(
+        status: probe.success
+            ? NodeVerificationStatus.verified
+            : NodeVerificationStatus.unreachable,
+        checkedAt: DateTime.now(),
+        countryCode: probe.countryCode,
+        egressIp: probe.egressIp,
+        latencyMs: probe.latencyMs,
+        error: probe.error,
+      );
+      _nodeCatalogPreferences = _nodeCatalogPreferences.withVerification(
+        node,
+        verification,
+      );
+      await _saveNodeCatalogPreferences();
+      return verification;
+    } catch (error) {
+      final verification = NodeVerification(
+        status: NodeVerificationStatus.unreachable,
+        checkedAt: DateTime.now(),
+        error: error.toString(),
+      );
+      _nodeCatalogPreferences = _nodeCatalogPreferences.withVerification(
+        node,
+        verification,
+      );
+      await _saveNodeCatalogPreferences();
+      return verification;
+    } finally {
+      _verifyingNodes.remove(key);
       _safeNotifyListeners();
     }
   }

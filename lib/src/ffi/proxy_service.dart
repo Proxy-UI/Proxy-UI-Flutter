@@ -40,6 +40,24 @@ class LogEntry {
   }
 }
 
+/// Raw outcome of a node egress probe, before it becomes a persisted
+/// [NodeVerification].
+class NodeProbe {
+  final bool success;
+  final String countryCode;
+  final String egressIp;
+  final int? latencyMs;
+  final String? error;
+
+  const NodeProbe({
+    required this.success,
+    this.countryCode = '',
+    this.egressIp = '',
+    this.latencyMs,
+    this.error,
+  });
+}
+
 /// One live process instance used to reconstruct application parent/child trees.
 class TunProcessInstance {
   final int pid;
@@ -671,6 +689,84 @@ class ProxyService {
       calloc.free(hostPtr);
       if (keyPtr != nullptr) calloc.free(keyPtr);
     }
+  }
+
+  /// Asks an echo service, through `serverHost`, where its traffic egresses.
+  ///
+  /// Runs off the UI isolate because it opens a real connection through the
+  /// node and waits for an answer.
+  static Future<Map<String, dynamic>> _probeNodeIsolate(
+    Map<String, dynamic> params,
+  ) async {
+    final ffi = ProxyFFI();
+    final hostPtr = (params['serverHost'] as String).toNativeUtf8();
+
+    try {
+      final result = ffi.proxyProbeNode(
+        hostPtr,
+        params['serverPort'] as int,
+        (params['forceCodec'] as bool) ? 1 : 0,
+        params['timeoutMs'] as int,
+      );
+
+      try {
+        if (result.success == 1) {
+          return {
+            'success': true,
+            'countryCode': result.countryCode == nullptr
+                ? ''
+                : result.countryCode.toDartString(),
+            'egressIp': result.egressIp == nullptr
+                ? ''
+                : result.egressIp.toDartString(),
+            'latencyMs': result.latencyMs,
+          };
+        }
+        return {
+          'success': false,
+          'latencyMs': result.latencyMs,
+          'error': result.error == nullptr
+              ? 'Node verification failed'
+              : result.error.toDartString(),
+        };
+      } finally {
+        final resultPtr = calloc<NodeProbeResult>();
+        resultPtr.ref
+          ..success = result.success
+          ..countryCode = result.countryCode
+          ..egressIp = result.egressIp
+          ..latencyMs = result.latencyMs
+          ..error = result.error;
+        ffi.proxyFreeNodeProbeResult(resultPtr);
+        calloc.free(resultPtr);
+      }
+    } finally {
+      calloc.free(hostPtr);
+    }
+  }
+
+  /// Verifies a node's real egress country.
+  Future<NodeProbe> probeNode({
+    required String serverHost,
+    required int serverPort,
+    bool forceCodec = false,
+    int timeoutMs = 10000,
+  }) async {
+    final result = await compute(_probeNodeIsolate, {
+      'serverHost': serverHost,
+      'serverPort': serverPort,
+      'forceCodec': forceCodec,
+      'timeoutMs': timeoutMs,
+    });
+
+    final latency = result['latencyMs'];
+    return NodeProbe(
+      success: result['success'] == true,
+      countryCode: (result['countryCode'] as String?) ?? '',
+      egressIp: (result['egressIp'] as String?) ?? '',
+      latencyMs: latency is int ? latency : null,
+      error: result['error'] as String?,
+    );
   }
 
   // Isolate entry point for group listing

@@ -8,6 +8,17 @@ import 'package:ffi/ffi.dart';
 typedef LogCallbackNative = Void Function(Int32 level, Pointer<Utf8> message);
 
 /// LatencyResult structure from FFI.
+/// NodeProbeResult structure from FFI.
+final class NodeProbeResult extends Struct {
+  @Int32()
+  external int success;
+  external Pointer<Utf8> countryCode;
+  external Pointer<Utf8> egressIp;
+  @Uint64()
+  external int latencyMs;
+  external Pointer<Utf8> error;
+}
+
 final class LatencyResult extends Struct {
   @Int32()
   external int success;
@@ -360,6 +371,26 @@ typedef _ProxyFreeNodesResultNative =
     Void Function(Pointer<NodesResult> result);
 typedef _ProxyFreeNodesResultDart = void Function(Pointer<NodesResult> result);
 
+typedef _ProxyProbeNodeNative =
+    NodeProbeResult Function(
+      Pointer<Utf8> serverHost,
+      Uint16 serverPort,
+      Int32 forceCodec,
+      Uint32 timeoutMs,
+    );
+typedef _ProxyProbeNodeDart =
+    NodeProbeResult Function(
+      Pointer<Utf8> serverHost,
+      int serverPort,
+      int forceCodec,
+      int timeoutMs,
+    );
+
+typedef _ProxyFreeNodeProbeResultNative =
+    Void Function(Pointer<NodeProbeResult> result);
+typedef _ProxyFreeNodeProbeResultDart =
+    void Function(Pointer<NodeProbeResult> result);
+
 // proxy_free_groups_result
 typedef _ProxyFreeGroupsResultNative =
     Void Function(Pointer<GroupsResult> result);
@@ -550,6 +581,17 @@ class ProxyFFI {
       .lookupFunction<_ProxyFreeNodesResultNative, _ProxyFreeNodesResultDart>(
         'proxy_free_nodes_result',
       );
+
+  late final proxyProbeNode = lib
+      .lookupFunction<_ProxyProbeNodeNative, _ProxyProbeNodeDart>(
+        'proxy_probe_node',
+      );
+
+  late final proxyFreeNodeProbeResult = lib
+      .lookupFunction<
+        _ProxyFreeNodeProbeResultNative,
+        _ProxyFreeNodeProbeResultDart
+      >('proxy_free_node_probe_result');
 
   late final proxyFreeGroupsResult = lib
       .lookupFunction<_ProxyFreeGroupsResultNative, _ProxyFreeGroupsResultDart>(

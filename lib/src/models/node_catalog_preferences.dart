@@ -8,12 +8,25 @@ class NodeCatalogPreferences {
   final bool sortByLatency;
   final Map<String, int> latencies;
 
+  /// The last catalogue fetched from the server.
+  ///
+  /// Persisted so opening the nodes page shows the servers immediately instead
+  /// of an empty list and a round trip. Refreshing stays an explicit action.
+  final List<NodeInfo> nodes;
+  final DateTime? fetchedAt;
+
+  /// Egress verifications, keyed by [NodeInfo.storageKey].
+  final Map<String, NodeVerification> verifications;
+
   const NodeCatalogPreferences({
     this.serverHost = '',
     this.serverPort = 1081,
     this.sessionKey,
     this.sortByLatency = false,
     this.latencies = const {},
+    this.nodes = const [],
+    this.fetchedAt,
+    this.verifications = const {},
   });
 
   factory NodeCatalogPreferences.fromJson(Map<String, dynamic> json) {
@@ -32,6 +45,27 @@ class NodeCatalogPreferences {
       }
     }
 
+    final nodes = <NodeInfo>[];
+    final rawNodes = json['nodes'];
+    if (rawNodes is List) {
+      for (final entry in rawNodes) {
+        final node = NodeInfo.fromJson(entry);
+        if (node != null) nodes.add(node);
+      }
+    }
+
+    final verifications = <String, NodeVerification>{};
+    final rawVerifications = json['verifications'];
+    if (rawVerifications is Map) {
+      for (final entry in rawVerifications.entries) {
+        final key = entry.key;
+        final verification = NodeVerification.fromJson(entry.value);
+        if (key is String && verification != null) {
+          verifications[key] = verification;
+        }
+      }
+    }
+
     return NodeCatalogPreferences(
       serverHost: json['serverHost'] is String
           ? json['serverHost'] as String
@@ -42,6 +76,11 @@ class NodeCatalogPreferences {
           : null,
       sortByLatency: json['sortByLatency'] == true,
       latencies: Map.unmodifiable(latencies),
+      nodes: List.unmodifiable(nodes),
+      fetchedAt: DateTime.tryParse(
+        json['fetchedAt']?.toString() ?? '',
+      )?.toLocal(),
+      verifications: Map.unmodifiable(verifications),
     );
   }
 
@@ -71,6 +110,11 @@ class NodeCatalogPreferences {
     'sessionKey': sessionKey,
     'sortByLatency': sortByLatency,
     'latencies': latencies,
+    'nodes': nodes.map((node) => node.toJson()).toList(),
+    'fetchedAt': fetchedAt?.toUtc().toIso8601String(),
+    'verifications': {
+      for (final entry in verifications.entries) entry.key: entry.value.toJson(),
+    },
   };
 
   NodeCatalogPreferences copyWith({
@@ -79,13 +123,48 @@ class NodeCatalogPreferences {
     String? sessionKey,
     bool? sortByLatency,
     Map<String, int>? latencies,
+    List<NodeInfo>? nodes,
+    DateTime? fetchedAt,
+    Map<String, NodeVerification>? verifications,
   }) => NodeCatalogPreferences(
     serverHost: serverHost ?? this.serverHost,
     serverPort: serverPort ?? this.serverPort,
     sessionKey: sessionKey ?? this.sessionKey,
     sortByLatency: sortByLatency ?? this.sortByLatency,
     latencies: latencies ?? this.latencies,
+    nodes: nodes ?? this.nodes,
+    fetchedAt: fetchedAt ?? this.fetchedAt,
+    verifications: verifications ?? this.verifications,
   );
+
+  /// Replaces the cached catalogue, dropping verifications for nodes the server
+  /// no longer lists so the store cannot grow without bound.
+  NodeCatalogPreferences withCatalog(List<NodeInfo> catalog, DateTime at) {
+    final live = catalog.map((node) => node.storageKey).toSet();
+    return copyWith(
+      nodes: List.unmodifiable(catalog),
+      fetchedAt: at,
+      verifications: Map.unmodifiable({
+        for (final entry in verifications.entries)
+          if (live.contains(entry.key)) entry.key: entry.value,
+      }),
+    );
+  }
+
+  NodeVerification? verificationFor(NodeInfo node) =>
+      verifications[node.storageKey];
+
+  NodeCatalogPreferences withVerification(
+    NodeInfo node,
+    NodeVerification verification,
+  ) {
+    return copyWith(
+      verifications: Map.unmodifiable({
+        ...verifications,
+        node.storageKey: verification,
+      }),
+    );
+  }
 
   int? latencyFor(NodeInfo node) =>
       latencies[_latencyKey(node)] ?? latencies[node.addr];
