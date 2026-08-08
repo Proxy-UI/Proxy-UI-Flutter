@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../models/node_model.dart';
 import '../providers/proxy_provider.dart';
+import '../utils/toast_utils.dart';
 import 'window_state_service.dart';
 
 enum _TrayStatus { connected, disconnected, error }
@@ -20,7 +22,6 @@ enum _TrayStatus { connected, disconnected, error }
 class TrayService with TrayListener {
   static TrayService? _instance;
   ProxyState? _proxyState;
-  bool _isWindowVisible = true;
   bool _initialized = false;
   bool _isDisposed = false;
 
@@ -62,11 +63,6 @@ class TrayService with TrayListener {
     trayManager.addListener(this);
     proxyState.addListener(_onProxyStateChanged);
 
-    try {
-      _isWindowVisible = await windowManager.isVisible();
-    } catch (error) {
-      debugPrint('Failed to read initial window visibility: $error');
-    }
     await _enqueue(_applyTray);
     _startHealthCheck();
   }
@@ -94,7 +90,6 @@ class TrayService with TrayListener {
   Future<void> handleSystemResume() async {
     if (_isDisposed || !_initialized) return;
     await rebuild();
-    await _refreshWindowVisibility();
   }
 
   /// Redraws the context menu from the current state.
@@ -218,48 +213,78 @@ class TrayService with TrayListener {
     if (proxyState == null) return;
 
     final isRunning = proxyState.isRunning;
+    final isTunRunning = proxyState.isTunRunning;
     final isBusy =
         proxyState.isProxyOperationInProgress || proxyState.isTunBusy;
     final config = proxyState.config;
     final status = _statusFor(proxyState);
+    final nodes = _menuNodes(proxyState);
     final menuSignature = Object.hash(
-      _isWindowVisible,
       status,
       isBusy,
+      isRunning,
+      isTunRunning,
       config.serverHost,
       config.serverPort,
+      proxyState.currentNodeId,
+      proxyState.hasLocalLogStorage,
+      Object.hashAll(nodes.map((node) => node.nodeId)),
     );
     if (_appliedMenuSignature == menuSignature) return;
 
     final statusLabel = isBusy
-        ? 'Proxy: Updating'
+        ? 'Updating…'
         : switch (status) {
-            _TrayStatus.connected => 'Proxy: Connected',
-            _TrayStatus.disconnected => 'Proxy: Disconnected',
-            _TrayStatus.error => 'Proxy: Connection error',
+            _TrayStatus.connected =>
+              isTunRunning ? 'Connected · TUN capturing' : 'Connected',
+            _TrayStatus.disconnected => 'Disconnected',
+            _TrayStatus.error => 'Connection error',
           };
-    final serverLabel = 'Server: ${config.serverHost}:${config.serverPort}';
+    final serverLabel = '${config.serverHost}:${config.serverPort}';
 
     final menu = Menu(
       items: [
-        MenuItem(
-          key: 'show_hide',
-          label: _isWindowVisible ? 'Hide Window' : 'Show Window',
-        ),
-        MenuItem.separator(),
+        // The two lines the tray exists to answer: is it on, and through what.
         MenuItem(key: 'status', label: statusLabel, disabled: true),
         MenuItem(key: 'server', label: serverLabel, disabled: true),
         MenuItem.separator(),
-        MenuItem(
-          key: 'start',
-          label: 'Start Proxy',
-          disabled: isRunning || isBusy,
+        // Checkboxes rather than a Start/Stop pair, one half of which was
+        // always greyed out and told the user nothing about the current state.
+        MenuItem.checkbox(
+          key: 'proxy',
+          label: 'Proxy',
+          checked: isRunning,
+          disabled: isBusy || config.serverHost.isEmpty,
         ),
-        MenuItem(
-          key: 'stop',
-          label: 'Stop Proxy',
-          disabled: !isRunning || isBusy,
+        MenuItem.checkbox(
+          key: 'tun',
+          label: 'TUN mode',
+          checked: isTunRunning,
+          // TUN captures through the local listener, so it cannot outlive it.
+          disabled: isBusy || !isRunning,
         ),
+        if (nodes.isNotEmpty) ...[
+          MenuItem.separator(),
+          MenuItem.submenu(
+            key: 'nodes',
+            label: 'Switch node',
+            disabled: isBusy,
+            submenu: Menu(
+              items: [
+                for (final node in nodes)
+                  MenuItem.checkbox(
+                    key: 'node:${node.nodeId}',
+                    label: _nodeLabel(node),
+                    checked: proxyState.isCurrentNode(node),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        MenuItem.separator(),
+        MenuItem(key: 'show', label: 'Show window'),
+        if (proxyState.hasLocalLogStorage)
+          MenuItem(key: 'logs', label: 'Open log folder'),
         MenuItem.separator(),
         MenuItem(key: 'quit', label: 'Quit'),
       ],
@@ -277,7 +302,10 @@ class TrayService with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    unawaited(_toggleWindow());
+    // Always raise. Toggling needed to know whether the window was already in
+    // front, and the only signal for that — focus — is unreliable at exactly
+    // the moment the tray is clicked, because the shell has just taken it.
+    unawaited(showWindow());
   }
 
   @override
@@ -292,28 +320,8 @@ class TrayService with TrayListener {
   }
 
   Future<void> _popUpContextMenu() async {
-    // The show/hide entry is the only place the cached visibility is visible to
-    // the user, so reconcile it with the real window right before the menu is
-    // drawn instead of polling on every proxy notification.
-    await _refreshWindowVisibility();
     await _enqueue(_applyMenu);
     await _call(trayManager.popUpContextMenu, 'popUpContextMenu');
-  }
-
-  Future<void> _refreshWindowVisibility() async {
-    try {
-      setWindowVisible(await windowManager.isVisible());
-    } catch (error) {
-      debugPrint('Failed to read window visibility: $error');
-    }
-  }
-
-  /// Records a visibility change made elsewhere (close-to-tray, activation from
-  /// a second launch) so the tray menu keeps offering the right action.
-  void setWindowVisible(bool visible) {
-    if (_isWindowVisible == visible) return;
-    _isWindowVisible = visible;
-    unawaited(_enqueue(_applyMenu));
   }
 
   Future<void> showWindow() async {
@@ -322,43 +330,108 @@ class TrayService with TrayListener {
     }
     await windowManager.show();
     await windowManager.focus();
-    setWindowVisible(true);
   }
 
-  Future<void> hideWindow() async {
-    await windowManager.hide();
-    setWindowVisible(false);
+  Future<void> hideWindow() => windowManager.hide();
+
+  /// Nodes worth offering in the menu.
+  ///
+  /// A context menu is a poor list widget, and a long server catalogue turns it
+  /// into one. Anything past this belongs on the nodes page.
+  static const int _maxMenuNodes = 12;
+
+  List<NodeInfo> _menuNodes(ProxyState proxyState) {
+    final nodes = proxyState.nodes;
+    return nodes.length <= _maxMenuNodes
+        ? nodes
+        : nodes.take(_maxMenuNodes).toList(growable: false);
   }
 
-  Future<void> _toggleWindow() async {
-    // A visible but backgrounded window should come forward instead of
-    // disappearing, which is what a single cached flag used to do.
-    final isVisible = await windowManager.isVisible();
-    final isFocused = isVisible && await windowManager.isFocused();
-    if (isVisible && isFocused) {
-      await hideWindow();
-    } else {
-      await showWindow();
-    }
+  String _nodeLabel(NodeInfo node) {
+    final name = node.displayName.trim();
+    // `displayName` is "country - region" and geo lookup can leave both empty.
+    final hasName = name.isNotEmpty && name != '-';
+    final label = hasName ? '$name (${node.addr})' : node.addr;
+    return node.latencyMs != null ? '$label · ${node.latencyDisplay}' : label;
   }
 
   Future<void> _handleMenuClick(String key) async {
     final proxyState = _proxyState;
     if (proxyState == null) return;
 
+    if (key.startsWith('node:')) {
+      await _switchNode(proxyState, key.substring('node:'.length));
+      return;
+    }
+
     switch (key) {
-      case 'show_hide':
-        await _toggleWindow();
+      case 'proxy':
+        if (proxyState.isRunning) {
+          proxyState.stop();
+        } else {
+          final started = await proxyState.start();
+          if (!started) {
+            ToastUtils.showError(proxyState.lastError ?? 'Could not start');
+          }
+        }
         break;
-      case 'start':
-        await proxyState.start();
+      case 'tun':
+        await _toggleTun(proxyState);
         break;
-      case 'stop':
-        proxyState.stop();
+      case 'show':
+        await showWindow();
+        break;
+      case 'logs':
+        try {
+          await proxyState.openLogDirectory();
+        } catch (error) {
+          ToastUtils.showError('Could not open the log folder: $error');
+        }
         break;
       case 'quit':
         await _quitApp();
         break;
+    }
+  }
+
+  Future<void> _toggleTun(ProxyState proxyState) async {
+    final enable = !proxyState.isTunRunning;
+    final result = await proxyState.setTunEnabled(enable);
+    // Null means an unelevated Windows instance launched its elevated
+    // replacement. This process has to release the port and go, exactly as the
+    // proxy page does when the switch is used there.
+    if (result == null) {
+      ToastUtils.showInfo('Restarting with administrator privileges for TUN');
+      proxyState.stopForElevationHandoff();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await proxyState.flushDesktopLogs();
+      exit(0);
+    }
+    if (result == false) {
+      ToastUtils.showError(proxyState.lastError ?? 'Failed to change TUN mode');
+    }
+  }
+
+  Future<void> _switchNode(ProxyState proxyState, String nodeId) async {
+    NodeInfo? target;
+    for (final node in proxyState.nodes) {
+      if (node.nodeId == nodeId) {
+        target = node;
+        break;
+      }
+    }
+    if (target == null) return;
+    if (proxyState.isCurrentNode(target)) return;
+
+    try {
+      final switched = await proxyState.switchToNode(target);
+      if (switched) {
+        ToastUtils.showSuccess('Switched to ${_nodeLabel(target)}');
+      } else {
+        ToastUtils.showError(proxyState.lastError ?? 'Could not switch node');
+      }
+    } catch (error) {
+      ToastUtils.showError('Could not switch node: $error');
     }
   }
 
