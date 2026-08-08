@@ -6,6 +6,7 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../providers/proxy_provider.dart';
+import 'window_state_service.dart';
 
 enum _TrayStatus { connected, disconnected, error }
 
@@ -266,6 +267,8 @@ class TrayService with TrayListener {
     } catch (error) {
       debugPrint('Failed to remove the tray icon on quit: $error');
     }
+    await WindowStateService.instance.saveNow();
+    await proxyState?.flushDesktopLogs();
     exit(0);
   }
 

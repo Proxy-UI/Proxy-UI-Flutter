@@ -483,6 +483,11 @@ class ProxyFFI {
         'proxy_relaunch_elevated_for_tun',
       );
 
+  late final proxyRestoreSystemProxy = lib
+      .lookupFunction<_ProxyNoArgResultNative, _ProxyNoArgResultDart>(
+        'proxy_restore_system_proxy',
+      );
+
   late final proxyListTunProcesses = lib
       .lookupFunction<_ProxyGetStringNative, _ProxyGetStringDart>(
         'proxy_list_tun_processes',

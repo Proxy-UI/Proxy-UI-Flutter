@@ -511,6 +511,21 @@ class ProxyService {
     return _ffi.proxyRelaunchElevatedForTun();
   }
 
+  /// Puts back a system proxy that a previous run took over but never released.
+  ///
+  /// Returns true when leftover settings were found and restored.
+  bool restoreOrphanedSystemProxy() {
+    if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) {
+      return false;
+    }
+    try {
+      return _ffi.proxyRestoreSystemProxy() == 1;
+    } on ArgumentError {
+      // An older native library without the export. Nothing to recover from.
+      return false;
+    }
+  }
+
   /// Stop proxy.
   int stop() {
     if (_handle == null) return ProxyResult.invalidParam;

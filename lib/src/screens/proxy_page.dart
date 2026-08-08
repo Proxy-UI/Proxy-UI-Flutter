@@ -120,6 +120,9 @@ class _ProxyPageState extends State<ProxyPage> {
       ToastUtils.showInfo('Restarting with administrator privileges for TUN');
       state.stopForElevationHandoff();
       await Future<void>.delayed(const Duration(milliseconds: 250));
+      // The elevated replacement is the interesting one to debug when TUN setup
+      // fails, and its predecessor's log tail explains how it got there.
+      await state.flushDesktopLogs();
       exit(0);
     }
     if (result) {

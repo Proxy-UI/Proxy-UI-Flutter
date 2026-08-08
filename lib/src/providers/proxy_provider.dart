@@ -103,6 +103,9 @@ class ProxyState extends ChangeNotifier {
   Future<void> _init() async {
     _service.initLogging();
     _logSubscription = ProxyService.logStream.listen(_onLog);
+    // Must run before anything can take the system proxy over again, so the
+    // settings captured below are the user's own and not a dead run's.
+    _service.restoreOrphanedSystemProxy();
     try {
       await _loadConfig();
     } finally {
@@ -151,6 +154,13 @@ class ProxyState extends ChangeNotifier {
   }
 
   Future<void> openLogDirectory() => _desktopLogService.openLogDirectory();
+
+  /// Drains the pending log queue to disk.
+  ///
+  /// The tray quit and the TUN elevation handoff both end in `exit`, which
+  /// skips Dart finalizers; without this the buffered entries that explain why
+  /// the app was shutting down are exactly the ones that get lost.
+  Future<void> flushDesktopLogs() => _desktopLogService.dispose();
 
   Future<void> _loadConfig() async {
     final prefs = await SharedPreferences.getInstance();

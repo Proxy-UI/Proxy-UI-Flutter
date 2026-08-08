@@ -8,8 +8,10 @@ import 'src/providers/proxy_provider.dart';
 import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
 import 'src/services/desktop_log_service.dart';
+import 'src/services/desktop_settings.dart';
 import 'src/services/single_instance_service.dart';
 import 'src/services/tray_service.dart';
+import 'src/services/window_state_service.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +42,9 @@ void main(List<String> arguments) async {
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
+      // Before the first show, so the window never appears at the default
+      // position and then jumps to the remembered one.
+      await WindowStateService.instance.restore();
       await windowManager.show();
       await windowManager.focus();
     });
@@ -56,6 +61,7 @@ void main(List<String> arguments) async {
             ),
           ),
           ChangeNotifierProvider(create: (_) => ThemeState()),
+          ChangeNotifierProvider(create: (_) => DesktopSettings()..load()),
         ],
         child: const ProxyApp(),
       ),
@@ -93,16 +99,50 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
   void dispose() {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       windowManager.removeListener(this);
+      WindowStateService.instance.dispose();
     }
     super.dispose();
   }
 
   @override
   Future<void> onWindowClose() async {
+    // The reliable moment to record the frame: window_manager only reports
+    // "moved"/"resized" after an interactive drag, so snapping or any
+    // programmatic move would otherwise never be saved.
+    await WindowStateService.instance.saveNow();
     // Hide to tray instead of closing. The tray menu's show/hide entry tracks
     // this, so it has to learn about the change here too.
     await TrayService.instance.hideWindow();
   }
+
+  @override
+  Future<void> onWindowMinimize() async {
+    if (!mounted || !context.read<DesktopSettings>().minimizeToTray) return;
+    // A background proxy has no reason to keep a taskbar button; the tray icon
+    // is the way back in.
+    await TrayService.instance.hideWindow();
+  }
+
+  @override
+  void onWindowResize() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowResized() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowMove() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowMoved() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowMaximize() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowUnmaximize() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowRestore() => WindowStateService.instance.scheduleSave();
 
   @override
   Widget build(BuildContext context) {

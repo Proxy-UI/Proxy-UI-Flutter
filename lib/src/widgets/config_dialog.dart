@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
 import '../models/proxy_config.dart';
+import '../services/desktop_settings.dart';
 import '../utils/toast_utils.dart';
 import 'lan_proxy_link.dart';
 
@@ -26,11 +27,16 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late bool _udpDirectFallback;
   late bool _reverseGeo;
   late bool _forceCodec;
+  late bool _minimizeToTray;
+  late bool _launchAtStartup;
 
   @override
   void initState() {
     super.initState();
     final config = context.read<ProxyState>().config;
+    final desktop = context.read<DesktopSettings>();
+    _minimizeToTray = desktop.minimizeToTray;
+    _launchAtStartup = desktop.launchAtStartup;
     _hostController = TextEditingController(text: config.serverHost);
     _serverPortController = TextEditingController(
       text: config.serverPort.toString(),
@@ -64,8 +70,10 @@ class _ConfigDialogState extends State<ConfigDialog> {
     if (_allowLan) setState(() {});
   }
 
-  void _save() {
+  Future<void> _save() async {
     final state = context.read<ProxyState>();
+    final desktop = context.read<DesktopSettings>();
+    final navigator = Navigator.of(context);
     state.updateConfig(
       ProxyConfigModel(
         serverHost: _hostController.text.trim(),
@@ -88,7 +96,19 @@ class _ConfigDialogState extends State<ConfigDialog> {
         setSystemProxy: state.config.setSystemProxy,
       ),
     );
-    Navigator.of(context).pop();
+
+    await desktop.setMinimizeToTray(_minimizeToTray);
+    // Windows owns the sign-in entry, so this is the one setting that can be
+    // refused; report that rather than closing on a switch that did nothing.
+    final startupError = DesktopSettings.supportsLaunchAtStartup
+        ? await desktop.setLaunchAtStartup(_launchAtStartup)
+        : null;
+
+    navigator.pop();
+    if (startupError != null) {
+      ToastUtils.showError(startupError);
+      return;
+    }
     ToastUtils.showSuccess('Configuration saved');
   }
 
@@ -213,6 +233,34 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 value: _forceCodec,
                 onChanged: (v) => setState(() => _forceCodec = v),
               ),
+              if (DesktopSettings.isSupported) ...[
+                const SizedBox(height: 24),
+                Text('Desktop', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.minimize_outlined),
+                  title: const Text('Minimize to tray'),
+                  subtitle: const Text(
+                    'Hide the taskbar button when minimized. The tray icon '
+                    'brings the window back.',
+                  ),
+                  value: _minimizeToTray,
+                  onChanged: (v) => setState(() => _minimizeToTray = v),
+                ),
+                if (DesktopSettings.supportsLaunchAtStartup)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.power_settings_new_outlined),
+                    title: const Text('Start at sign-in'),
+                    subtitle: const Text(
+                      'Launch automatically when you sign in to Windows. The '
+                      'proxy still has to be started manually.',
+                    ),
+                    value: _launchAtStartup,
+                    onChanged: (v) => setState(() => _launchAtStartup = v),
+                  ),
+              ],
             ],
           ),
         ),

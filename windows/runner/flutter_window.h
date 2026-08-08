@@ -35,6 +35,10 @@ class FlutterWindow : public Win32Window {
   // its own window and tray state with the raise this window already performed.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       single_instance_channel_;
+
+  // Reads and writes the per-user "start when I sign in" entry for Dart.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      startup_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
