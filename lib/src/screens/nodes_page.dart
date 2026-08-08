@@ -27,6 +27,7 @@ class _NodesPageState extends State<NodesPage> {
   bool _isPingingAll = false;
   String? _selectedGroupId;
   String _searchQuery = '';
+  String? _selectedCountry;
 
   void _initializeControlFields(ProxyState state) {
     _hostController.text = state.nodesServerHost.isEmpty
@@ -379,8 +380,44 @@ class _NodesPageState extends State<NodesPage> {
       nodes: state.nodes,
       groups: state.groups,
       selectedGroupId: _selectedGroupId,
+      selectedCountry: _selectedCountry,
       query: _searchQuery,
       sortByLatency: state.sortNodesByLatency,
+      countryOf: state.effectiveCountry,
+    );
+  }
+
+  /// One chip per country in the catalogue, so picking a region is a click
+  /// rather than a search term the user has to know.
+  Widget _buildCountryChips(ProxyState state) {
+    final facets = countryFacets(
+      nodes: state.nodes,
+      countryOf: state.effectiveCountry,
+    );
+    if (facets.length < 2) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilterChip(
+            label: Text('All (${state.nodes.length})'),
+            selected: _selectedCountry == null,
+            onSelected: (_) => setState(() => _selectedCountry = null),
+          ),
+          for (final facet in facets)
+            FilterChip(
+              avatar: _buildCountryFlag(facet.code),
+              label: Text('${facet.code} (${facet.count})'),
+              selected: _selectedCountry == facet.code,
+              onSelected: (selected) => setState(
+                () => _selectedCountry = selected ? facet.code : null,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -448,14 +485,21 @@ class _NodesPageState extends State<NodesPage> {
               _buildSearchField(),
               const SizedBox(height: 8),
               Align(alignment: Alignment.centerRight, child: actions),
+              _buildCountryChips(state),
             ],
           );
         }
-        return Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _buildSearchField()),
-            const SizedBox(width: 8),
-            actions,
+            Row(
+              children: [
+                Expanded(child: _buildSearchField()),
+                const SizedBox(width: 8),
+                actions,
+              ],
+            ),
+            _buildCountryChips(state),
           ],
         );
       },
@@ -598,6 +642,7 @@ class _NodesPageState extends State<NodesPage> {
 
   Widget _buildNodeCard(BuildContext context, ProxyState state, NodeInfo node) {
     final isCurrent = state.isCurrentNode(node);
+    final verificationNote = _buildVerificationNote(context, state, node);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -629,11 +674,12 @@ class _NodesPageState extends State<NodesPage> {
                     ),
                   ),
                 if (isCurrent) const SizedBox(width: 8),
-                _buildCountryFlag(node.country),
+                _buildNodeFlag(context, state, node),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${node.country}${node.region.isNotEmpty ? ' - ${node.region}' : ''}',
+                    '${state.effectiveCountry(node)}'
+                    '${node.region.isNotEmpty ? ' - ${node.region}' : ''}',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -675,6 +721,11 @@ class _NodesPageState extends State<NodesPage> {
               ),
             ],
 
+            if (verificationNote != null) ...[
+              const SizedBox(height: 4),
+              verificationNote,
+            ],
+
             const SizedBox(height: 12),
 
             // Action buttons
@@ -706,6 +757,25 @@ class _NodesPageState extends State<NodesPage> {
                         )
                       : const Icon(Icons.speed, size: 18),
                   label: const Text('Ping'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: state.isVerifyingNode(node)
+                      ? null
+                      : () => _verifyNode(context, node),
+                  icon: state.isVerifyingNode(node)
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.travel_explore, size: 18),
+                  label: const Text('Verify'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -757,6 +827,46 @@ class _NodesPageState extends State<NodesPage> {
     }
   }
 
+  /// The flag slot, which doubles as the verification indicator.
+  ///
+  /// A node that did not answer gets a distinct mark rather than the flag of a
+  /// country its traffic never reaches — the whole point of verifying is that
+  /// the catalogue's claim cannot be trusted on its own.
+  Widget _buildNodeFlag(BuildContext context, ProxyState state, NodeInfo node) {
+    final theme = Theme.of(context);
+    if (state.isVerifyingNode(node)) {
+      return const SizedBox(
+        width: 28,
+        height: 20,
+        child: Center(
+          child: SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final verification = state.verificationFor(node);
+    if (verification != null && !verification.isVerified) {
+      return Tooltip(
+        message: verification.error ?? 'This node did not answer',
+        child: SizedBox(
+          width: 28,
+          height: 20,
+          child: Icon(
+            Icons.cloud_off,
+            size: 18,
+            color: theme.colorScheme.error,
+          ),
+        ),
+      );
+    }
+
+    return _buildCountryFlag(state.effectiveCountry(node));
+  }
+
   /// Extract country code from string and build flag widget
   Widget _buildCountryFlag(String country) {
     // Try to find a 2-letter country code in the string
@@ -770,5 +880,62 @@ class _NodesPageState extends State<NodesPage> {
     }
     // Fallback to a generic icon
     return const Icon(Icons.flag, size: 20);
+  }
+
+  /// One line describing what the last probe found, or nothing before one ran.
+  Widget? _buildVerificationNote(
+    BuildContext context,
+    ProxyState state,
+    NodeInfo node,
+  ) {
+    final verification = state.verificationFor(node);
+    if (verification == null) return null;
+    final theme = Theme.of(context);
+
+    if (!verification.isVerified) {
+      return Text(
+        'Unreachable · ${verification.error ?? 'no answer'}',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.error,
+        ),
+      );
+    }
+
+    final drifted = verification.disagreesWith(node.country);
+    final parts = <String>[
+      'Egress ${verification.countryCode}',
+      if (verification.egressIp.isNotEmpty) verification.egressIp,
+      if (verification.latencyMs != null) '${verification.latencyMs}ms',
+    ];
+    return Text(
+      drifted
+          ? '${parts.join(' · ')} — catalogue says ${node.country}'
+          : parts.join(' · '),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: drifted
+            ? theme.colorScheme.tertiary
+            : theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  Future<void> _verifyNode(BuildContext context, NodeInfo node) async {
+    final state = context.read<ProxyState>();
+    final verification = await state.verifyNode(node);
+    if (verification == null) return;
+    if (verification.isVerified) {
+      ToastUtils.showSuccess(
+        'Traffic leaves from ${verification.countryCode}'
+        '${verification.egressIp.isEmpty ? '' : ' (${verification.egressIp})'}',
+      );
+    } else {
+      ToastUtils.showError(
+        verification.error ?? 'Could not reach ${node.addr}',
+      );
+    }
   }
 }

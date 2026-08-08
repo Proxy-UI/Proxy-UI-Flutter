@@ -101,4 +101,82 @@ void main() {
       [nodes[2], nodes[0], nodes[1]],
     );
   });
+
+  test('a two-letter term is a country code, not a substring', () {
+    // "lo" appears inside "Los Angeles", which is exactly the kind of accidental
+    // hit that made country search useless.
+    expect(filterNodeCatalog(nodes: nodes, groups: groups, query: 'lo'), []);
+    expect(filterNodeCatalog(nodes: nodes, groups: groups, query: 'us'), [
+      nodes[2],
+    ]);
+    // Longer terms keep matching anywhere.
+    expect(filterNodeCatalog(nodes: nodes, groups: groups, query: 'angeles'), [
+      nodes[2],
+    ]);
+  });
+
+  test('a verified country is searchable alongside the claimed one', () {
+    String verified(NodeInfo node) =>
+        node.nodeId == 'hk-01' ? 'JP' : node.country;
+
+    expect(
+      filterNodeCatalog(
+        nodes: nodes,
+        groups: groups,
+        query: 'jp',
+        countryOf: verified,
+      ),
+      [nodes[0]],
+      reason: 'the country its traffic actually leaves from',
+    );
+    expect(
+      filterNodeCatalog(
+        nodes: nodes,
+        groups: groups,
+        query: 'hk',
+        countryOf: verified,
+      ),
+      [nodes[0]],
+      reason: 'the country the catalogue still advertises',
+    );
+  });
+
+  test('country selection filters on the resolved country', () {
+    String verified(NodeInfo node) =>
+        node.nodeId == 'hk-01' ? 'JP' : node.country;
+
+    expect(
+      filterNodeCatalog(
+        nodes: nodes,
+        groups: groups,
+        selectedCountry: 'JP',
+        countryOf: verified,
+      ),
+      [nodes[0]],
+    );
+    expect(
+      filterNodeCatalog(nodes: nodes, groups: groups, selectedCountry: 'HK'),
+      [nodes[0]],
+    );
+  });
+
+  test('country facets are ordered by population then alphabetically', () {
+    final extra = [
+      ...nodes,
+      NodeInfo(
+        nodeId: 'us-02',
+        addr: '10.0.0.4:1081',
+        lastSeen: now,
+        country: 'US',
+        region: 'New York',
+      ),
+    ];
+
+    expect(countryFacets(nodes: extra).map((facet) => facet.code).toList(), [
+      'US',
+      'HK',
+      'SG',
+    ]);
+    expect(countryFacets(nodes: extra).first.count, 2);
+  });
 }
