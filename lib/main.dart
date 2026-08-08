@@ -8,6 +8,7 @@ import 'src/providers/proxy_provider.dart';
 import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
 import 'src/services/desktop_log_service.dart';
+import 'src/services/single_instance_service.dart';
 import 'src/services/tray_service.dart';
 
 void main(List<String> arguments) async {
@@ -77,7 +78,11 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
     // Initialize tray and window listener for desktop platforms
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        TrayService.instance.initialize(context);
+        if (!mounted) return;
+        TrayService.instance.initialize(context.read<ProxyState>());
+        // Must follow the tray so an activation arriving during startup finds
+        // a service that can already show the window.
+        SingleInstanceService.instance.initialize();
       });
       windowManager.addListener(this);
       windowManager.setPreventClose(true);
@@ -94,8 +99,9 @@ class _ProxyAppState extends State<ProxyApp> with WindowListener {
 
   @override
   Future<void> onWindowClose() async {
-    // Hide to tray instead of closing
-    await windowManager.hide();
+    // Hide to tray instead of closing. The tray menu's show/hide entry tracks
+    // this, so it has to learn about the change here too.
+    await TrayService.instance.hideWindow();
   }
 
   @override

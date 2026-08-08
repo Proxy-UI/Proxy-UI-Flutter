@@ -1,8 +1,18 @@
 #include "flutter_window.h"
 
+#include <flutter/standard_method_codec.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "single_instance.h"
+
+namespace {
+
+constexpr char kSingleInstanceChannel[] = "proxy_ui/single_instance";
+constexpr char kSecondInstanceMethod[] = "onSecondInstance";
+
+}  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -27,6 +37,12 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  single_instance_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), kSingleInstanceChannel,
+          &flutter::StandardMethodCodec::GetInstance());
+  single_instance::RegisterMainWindow(GetHandle());
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -40,6 +56,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  single_instance_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -51,6 +68,22 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  const UINT activation_message = single_instance::ActivationMessage();
+  if (activation_message != 0 && message == activation_message) {
+    // Raise the window here rather than from Dart: this runs while the second
+    // process is still alive and holding the foreground grant open, and it also
+    // works when the UI isolate is busy.
+    single_instance::RaiseWindow(hwnd);
+    if (single_instance_channel_) {
+      single_instance_channel_->InvokeMethod(kSecondInstanceMethod, nullptr);
+    }
+    return 0;
+  }
+
+  if (message == WM_DESTROY) {
+    single_instance::UnregisterMainWindow(hwnd);
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

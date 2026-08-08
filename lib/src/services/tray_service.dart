@@ -1,18 +1,34 @@
+import 'dart:async';
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+
+import 'package:flutter/foundation.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+
 import '../providers/proxy_provider.dart';
 
 enum _TrayStatus { connected, disconnected, error }
 
+/// Owns the desktop notification icon and keeps it consistent with
+/// [ProxyState].
+///
+/// Every shell call is funnelled through a single queue. `ProxyState` notifies
+/// on a 100 ms log cadence while traffic flows, and overlapping
+/// `Shell_NotifyIcon` calls on Windows race on the same notification icon.
 class TrayService with TrayListener {
   static TrayService? _instance;
-  BuildContext? _context;
+  ProxyState? _proxyState;
   bool _isWindowVisible = true;
-  _TrayStatus? _currentIconStatus;
-  int? _currentMenuSignature;
+  bool _initialized = false;
+
+  /// State the shell has actually accepted. Both are cleared before a platform
+  /// call and only restored after it succeeds, so a failed call can never leave
+  /// the tray frozen on a stale icon or menu.
+  _TrayStatus? _appliedIconStatus;
+  int? _appliedMenuSignature;
+
+  Future<void> _queue = Future<void>.value();
+  bool _needsRebuild = false;
 
   TrayService._();
 
@@ -21,24 +37,59 @@ class TrayService with TrayListener {
     return _instance!;
   }
 
-  Future<void> initialize(BuildContext context) async {
-    _context = context;
+  Future<void> initialize(ProxyState proxyState) async {
+    if (_initialized) return;
+    _initialized = true;
+
+    _proxyState = proxyState;
     trayManager.addListener(this);
+    proxyState.addListener(_onProxyStateChanged);
 
-    await _updateTrayIcon(_TrayStatus.disconnected);
-    await _updateTrayMenu();
-
-    if (_context != null) {
-      _context!.read<ProxyState>().addListener(_onProxyStateChanged);
+    try {
+      _isWindowVisible = await windowManager.isVisible();
+    } catch (error) {
+      debugPrint('Failed to read initial window visibility: $error');
     }
+    await _enqueue(_applyTray);
+  }
+
+  /// Deletes and re-adds the notification icon.
+  ///
+  /// `NIM_MODIFY` silently fails once the shell has dropped an icon, so a
+  /// disappeared icon can only be recovered by adding it again.
+  Future<void> rebuild() {
+    _needsRebuild = true;
+    return _enqueue(_applyTray);
   }
 
   void _onProxyStateChanged() {
-    if (_context != null) {
-      final proxyState = _context!.read<ProxyState>();
-      _updateTrayIcon(_statusFor(proxyState));
-      _updateTrayMenu();
+    unawaited(_enqueue(_applyTray));
+  }
+
+  /// Serializes tray work and keeps the queue alive across failures.
+  Future<void> _enqueue(Future<void> Function() action) {
+    _queue = _queue.then((_) => action()).catchError((Object error) {
+      // The shell rejected the update. Recreate the icon on the next pass
+      // rather than leaving the tray stuck on whatever it last accepted.
+      _needsRebuild = true;
+      debugPrint('Tray update failed: $error');
+    });
+    return _queue;
+  }
+
+  Future<void> _applyTray() async {
+    if (_needsRebuild) {
+      _needsRebuild = false;
+      _appliedIconStatus = null;
+      _appliedMenuSignature = null;
+      try {
+        await trayManager.destroy();
+      } catch (error) {
+        debugPrint('Failed to drop the previous tray icon: $error');
+      }
     }
+    await _applyIcon();
+    await _applyMenu();
   }
 
   _TrayStatus _statusFor(ProxyState proxyState) {
@@ -47,11 +98,14 @@ class TrayService with TrayListener {
     return _TrayStatus.disconnected;
   }
 
-  Future<void> _updateTrayIcon(_TrayStatus status) async {
+  Future<void> _applyIcon() async {
+    final proxyState = _proxyState;
+    if (proxyState == null) return;
+
+    final status = _statusFor(proxyState);
     // ProxyState also notifies for every log line. Avoid repeatedly replacing
     // the native tray icon when the connection state has not changed.
-    if (_currentIconStatus == status) return;
-    _currentIconStatus = status;
+    if (_appliedIconStatus == status) return;
 
     final (iconName, tooltipStatus) = switch (status) {
       _TrayStatus.connected => ('tray_icon', 'Connected'),
@@ -61,14 +115,17 @@ class TrayService with TrayListener {
     final iconPath = Platform.isWindows
         ? 'assets/tray/$iconName.ico'
         : 'assets/tray/$iconName.png';
+
+    _appliedIconStatus = null;
     await trayManager.setIcon(iconPath);
     await trayManager.setToolTip('Proxy Everything - $tooltipStatus');
+    _appliedIconStatus = status;
   }
 
-  Future<void> _updateTrayMenu() async {
-    if (_context == null) return;
+  Future<void> _applyMenu() async {
+    final proxyState = _proxyState;
+    if (proxyState == null) return;
 
-    final proxyState = _context!.read<ProxyState>();
     final isRunning = proxyState.isRunning;
     final config = proxyState.config;
     final status = _statusFor(proxyState);
@@ -78,8 +135,7 @@ class TrayService with TrayListener {
       config.serverHost,
       config.serverPort,
     );
-    if (_currentMenuSignature == menuSignature) return;
-    _currentMenuSignature = menuSignature;
+    if (_appliedMenuSignature == menuSignature) return;
 
     final statusLabel = switch (status) {
       _TrayStatus.connected => 'Proxy: Connected',
@@ -105,48 +161,91 @@ class TrayService with TrayListener {
       ],
     );
 
+    _appliedMenuSignature = null;
     await trayManager.setContextMenu(menu);
+    _appliedMenuSignature = menuSignature;
   }
 
   @override
   void onTrayIconMouseDown() {
-    _toggleWindow();
+    unawaited(_toggleWindow());
   }
 
   @override
   void onTrayIconRightMouseDown() {
-    trayManager.popUpContextMenu();
+    unawaited(_popUpContextMenu());
   }
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
-    _handleMenuClick(menuItem.key!);
+    final key = menuItem.key;
+    if (key != null) unawaited(_handleMenuClick(key));
+  }
+
+  Future<void> _popUpContextMenu() async {
+    // The show/hide entry is the only place the cached visibility is visible to
+    // the user, so reconcile it with the real window right before the menu is
+    // drawn instead of polling on every proxy notification.
+    await _refreshWindowVisibility();
+    await _enqueue(_applyMenu);
+    await trayManager.popUpContextMenu();
+  }
+
+  Future<void> _refreshWindowVisibility() async {
+    try {
+      setWindowVisible(await windowManager.isVisible());
+    } catch (error) {
+      debugPrint('Failed to read window visibility: $error');
+    }
+  }
+
+  /// Records a visibility change made elsewhere (close-to-tray, activation from
+  /// a second launch) so the tray menu keeps offering the right action.
+  void setWindowVisible(bool visible) {
+    if (_isWindowVisible == visible) return;
+    _isWindowVisible = visible;
+    unawaited(_enqueue(_applyMenu));
+  }
+
+  Future<void> showWindow() async {
+    if (await windowManager.isMinimized()) {
+      await windowManager.restore();
+    }
+    await windowManager.show();
+    await windowManager.focus();
+    setWindowVisible(true);
+  }
+
+  Future<void> hideWindow() async {
+    await windowManager.hide();
+    setWindowVisible(false);
   }
 
   Future<void> _toggleWindow() async {
-    if (_isWindowVisible) {
-      await windowManager.hide();
-      _isWindowVisible = false;
+    // A visible but backgrounded window should come forward instead of
+    // disappearing, which is what a single cached flag used to do.
+    final isVisible = await windowManager.isVisible();
+    final isFocused = isVisible && await windowManager.isFocused();
+    if (isVisible && isFocused) {
+      await hideWindow();
     } else {
-      await windowManager.show();
-      await windowManager.focus();
-      _isWindowVisible = true;
+      await showWindow();
     }
-    await _updateTrayMenu();
   }
 
   Future<void> _handleMenuClick(String key) async {
-    if (_context == null) return;
+    final proxyState = _proxyState;
+    if (proxyState == null) return;
 
     switch (key) {
       case 'show_hide':
         await _toggleWindow();
         break;
       case 'start':
-        await _context!.read<ProxyState>().start();
+        await proxyState.start();
         break;
       case 'stop':
-        _context!.read<ProxyState>().stop();
+        proxyState.stop();
         break;
       case 'quit':
         await _quitApp();
@@ -155,17 +254,25 @@ class TrayService with TrayListener {
   }
 
   Future<void> _quitApp() async {
-    if (_context != null) {
-      final proxyState = _context!.read<ProxyState>();
-      if (proxyState.isRunning) {
-        proxyState.stop();
-      }
+    final proxyState = _proxyState;
+    // Stopping releases the native system-proxy guard. `exit` skips Dart and
+    // Rust teardown, so the system proxy would otherwise keep pointing at a
+    // listener that no longer exists.
+    if (proxyState != null && proxyState.isRunning) {
+      proxyState.stop();
     }
-    await trayManager.destroy();
+    try {
+      await trayManager.destroy();
+    } catch (error) {
+      debugPrint('Failed to remove the tray icon on quit: $error');
+    }
     exit(0);
   }
 
   void dispose() {
     trayManager.removeListener(this);
+    _proxyState?.removeListener(_onProxyStateChanged);
+    _proxyState = null;
+    _initialized = false;
   }
 }
