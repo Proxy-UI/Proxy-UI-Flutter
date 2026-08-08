@@ -2,6 +2,7 @@ import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/node_filter.dart';
 import '../models/node_model.dart';
 import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
@@ -20,20 +21,28 @@ class _NodesPageState extends State<NodesPage> {
   final _hostController = TextEditingController();
   final _portController = TextEditingController();
   final _keyController = TextEditingController();
+  final _searchController = TextEditingController();
   bool _showConfig = true;
+  bool _controlFieldsInitialized = false;
+  bool _isPingingAll = false;
   String? _selectedGroupId;
+  String _searchQuery = '';
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final state = context.read<ProxyState>();
-      _hostController.text = state.nodesServerHost.isEmpty
-          ? state.config.serverHost
-          : state.nodesServerHost;
-      _portController.text = state.nodesServerPort.toString();
-      _keyController.text = state.nodesSessionKey ?? '';
-    });
+  void _initializeControlFields(ProxyState state) {
+    _hostController.text = state.nodesServerHost.isEmpty
+        ? state.config.serverHost
+        : state.nodesServerHost;
+    _portController.text = state.nodesServerPort.toString();
+    _keyController.text = state.nodesSessionKey ?? '';
+    _controlFieldsInitialized = true;
+  }
+
+  void _persistControlFields() {
+    context.read<ProxyState>().updateNodesServerConfig(
+      host: _hostController.text.trim(),
+      port: int.tryParse(_portController.text),
+      sessionKey: _keyController.text.trim(),
+    );
   }
 
   @override
@@ -41,6 +50,7 @@ class _NodesPageState extends State<NodesPage> {
     _hostController.dispose();
     _portController.dispose();
     _keyController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -88,7 +98,7 @@ class _NodesPageState extends State<NodesPage> {
         if (success) {
           ToastUtils.showSuccess('Switched to ${node.displayName}');
         } else {
-          ToastUtils.showError('Failed to start proxy');
+          ToastUtils.showError(state.lastError ?? 'Failed to switch node');
         }
       }
     } catch (e) {
@@ -109,7 +119,7 @@ class _NodesPageState extends State<NodesPage> {
     });
 
     try {
-      await state.pingCurrentNode();
+      await state.pingNode(node);
       // No toast on success - latency is already displayed on the card
     } catch (e) {
       if (mounted) {
@@ -124,10 +134,55 @@ class _NodesPageState extends State<NodesPage> {
     }
   }
 
+  Future<void> _pingAllNodes(ProxyState state) async {
+    if (_isPingingAll) return;
+    final nodes = _filterNodes(state);
+    if (nodes.isEmpty) return;
+
+    setState(() {
+      _isPingingAll = true;
+      for (final node in nodes) {
+        _pingLoading[node.nodeId] = true;
+      }
+    });
+    var nextIndex = 0;
+    var failures = 0;
+
+    Future<void> worker() async {
+      while (nextIndex < nodes.length) {
+        final node = nodes[nextIndex++];
+        try {
+          await state.pingNode(node);
+        } catch (_) {
+          failures++;
+        } finally {
+          if (mounted) {
+            setState(() => _pingLoading[node.nodeId] = false);
+          }
+        }
+      }
+    }
+
+    final workerCount = nodes.length < 8 ? nodes.length : 8;
+    await Future.wait(List.generate(workerCount, (_) => worker()));
+    if (!mounted) return;
+    setState(() => _isPingingAll = false);
+    if (failures == 0) {
+      ToastUtils.showSuccess('Pinged ${nodes.length} nodes');
+    } else {
+      ToastUtils.showError(
+        'Ping completed: ${nodes.length - failures} succeeded, $failures failed',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ProxyState>(
       builder: (context, state, _) {
+        if (state.isInitialized && !_controlFieldsInitialized) {
+          _initializeControlFields(state);
+        }
         return Column(
           children: [
             // Server config card
@@ -167,6 +222,7 @@ class _NodesPageState extends State<NodesPage> {
                             flex: 3,
                             child: TextField(
                               controller: _hostController,
+                              onChanged: (_) => _persistControlFields(),
                               decoration: const InputDecoration(
                                 labelText: 'Host',
                                 hintText: 'e.g. 192.168.1.100',
@@ -180,6 +236,7 @@ class _NodesPageState extends State<NodesPage> {
                             flex: 1,
                             child: TextField(
                               controller: _portController,
+                              onChanged: (_) => _persistControlFields(),
                               decoration: const InputDecoration(
                                 labelText: 'Port',
                                 isDense: true,
@@ -193,6 +250,7 @@ class _NodesPageState extends State<NodesPage> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: _keyController,
+                        onChanged: (_) => _persistControlFields(),
                         decoration: const InputDecoration(
                           labelText: 'Session Key (optional)',
                           isDense: true,
@@ -304,10 +362,12 @@ class _NodesPageState extends State<NodesPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _buildNodeToolbar(state),
+        const SizedBox(height: 12),
         if (state.groups.isNotEmpty) _buildGroupSelector(state),
         if (state.groups.isNotEmpty) const SizedBox(height: 12),
         if (filteredNodes.isEmpty)
-          _buildEmptyGroupState(state)
+          _buildEmptyFilterState(state)
         else
           ...filteredNodes.map((node) => _buildNodeCard(context, state, node)),
       ],
@@ -315,20 +375,114 @@ class _NodesPageState extends State<NodesPage> {
   }
 
   List<NodeInfo> _filterNodes(ProxyState state) {
-    if (_selectedGroupId == null) {
-      return state.nodes;
-    }
-    if (state.groups.isEmpty) {
-      return state.nodes;
-    }
-    final group = state.groups.firstWhere(
-      (g) => g.groupId == _selectedGroupId,
-      orElse: () => state.groups.first,
+    return filterNodeCatalog(
+      nodes: state.nodes,
+      groups: state.groups,
+      selectedGroupId: _selectedGroupId,
+      query: _searchQuery,
+      sortByLatency: state.sortNodesByLatency,
     );
-    final nodeIdSet = group.nodeIds.toSet();
-    return state.nodes
-        .where((node) => nodeIdSet.contains(node.nodeId))
-        .toList();
+  }
+
+  Widget _buildNodeToolbar(ProxyState state) {
+    final actions = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          onPressed: _isPingingAll ? null : () => _pingAllNodes(state),
+          icon: _isPingingAll
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.network_ping, size: 18),
+          label: const Text('Ping all'),
+        ),
+        PopupMenuButton<bool>(
+          tooltip: 'Sort nodes',
+          initialValue: state.sortNodesByLatency,
+          onSelected: state.setSortNodesByLatency,
+          itemBuilder: (context) => [
+            CheckedPopupMenuItem(
+              value: false,
+              checked: !state.sortNodesByLatency,
+              child: const Text('Server order'),
+            ),
+            CheckedPopupMenuItem(
+              value: true,
+              checked: state.sortNodesByLatency,
+              child: const Text('Latency'),
+            ),
+          ],
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.sort, size: 18),
+                const SizedBox(width: 8),
+                Text(state.sortNodesByLatency ? 'Latency' : 'Server order'),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 720) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSearchField(),
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerRight, child: actions),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: _buildSearchField()),
+            const SizedBox(width: 8),
+            actions,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchField() {
+    return TextField(
+      controller: _searchController,
+      onChanged: (value) => setState(() => _searchQuery = value),
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Search nodes, regions, addresses, or groups',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _searchQuery.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+              ),
+        border: const OutlineInputBorder(),
+      ),
+    );
   }
 
   Widget _buildGroupSelector(ProxyState state) {
@@ -387,7 +541,29 @@ class _NodesPageState extends State<NodesPage> {
     );
   }
 
-  Widget _buildEmptyGroupState(ProxyState state) {
+  Widget _buildEmptyFilterState(ProxyState state) {
+    if (_searchQuery.trim().isNotEmpty) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.search_off),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'No nodes match "${_searchQuery.trim()}"',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (_selectedGroupId == null) {
       return const SizedBox.shrink();
     }
@@ -422,7 +598,6 @@ class _NodesPageState extends State<NodesPage> {
 
   Widget _buildNodeCard(BuildContext context, ProxyState state, NodeInfo node) {
     final isCurrent = state.isCurrentNode(node);
-    final canPing = isCurrent && state.isRunning;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -503,7 +678,9 @@ class _NodesPageState extends State<NodesPage> {
             const SizedBox(height: 12),
 
             // Action buttons
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 // Export Config button (always available)
                 ElevatedButton.icon(
@@ -517,32 +694,29 @@ class _NodesPageState extends State<NodesPage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-
-                // Switch or Ping button
-                if (isCurrent && canPing)
-                  ElevatedButton.icon(
-                    onPressed: _pingLoading[node.nodeId] == true
-                        ? null
-                        : () => _pingNode(context, node),
-                    icon: _pingLoading[node.nodeId] == true
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.speed, size: 18),
-                    label: const Text('Ping'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                ElevatedButton.icon(
+                  onPressed: _pingLoading[node.nodeId] == true
+                      ? null
+                      : () => _pingNode(context, node),
+                  icon: _pingLoading[node.nodeId] == true
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.speed, size: 18),
+                  label: const Text('Ping'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
-                  )
-                else if (!isCurrent)
+                  ),
+                ),
+                if (!isCurrent)
                   ElevatedButton.icon(
-                    onPressed: _switchLoading[node.nodeId] == true
+                    onPressed:
+                        _switchLoading[node.nodeId] == true || state.isTunBusy
                         ? null
                         : () => _switchNode(context, node),
                     icon: _switchLoading[node.nodeId] == true

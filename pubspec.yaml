@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.2.2
+version: 1.2.10+16
 
 environment:
   sdk: ^3.9.0
@@ -37,8 +37,16 @@ dependencies:
   shared_preferences: ^2.2.0
   shelf: ^1.4.0
   network_info_plus: ^5.0.0
-  tray_manager: ^0.5.2
+  # 0.5.x is the first series whose Windows plugin re-adds the notification
+  # icon when the shell broadcasts TaskbarCreated (Explorer restart) or the
+  # machine resumes from sleep, and the first that frees the previous HICON
+  # when the status icon changes.
+  tray_manager: ^0.5.3
   window_manager: ^0.5.1
+  # Validates a remembered window frame against the displays that are actually
+  # connected, so a saved position on an unplugged monitor cannot strand the
+  # window off-screen.
+  screen_retriever: ^0.2.0
   country_flags: ^3.0.0
   toastification: ^3.0.3
 

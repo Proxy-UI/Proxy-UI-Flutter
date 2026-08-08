@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/dist/
 
 # Symbolication related
 app.*.symbols
@@ -54,3 +55,6 @@ app.*.map.json
 **/ios/Podfile.lock
 **/macos/Podfile
 **/macos/Podfile.lock
+
+# FVM Version Cache
+.fvm/

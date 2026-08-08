@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
+import '../services/desktop_settings.dart';
 import '../utils/toast_utils.dart';
+import 'lan_proxy_link.dart';
 
 /// Configuration dialog for proxy settings - simplified AlertDialog style
 class ConfigDialog extends StatefulWidget {
@@ -18,14 +20,22 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late TextEditingController _serverPortController;
   late TextEditingController _localPortController;
   late TextEditingController _sessionKeyController;
+  late bool _allowLan;
   late bool _autoProxy;
+  late bool _udpEnabled;
+  late bool _udpDirectFallback;
   late bool _reverseGeo;
   late bool _forceCodec;
+  late bool _minimizeToTray;
+  late bool _launchAtStartup;
 
   @override
   void initState() {
     super.initState();
     final config = context.read<ProxyState>().config;
+    final desktop = context.read<DesktopSettings>();
+    _minimizeToTray = desktop.minimizeToTray;
+    _launchAtStartup = desktop.launchAtStartup;
     _hostController = TextEditingController(text: config.serverHost);
     _serverPortController = TextEditingController(
       text: config.serverPort.toString(),
@@ -33,16 +43,21 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _localPortController = TextEditingController(
       text: config.localPort.toString(),
     );
+    _localPortController.addListener(_onLocalPortChanged);
     _sessionKeyController = TextEditingController(
       text: config.sessionKey ?? '',
     );
+    _allowLan = config.allowLan;
     _autoProxy = config.autoProxy;
+    _udpEnabled = config.udpEnabled;
+    _udpDirectFallback = config.udpDirectFallback;
     _reverseGeo = config.reverseGeo;
     _forceCodec = config.forceCodec;
   }
 
   @override
   void dispose() {
+    _localPortController.removeListener(_onLocalPortChanged);
     _hostController.dispose();
     _serverPortController.dispose();
     _localPortController.dispose();
@@ -50,7 +65,11 @@ class _ConfigDialogState extends State<ConfigDialog> {
     super.dispose();
   }
 
-  void _save() {
+  void _onLocalPortChanged() {
+    if (_allowLan) setState(() {});
+  }
+
+  Future<void> _save() async {
     final state = context.read<ProxyState>();
     final serverPort = int.tryParse(_serverPortController.text);
     final localPort = int.tryParse(_localPortController.text);
@@ -64,20 +83,43 @@ class _ConfigDialogState extends State<ConfigDialog> {
     }
 
     final currentConfig = state.config;
+    final desktop = context.read<DesktopSettings>();
+    final navigator = Navigator.of(context);
     state.updateConfig(
       currentConfig.copyWith(
         serverHost: _hostController.text.trim(),
         serverPort: serverPort,
         localPort: localPort,
+        allowLan: _allowLan,
         sessionKey: _sessionKeyController.text.isEmpty
             ? null
             : _sessionKeyController.text,
         autoProxy: _autoProxy,
+        udpEnabled: _udpEnabled,
+        udpDirectFallback: _udpDirectFallback,
+        tunEnabled: state.config.tunEnabled,
+        tunBypassProcesses: state.config.tunBypassProcesses,
+        androidVpnRoutingMode: state.config.androidVpnRoutingMode,
+        androidVpnPackages: state.config.androidVpnPackages,
         reverseGeo: _reverseGeo,
+        needCodecIps: state.config.needCodecIps,
         forceCodec: _forceCodec,
+        setSystemProxy: state.config.setSystemProxy,
       ),
     );
-    Navigator.of(context).pop();
+
+    await desktop.setMinimizeToTray(_minimizeToTray);
+    // Windows owns the sign-in entry, so this is the one setting that can be
+    // refused; report that rather than closing on a switch that did nothing.
+    final startupError = DesktopSettings.supportsLaunchAtStartup
+        ? await desktop.setLaunchAtStartup(_launchAtStartup)
+        : null;
+
+    navigator.pop();
+    if (startupError != null) {
+      ToastUtils.showError(startupError);
+      return;
+    }
     ToastUtils.showSuccess('Configuration saved');
   }
 
@@ -150,6 +192,22 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.lan_outlined),
+                title: const Text('Allow LAN'),
+                subtitle: const Text(
+                  'Listen on all interfaces. Use only on trusted networks.',
+                ),
+                value: _allowLan,
+                onChanged: (value) => setState(() => _allowLan = value),
+              ),
+              if (_allowLan) ...[
+                const SizedBox(height: 8),
+                LanProxyLink(
+                  port: int.tryParse(_localPortController.text) ?? 1080,
+                ),
+              ],
               const SizedBox(height: 24),
               // Options section
               Text('Options', style: Theme.of(context).textTheme.titleSmall),
@@ -159,6 +217,20 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 subtitle: const Text('Route traffic based on geo-location'),
                 value: _autoProxy,
                 onChanged: (v) => setState(() => _autoProxy = v),
+              ),
+              SwitchListTile(
+                title: const Text('SOCKS5 UDP'),
+                subtitle: const Text('Proxy UDP through the server'),
+                value: _udpEnabled,
+                onChanged: (v) => setState(() => _udpEnabled = v),
+              ),
+              SwitchListTile(
+                title: const Text('Direct UDP fallback'),
+                subtitle: const Text(
+                  'When SOCKS5 UDP is off, send VPN/TUN UDP directly instead of blocking it',
+                ),
+                value: _udpDirectFallback,
+                onChanged: (v) => setState(() => _udpDirectFallback = v),
               ),
               SwitchListTile(
                 title: const Text('Reverse Geo'),
@@ -172,6 +244,34 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 value: _forceCodec,
                 onChanged: (v) => setState(() => _forceCodec = v),
               ),
+              if (DesktopSettings.isSupported) ...[
+                const SizedBox(height: 24),
+                Text('Desktop', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.minimize_outlined),
+                  title: const Text('Minimize to tray'),
+                  subtitle: const Text(
+                    'Hide the taskbar button when minimized. The tray icon '
+                    'brings the window back.',
+                  ),
+                  value: _minimizeToTray,
+                  onChanged: (v) => setState(() => _minimizeToTray = v),
+                ),
+                if (DesktopSettings.supportsLaunchAtStartup)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.power_settings_new_outlined),
+                    title: const Text('Start at sign-in'),
+                    subtitle: const Text(
+                      'Launch automatically when you sign in to Windows. The '
+                      'proxy still has to be started manually.',
+                    ),
+                    value: _launchAtStartup,
+                    onChanged: (v) => setState(() => _launchAtStartup = v),
+                  ),
+              ],
             ],
           ),
         ),

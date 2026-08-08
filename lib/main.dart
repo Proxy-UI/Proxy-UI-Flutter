@@ -8,24 +8,44 @@ import 'package:window_manager/window_manager.dart';
 import 'src/providers/proxy_provider.dart';
 import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
+import 'src/services/desktop_log_service.dart';
+import 'src/services/desktop_settings.dart';
+import 'src/services/single_instance_service.dart';
 import 'src/services/tray_service.dart';
+import 'src/services/window_state_service.dart';
 
-void main() async {
+void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  final enableTunOnStartup = arguments.contains('--enable-tun');
+  final desktopLogService = DesktopLogService();
 
   // Initialize window manager for desktop platforms
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
 
-    const windowOptions = WindowOptions(
+    try {
+      await desktopLogService.initialize();
+    } catch (error) {
+      debugPrint('Failed to initialize desktop logging: $error');
+    }
+
+    final windowOptions = WindowOptions(
       size: Size(1280, 720),
       minimumSize: Size(800, 600),
       center: true,
+      backgroundColor: Colors.transparent,
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.normal,
+      title: 'Proxy With Flutter',
+      titleBarStyle: TitleBarStyle.hidden,
+      // macOS retains the native traffic lights inside the unified surface.
+      // Windows and Linux render matching controls in Flutter.
+      windowButtonVisibility: Platform.isMacOS,
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
+      // Before the first show, so the window never appears at the default
+      // position and then jumps to the remembered one.
+      await WindowStateService.instance.restore();
       await windowManager.show();
       await windowManager.focus();
     });
@@ -35,8 +55,14 @@ void main() async {
     ToastificationWrapper(
       child: MultiProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => ProxyState()),
+          ChangeNotifierProvider(
+            create: (_) => ProxyState(
+              enableTunOnStartup: enableTunOnStartup,
+              desktopLogService: desktopLogService,
+            ),
+          ),
           ChangeNotifierProvider(create: (_) => ThemeState()),
+          ChangeNotifierProvider(create: (_) => DesktopSettings()..load()),
         ],
         child: const ProxyApp(),
       ),
@@ -61,7 +87,11 @@ class _ProxyAppState extends State<ProxyApp>
     // Initialize tray and window listener for desktop platforms
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        TrayService.instance.initialize(context);
+        if (!mounted) return;
+        TrayService.instance.initialize(context.read<ProxyState>());
+        // Must follow the tray so an activation arriving during startup finds
+        // a service that can already show the window.
+        SingleInstanceService.instance.initialize();
       });
       windowManager.addListener(this);
       windowManager.setPreventClose(true);
@@ -74,15 +104,20 @@ class _ProxyAppState extends State<ProxyApp>
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       windowManager.removeListener(this);
       TrayService.instance.dispose();
+      WindowStateService.instance.dispose();
     }
     super.dispose();
   }
 
   @override
   Future<void> onWindowClose() async {
-    // Hide to tray instead of closing
-    await windowManager.hide();
-    await TrayService.instance.refreshMenu();
+    // The reliable moment to record the frame: window_manager only reports
+    // "moved"/"resized" after an interactive drag, so snapping or any
+    // programmatic move would otherwise never be saved.
+    await WindowStateService.instance.saveNow();
+    // Hide to tray instead of closing. The tray menu's show/hide entry tracks
+    // this, so it has to learn about the change here too.
+    await TrayService.instance.hideWindow();
   }
 
   @override
@@ -94,6 +129,35 @@ class _ProxyAppState extends State<ProxyApp>
       unawaited(TrayService.instance.handleSystemResume());
     }
   }
+
+  @override
+  Future<void> onWindowMinimize() async {
+    if (!mounted || !context.read<DesktopSettings>().minimizeToTray) return;
+    // A background proxy has no reason to keep a taskbar button; the tray icon
+    // is the way back in.
+    await TrayService.instance.hideWindow();
+  }
+
+  @override
+  void onWindowResize() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowResized() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowMove() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowMoved() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowMaximize() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowUnmaximize() => WindowStateService.instance.scheduleSave();
+
+  @override
+  void onWindowRestore() => WindowStateService.instance.scheduleSave();
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +177,12 @@ class _ProxyAppState extends State<ProxyApp>
             useMaterial3: true,
             brightness: Brightness.dark,
           ),
+          builder: (context, child) {
+            if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+              return VirtualWindowFrame(child: child!);
+            }
+            return child!;
+          },
           home: const HomeScreen(),
         );
       },

@@ -7,7 +7,10 @@
 - **代理控制**：一键启停代理，可视化状态指示
 - **配置管理**：服务器地址、端口、会话密钥、本地端口设置
 - **自动代理**：基于地理位置的路由（国内直连，国外代理）
+- **SOCKS5 UDP**：在同一本地代理端口启用或停用 RFC 1928 UDP 转发
+- **Windows TUN**：接管本机 TCP/UDP，并支持运行时修改进程排除列表
 - **实时日志**：彩色日志查看器，支持级别过滤（TRACE/DEBUG/INFO/WARN/ERROR）
+- **桌面日志文件**：按小时滚动并保留最近三天，支持从日志页直接打开所在文件夹
 - **主题切换**：4 种配色主题（赛博朋克、日落、海洋、森林）
 - **明暗模式**：深色/浅色外观切换
 - **响应式布局**：自适应手机、平板、桌面屏幕
@@ -28,15 +31,39 @@
 
 ### 前置条件
 
-- Flutter 3.38.6+
-- 原生库（联系维护者获取）
+- [FVM](https://fvm.app/) 4.x
+- Visual Studio 2022，并安装“使用 C++ 的桌面开发”工作负载（Windows）
+- 父级 `proxy-everything` 仓库指定的 Rust 工具链
+
+项目通过 `.fvmrc` 固定使用 Flutter 3.38.6。请勿直接调用全局安装的
+`flutter` 或 `dart`，统一使用 `fvm flutter` 和 `fvm dart`，确保本地与
+CI 使用同一 SDK。
 
 ### 本地开发
 
 ```bash
-flutter pub get
-flutter run
+fvm install
+fvm flutter pub get
+fvm flutter run -d windows
 ```
+
+桌面 UI 依赖 Rust 编译生成的 `http_proxy` 原生库。Windows TUN 模式还
+依赖 `wintun.dll`，父级构建脚本会同时放置两个 DLL。在 Windows 上从父级
+仓库开发时，推荐从父级仓库根目录使用以下命令自动编译、放置 DLL 并启动 Flutter：
+
+```powershell
+.\scripts\windows\run-ui.ps1
+```
+
+同时构建完整 Rust 工作区和 Windows UI：
+
+```powershell
+.\scripts\windows\build.ps1 -Configuration Release
+```
+
+Windows 程序启动时会请求管理员权限，因为创建 Wintun 和修改路由需要提权。
+TUN 进程排除列表可在连接前或连接中修改。原生层始终强制排除 UI 自身进程，
+避免客户端的出站连接再次被 TUN 捕获而形成死循环。
 
 ### 触发发布构建
 

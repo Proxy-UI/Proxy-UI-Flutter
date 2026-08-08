@@ -3,9 +3,11 @@ import 'package:proxy_ui/src/models/proxy_config.dart';
 
 void main() {
   group('ProxyConfigModel', () {
-    test('uses 1080 as default local port', () {
+    // New installs moved off 1080, which too many other proxy tools claim.
+    // Imported configurations still fall back to 1080, covered below.
+    test('uses 10801 as default local port', () {
       final config = ProxyConfigModel();
-      expect(config.localPort, 1080);
+      expect(config.localPort, 10801);
     });
 
     test('fromJson falls back for invalid port values', () {

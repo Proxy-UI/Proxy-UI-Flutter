@@ -20,6 +20,7 @@ class _LogPageState extends State<LogPage> {
   int _lastKnownLogCount = 0;
   int _newLogsCount = 0;
   bool _isAtBottom = true;
+  bool _isOpeningLogDirectory = false;
 
   @override
   void initState() {
@@ -71,6 +72,21 @@ class _LogPageState extends State<LogPage> {
 
   void _onSearchChanged(String value) {
     setState(() => _searchQuery = value);
+  }
+
+  Future<void> _openLogDirectory(ProxyState state) async {
+    if (_isOpeningLogDirectory) return;
+    setState(() => _isOpeningLogDirectory = true);
+    try {
+      await state.openLogDirectory();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open the log folder: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningLogDirectory = false);
+    }
   }
 
   @override
@@ -175,6 +191,14 @@ class _LogPageState extends State<LogPage> {
         // Level 过滤（阈值，INFO+ 表示包含更高等级）
         _buildFilterDropdown(context, state, isDark),
         const SizedBox(width: 8),
+        if (state.hasLocalLogStorage)
+          IconButton(
+            onPressed: _isOpeningLogDirectory
+                ? null
+                : () => _openLogDirectory(state),
+            icon: const Icon(Icons.folder_open_outlined),
+            tooltip: 'Open log folder',
+          ),
         // 清除按钮
         IconButton(
           onPressed: state.clearLogs,

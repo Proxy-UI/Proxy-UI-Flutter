@@ -2,7 +2,10 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include <algorithm>
+
 #include "flutter_window.h"
+#include "single_instance.h"
 #include "utils.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
@@ -22,6 +25,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 
+  // `--enable-tun` is how the app relaunches itself elevated. That replacement
+  // has to be able to take the lock from the instance it supersedes, which
+  // releases it a moment later, instead of being sent away as a duplicate.
+  const bool is_elevation_handoff =
+      std::find(command_line_arguments.begin(), command_line_arguments.end(),
+                "--enable-tun") != command_line_arguments.end();
+
+  if (single_instance::AcquireLock(is_elevation_handoff) ==
+      single_instance::LockResult::kSecondary) {
+    single_instance::ActivateRunningInstance();
+    ::CoUninitialize();
+    return EXIT_SUCCESS;
+  }
+
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
@@ -38,6 +55,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
+  single_instance::ReleaseLock();
   ::CoUninitialize();
   return EXIT_SUCCESS;
 }
