@@ -762,10 +762,10 @@ class _NodesPageState extends State<NodesPage> {
     // Try to find a 2-letter country code in the string
     final match = RegExp(r'[A-Z]{2}').firstMatch(country.toUpperCase());
     if (match != null) {
+      // country_flags 4.x moved sizing into the theme object.
       return CountryFlag.fromCountryCode(
         match.group(0)!,
-        height: 20,
-        width: 28,
+        theme: const ImageTheme(height: 20, width: 28),
       );
     }
     // Fallback to a generic icon

@@ -381,7 +381,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
         '$childApplications child applications | ${node.descendantInstanceCount} processes',
       if (process.aliases.isNotEmpty)
         'Registered as ${process.aliases.take(2).join(', ')}',
-      if (path != null) path,
+      ?path,
     ];
 
     return Material(
