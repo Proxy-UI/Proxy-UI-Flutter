@@ -16,7 +16,6 @@ class NodesPage extends StatefulWidget {
 }
 
 class _NodesPageState extends State<NodesPage> {
-  final Map<String, bool> _pingLoading = {};
   final Map<String, bool> _switchLoading = {};
   final _hostController = TextEditingController();
   final _portController = TextEditingController();
@@ -24,7 +23,7 @@ class _NodesPageState extends State<NodesPage> {
   final _searchController = TextEditingController();
   bool _showConfig = true;
   bool _controlFieldsInitialized = false;
-  bool _isPingingAll = false;
+  bool _isTestingAll = false;
   String? _selectedGroupId;
   String _searchQuery = '';
   String? _selectedCountry;
@@ -113,66 +112,33 @@ class _NodesPageState extends State<NodesPage> {
     }
   }
 
-  Future<void> _pingNode(BuildContext context, NodeInfo node) async {
-    final state = context.read<ProxyState>();
-    setState(() {
-      _pingLoading[node.nodeId] = true;
-    });
-
-    try {
-      await state.pingNode(node);
-      // No toast on success - latency is already displayed on the card
-    } catch (e) {
-      if (mounted) {
-        ToastUtils.showError('Ping failed: $e');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _pingLoading[node.nodeId] = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _pingAllNodes(ProxyState state) async {
-    if (_isPingingAll) return;
+  Future<void> _testAllNodes(ProxyState state) async {
+    if (_isTestingAll) return;
     final nodes = _filterNodes(state);
     if (nodes.isEmpty) return;
 
-    setState(() {
-      _isPingingAll = true;
-      for (final node in nodes) {
-        _pingLoading[node.nodeId] = true;
-      }
-    });
+    setState(() => _isTestingAll = true);
     var nextIndex = 0;
     var failures = 0;
 
     Future<void> worker() async {
       while (nextIndex < nodes.length) {
         final node = nodes[nextIndex++];
-        try {
-          await state.pingNode(node);
-        } catch (_) {
-          failures++;
-        } finally {
-          if (mounted) {
-            setState(() => _pingLoading[node.nodeId] = false);
-          }
-        }
+        final verification = await state.verifyNode(node);
+        if (verification == null || !verification.isVerified) failures++;
       }
     }
 
     final workerCount = nodes.length < 8 ? nodes.length : 8;
     await Future.wait(List.generate(workerCount, (_) => worker()));
     if (!mounted) return;
-    setState(() => _isPingingAll = false);
+    setState(() => _isTestingAll = false);
     if (failures == 0) {
-      ToastUtils.showSuccess('Pinged ${nodes.length} nodes');
+      ToastUtils.showSuccess('Tested ${nodes.length} nodes');
     } else {
       ToastUtils.showError(
-        'Ping completed: ${nodes.length - failures} succeeded, $failures failed',
+        'Tested ${nodes.length}: ${nodes.length - failures} reachable, '
+        '$failures failed',
       );
     }
   }
@@ -428,15 +394,15 @@ class _NodesPageState extends State<NodesPage> {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         OutlinedButton.icon(
-          onPressed: _isPingingAll ? null : () => _pingAllNodes(state),
-          icon: _isPingingAll
+          onPressed: _isTestingAll ? null : () => _testAllNodes(state),
+          icon: _isTestingAll
               ? const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.network_ping, size: 18),
-          label: const Text('Ping all'),
+          label: const Text('Test all'),
         ),
         PopupMenuButton<bool>(
           tooltip: 'Sort nodes',
@@ -746,25 +712,6 @@ class _NodesPageState extends State<NodesPage> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: _pingLoading[node.nodeId] == true
-                      ? null
-                      : () => _pingNode(context, node),
-                  icon: _pingLoading[node.nodeId] == true
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.speed, size: 18),
-                  label: const Text('Ping'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                  ),
-                ),
-                ElevatedButton.icon(
                   onPressed: state.isVerifyingNode(node)
                       ? null
                       : () => _verifyNode(context, node),
@@ -774,8 +721,8 @@ class _NodesPageState extends State<NodesPage> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.travel_explore, size: 18),
-                  label: const Text('Verify'),
+                      : const Icon(Icons.speed, size: 18),
+                  label: const Text('Test'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,

@@ -17,7 +17,6 @@ import '../models/node_model.dart';
 import '../models/proxy_config.dart';
 import '../services/desktop_log_service.dart';
 import '../services/android_vpn_service.dart';
-import '../services/node_latency_service.dart';
 import '../services/subscription_service.dart';
 
 /// Proxy state provider for UI.
@@ -94,6 +93,7 @@ class ProxyState extends ChangeNotifier {
   bool get isTunRunning => _isTunRunning;
   bool get isTunBusy => _isTunBusy;
   String? get lastError => _lastError;
+
   /// The buffered entry count. Reading this used to copy the whole buffer.
   int get logCount => _logs.length;
   int get minLogLevel => _minLogLevel;
@@ -789,14 +789,24 @@ class ProxyState extends ChangeNotifier {
     return node.country;
   }
 
-  bool isVerifyingNode(NodeInfo node) => _verifyingNodes.contains(node.storageKey);
+  bool isVerifyingNode(NodeInfo node) =>
+      _verifyingNodes.contains(node.storageKey);
 
-  /// Ask an echo service, through this node, where its traffic leaves from.
+  /// Test a node: how long a real round trip through it takes, and where that
+  /// traffic leaves from.
   ///
-  /// The catalogue reports where a server registered itself, which is not
-  /// necessarily where it egresses; only a real request through the node can
-  /// settle that. The answer is persisted, including a failure, because "this
-  /// node did not answer" is worth remembering too.
+  /// One request answers both, because both need the same thing — bytes that
+  /// actually travelled through the node.
+  ///
+  /// A TCP handshake answers neither. With TUN capturing, every address except
+  /// the current upstream is intercepted, and the local user-space stack
+  /// replies to the SYN itself, so a connect returns in under a millisecond
+  /// whether the node is alive or dead. The catalogue's country is a claim for
+  /// the same reason: it is where the server registered, not where its traffic
+  /// leaves from.
+  ///
+  /// The answer is persisted, including a failure, because "this node did not
+  /// answer" is worth remembering too.
   Future<NodeVerification?> verifyNode(NodeInfo node) async {
     final key = node.storageKey;
     if (_verifyingNodes.contains(key)) return null;
@@ -823,6 +833,15 @@ class ProxyState extends ChangeNotifier {
         node,
         verification,
       );
+      // A failed test leaves the previous latency alone rather than replacing
+      // it with a number that measured nothing.
+      if (probe.success && probe.latencyMs != null) {
+        node.latencyMs = probe.latencyMs;
+        _nodeCatalogPreferences = _nodeCatalogPreferences.withLatency(
+          node,
+          probe.latencyMs!,
+        );
+      }
       await _saveNodeCatalogPreferences();
       return verification;
     } catch (error) {
@@ -841,25 +860,6 @@ class ProxyState extends ChangeNotifier {
       _verifyingNodes.remove(key);
       _safeNotifyListeners();
     }
-  }
-
-  /// Measure a node's TCP handshake latency without changing the active proxy.
-  ///
-  /// Replaces the earlier `pingCurrentNode`, which could only measure the node
-  /// already in use and only while the proxy was running.
-  Future<int> pingNode(NodeInfo node) async {
-    final latency = await measureNodeTcpLatency(
-      host: node.host,
-      port: node.port,
-    );
-    node.latencyMs = latency;
-    _nodeCatalogPreferences = _nodeCatalogPreferences.withLatency(
-      node,
-      latency,
-    );
-    await _saveNodeCatalogPreferences();
-    _safeNotifyListeners();
-    return latency;
   }
 
   // Export node config to clipboard (reuse existing export logic)
