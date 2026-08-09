@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import '../services/local_network_service.dart';
 import '../utils/toast_utils.dart';
 
+/// The addresses on offer, and the one currently shown.
+typedef _LanChoices = ({List<LanAddress> addresses, LanAddress? selected});
+
 class LanProxyLink extends StatefulWidget {
   const LanProxyLink({super.key, required this.port, this.networkService});
 
@@ -16,13 +19,17 @@ class LanProxyLink extends StatefulWidget {
 
 class _LanProxyLinkState extends State<LanProxyLink> {
   late LocalNetworkService _networkService;
-  late Future<String?> _url;
+  late Future<_LanChoices> _choices;
+
+  /// Kept in state so switching adapters shows the new address immediately,
+  /// without waiting on the store it is also written to.
+  String? _preferredAddress;
 
   @override
   void initState() {
     super.initState();
     _networkService = widget.networkService ?? LocalNetworkService();
-    _url = _networkService.getHttpProxyUrl(widget.port);
+    _choices = _load();
   }
 
   @override
@@ -37,10 +44,27 @@ class _LanProxyLinkState extends State<LanProxyLink> {
     }
   }
 
+  Future<_LanChoices> _load() async {
+    _preferredAddress ??= await _networkService.loadPreferredAddress();
+    final addresses = await _networkService.listLanAddresses();
+    final selected = await _networkService.resolveLanAddress(
+      preferredAddress: _preferredAddress,
+    );
+    return (addresses: addresses, selected: selected);
+  }
+
   void _refresh() {
     setState(() {
-      _url = _networkService.getHttpProxyUrl(widget.port);
+      _choices = _load();
     });
+  }
+
+  Future<void> _select(LanAddress address) async {
+    setState(() {
+      _preferredAddress = address.address;
+      _choices = _load();
+    });
+    await _networkService.savePreferredAddress(address.address);
   }
 
   Future<void> _copy(String url) async {
@@ -52,12 +76,19 @@ class _LanProxyLinkState extends State<LanProxyLink> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return FutureBuilder<String?>(
-      future: _url,
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return FutureBuilder<_LanChoices>(
+      future: _choices,
       builder: (context, snapshot) {
-        final url = snapshot.data;
         final loading = snapshot.connectionState == ConnectionState.waiting;
+        final selected = snapshot.data?.selected;
+        final addresses = snapshot.data?.addresses ?? const <LanAddress>[];
+        final url = selected?.httpProxyUrl(widget.port);
+        // The adapter only needs naming when there is something to choose
+        // between; on a single-homed machine it is noise.
+        final showInterface = addresses.length > 1 && selected != null;
+
         return Container(
           key: const Key('lan-proxy-link'),
           constraints: const BoxConstraints(minHeight: 64),
@@ -77,18 +108,22 @@ class _LanProxyLinkState extends State<LanProxyLink> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'LAN HTTP proxy',
-                      style: Theme.of(context).textTheme.labelMedium,
+                      showInterface
+                          ? 'LAN HTTP proxy · ${selected.interfaceName}'
+                          : 'LAN HTTP proxy',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       loading
-                          ? 'Finding Wi-Fi address...'
-                          : url ?? 'Wi-Fi address unavailable',
+                          ? 'Finding LAN address...'
+                          : url ?? 'LAN address unavailable',
                       key: const Key('lan-proxy-url'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: url == null
                             ? colors.onSurfaceVariant
                             : colors.onSurface,
@@ -105,16 +140,35 @@ class _LanProxyLinkState extends State<LanProxyLink> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 )
-              else
+              else ...[
+                if (addresses.length > 1)
+                  PopupMenuButton<LanAddress>(
+                    key: const Key('lan-proxy-picker'),
+                    tooltip: 'Choose the network to share on',
+                    icon: const Icon(Icons.swap_horiz),
+                    onSelected: _select,
+                    itemBuilder: (context) => <PopupMenuEntry<LanAddress>>[
+                      for (final address in addresses)
+                        CheckedPopupMenuItem<LanAddress>(
+                          value: address,
+                          checked: address == selected,
+                          child: Text(
+                            '${address.address} · ${address.interfaceName}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
                 IconButton(
                   onPressed: url == null ? _refresh : () => _copy(url),
                   icon: Icon(
                     url == null ? Icons.refresh : Icons.content_copy_outlined,
                   ),
                   tooltip: url == null
-                      ? 'Refresh Wi-Fi address'
+                      ? 'Refresh LAN address'
                       : 'Copy LAN proxy link',
                 ),
+              ],
             ],
           ),
         );
