@@ -270,6 +270,18 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
+      # `macos/Runner.xcodeproj` is committed with CocoaPods build phases baked
+      # in, and no Podfile is tracked because Flutter generates one. From 3.44.9
+      # Flutter integrates plugins through Swift Package Manager instead, so it
+      # never runs `pod install`, `PODS_ROOT` stays undefined, and the surviving
+      # `[CP] Embed Pods Frameworks` phase fails on a path that begins with the
+      # empty variable: "Unable to load contents of file list:
+      # '/Target Support Files/Pods-Runner/…'". Keeping CocoaPods restores what
+      # this project built with before the SDK bump. Migrating the Xcode project
+      # to SPM is the real fix and needs a Mac to verify.
+      - name: Use CocoaPods for plugin integration
+        run: flutter config --no-enable-swift-package-manager
+
       - name: Build macOS app
         run: |
           flutter pub get
