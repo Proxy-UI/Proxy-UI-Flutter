@@ -34,35 +34,10 @@ jobs:
           GH_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
           LIB_VERSION: ${{ github.event.inputs.lib_version }}
         run: |
-          mkdir -p native/{android/{arm64-v8a,armeabi-v7a,x86_64},ios,macos,windows/{x64,arm64},linux/{x64,arm64}}
+          # Desktop only. The mobile libraries this used to fetch are consumed
+          # by local builds, which fetch them themselves.
+          mkdir -p native/{macos,windows/{x64,arm64},linux/{x64,arm64}}
           WORK_DIR=$(mktemp -d)
-
-          # Android
-          for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
-            echo "Downloading Android: $target"
-            gh release download "$LIB_VERSION" \
-              -R "$PRIVATE_REPO" \
-              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
-              -D "$WORK_DIR" || continue
-            tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
-            case $target in
-              aarch64-linux-android) dest="arm64-v8a" ;;
-              armv7-linux-androideabi) dest="armeabi-v7a" ;;
-              x86_64-linux-android) dest="x86_64" ;;
-            esac
-            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.so" "native/android/$dest/" || true
-          done
-
-          # iOS
-          for target in aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim; do
-            echo "Downloading iOS: $target"
-            gh release download "$LIB_VERSION" \
-              -R "$PRIVATE_REPO" \
-              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
-              -D "$WORK_DIR" || continue
-            tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
-            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.a" "native/ios/libhttp_proxy-${target}.a" || true
-          done
 
           # macOS
           for target in x86_64-apple-darwin aarch64-apple-darwin; do
@@ -114,128 +89,6 @@ jobs:
           name: native-libs
           path: native/
           retention-days: 1
-
-  build-android:
-    needs: download-native-libs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: native-libs
-          path: native/
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-
-      - name: Build Android APKs
-        run: |
-          flutter pub get
-          flutter build apk --split-per-abi --release
-
-      - name: Rename APKs
-        run: |
-          cd build/app/outputs/flutter-apk
-          mv app-arm64-v8a-release.apk proxy-ui-arm64-v8a.apk || true
-          mv app-armeabi-v7a-release.apk proxy-ui-armeabi-v7a.apk || true
-          mv app-x86_64-release.apk proxy-ui-x86_64.apk || true
-
-      - name: Upload Android artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apks
-          path: build/app/outputs/flutter-apk/proxy-ui-*.apk
-
-      - name: Generate download summary
-        run: |
-          echo "## 📦 Android APK Build Complete (compile check only)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> ⚠️ **Do not distribute these.** They are signed with a debug key this runner generated, which differs on every run, so a phone cannot install one over another. Release APKs are built locally against a stable key." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Built APKs are available as artifacts. Download them from the workflow run page:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Available APKs:" >> $GITHUB_STEP_SUMMARY
-          echo "- \`proxy-ui-arm64-v8a.apk\` (ARM64)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`proxy-ui-armeabi-v7a.apk\` (ARMv7)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`proxy-ui-x86_64.apk\` (x86_64)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### File Sizes:" >> $GITHUB_STEP_SUMMARY
-          cd build/app/outputs/flutter-apk
-          ls -lh proxy-ui-*.apk | awk '{print "- " $9 ": " $5}' >> $GITHUB_STEP_SUMMARY
-
-  build-ios:
-    needs: download-native-libs
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: native-libs
-          path: native/
-
-      - name: Create iOS static library
-        run: |
-          cd native/ios
-          # Merge simulator architectures if both exist
-          if [ -f "libhttp_proxy-aarch64-apple-ios-sim.a" ] && [ -f "libhttp_proxy-x86_64-apple-ios.a" ]; then
-            lipo -create \
-              libhttp_proxy-aarch64-apple-ios-sim.a \
-              libhttp_proxy-x86_64-apple-ios.a \
-              -output libhttp_proxy-sim.a
-          elif [ -f "libhttp_proxy-aarch64-apple-ios-sim.a" ]; then
-            cp libhttp_proxy-aarch64-apple-ios-sim.a libhttp_proxy-sim.a
-          elif [ -f "libhttp_proxy-x86_64-apple-ios.a" ]; then
-            cp libhttp_proxy-x86_64-apple-ios.a libhttp_proxy-sim.a
-          fi
-
-          # Rename device library
-          if [ -f "libhttp_proxy-aarch64-apple-ios.a" ]; then
-            cp libhttp_proxy-aarch64-apple-ios.a libhttp_proxy.a
-          fi
-
-          ls -la
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-
-      - name: Build iOS app
-        run: |
-          flutter pub get
-          flutter build ios --release --no-codesign
-
-      - name: Create IPA
-        run: |
-          cd build/ios/iphoneos
-          mkdir Payload
-          mv Runner.app Payload/
-          zip -r proxy-ui-ios-unsigned.ipa Payload/
-
-      - name: Upload iOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-ipa
-          path: build/ios/iphoneos/proxy-ui-ios-unsigned.ipa
-
-      - name: Generate download summary
-        run: |
-          echo "## 📱 iOS IPA Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ **Note**: This is an unsigned IPA for development/sideloading only." >> $GITHUB_STEP_SUMMARY
 
   build-macos:
     needs: download-native-libs
@@ -396,7 +249,7 @@ jobs:
           echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
 
   release:
-    needs: [build-android, build-ios, build-macos, build-windows, build-linux]
+    needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.create_release == 'true' && github.event.inputs.release_tag != '' }}
     steps:
@@ -407,11 +260,10 @@ jobs:
 
       - name: Collect release files
         run: |
-          # Desktop only. Android and iOS are signed with whatever debug key the
-          # runner happens to generate, which differs on every run, so a phone
-          # cannot install one release over another. Mobile packages are built
-          # locally against a stable key and uploaded to this release by hand;
-          # the mobile jobs above stay as compile checks.
+          # Desktop only, and nothing here builds mobile any more: a runner
+          # signs with a debug key it generates per run, so a phone could not
+          # install one release over another. Mobile packages are built locally
+          # against a stable key and uploaded to this release by hand.
           mkdir -p release
           find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" -o -name "*.msix" -o -name "*.appx" -o -name "*.appxbundle" \) -exec cp {} release/ \;
           ls -la release/
