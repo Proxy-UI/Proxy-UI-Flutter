@@ -1,5 +1,9 @@
 gradle-wrapper.jar
 /.gradle
+# Gradle's own output tree. The repository root ignores `/build/` anchored, so
+# this one is not covered by it, and a release build drops a problems report
+# here that is easy to sweep into a commit.
+/build/
 /captures/
 /gradlew
 /gradlew.bat
