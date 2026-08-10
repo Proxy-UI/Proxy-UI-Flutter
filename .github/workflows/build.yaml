@@ -15,7 +15,9 @@ on:
         required: false
 
 env:
-  FLUTTER_VERSION: '3.38.6'
+  # Keep in step with `.fvmrc`: the local builds are validated on that SDK, and
+  # a release built on a different one is a release nobody tested.
+  FLUTTER_VERSION: '3.44.9'
   PRIVATE_REPO: acking-you/proxy-everything
 
 permissions:
@@ -154,7 +156,9 @@ jobs:
 
       - name: Generate download summary
         run: |
-          echo "## 📦 Android APK Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Android APK Build Complete (compile check only)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> ⚠️ **Do not distribute these.** They are signed with a debug key this runner generated, which differs on every run, so a phone cannot install one over another. Release APKs are built locally against a stable key." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Built APKs are available as artifacts. Download them from the workflow run page:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -391,8 +395,13 @@ jobs:
 
       - name: Collect release files
         run: |
+          # Desktop only. Android and iOS are signed with whatever debug key the
+          # runner happens to generate, which differs on every run, so a phone
+          # cannot install one release over another. Mobile packages are built
+          # locally against a stable key and uploaded to this release by hand;
+          # the mobile jobs above stay as compile checks.
           mkdir -p release
-          find artifacts -type f \( -name "*.apk" -o -name "*.ipa" -o -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" -o -name "*.msix" -o -name "*.appx" -o -name "*.appxbundle" \) -exec cp {} release/ \;
+          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" -o -name "*.msix" -o -name "*.appx" -o -name "*.appxbundle" \) -exec cp {} release/ \;
           ls -la release/
 
       - name: Create Release
@@ -400,7 +409,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           name: "Proxy UI ${{ github.event.inputs.release_tag }}"
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          draft: false
           body: |
             # Proxy UI Release ${{ github.event.inputs.release_tag }}
 
@@ -409,9 +418,9 @@ jobs:
             Native library version: ${{ github.event.inputs.lib_version }}
 
             ## Downloads
-            - **Android**: APK files for different architectures
-            - **iOS**: Unsigned IPA (for development/sideloading)
             - **macOS**: DMG installer
             - **Windows**: Installer (fastforge) or portable package
             - **Linux**: tar.gz archive
+            - **Android / iOS**: uploaded separately, built locally against a
+              stable signing key so an installed copy can be updated in place
           files: release/*
