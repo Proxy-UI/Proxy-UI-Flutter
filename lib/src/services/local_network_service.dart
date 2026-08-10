@@ -116,10 +116,7 @@ class LocalNetworkService {
         if (!_isShareable(address)) continue;
         candidates.add((
           _rank(address),
-          LanAddress(
-            address: address.address,
-            interfaceName: interface.name,
-          ),
+          LanAddress(address: address.address, interfaceName: interface.name),
         ));
       }
     }

@@ -64,7 +64,10 @@ void main() {
       _FakeInterface('以太网', ['192.168.1.20']),
     ]);
 
-    expect(service.getHttpProxyUrl(1080), completion('http://192.168.1.20:1080'));
+    expect(
+      service.getHttpProxyUrl(1080),
+      completion('http://192.168.1.20:1080'),
+    );
   });
 
   test('skips the addresses no other device can reach', () async {
@@ -136,25 +139,28 @@ void main() {
     ]);
   });
 
-  test('honours a chosen address and names the adapter it belongs to', () async {
-    // Two live networks is exactly when the first guess can be wrong, so the
-    // choice has to survive being made.
-    final service = serviceWith([
-      _FakeInterface('WLAN', ['192.168.21.5']),
-      _FakeInterface('以太网 2', ['192.168.255.10']),
-    ]);
+  test(
+    'honours a chosen address and names the adapter it belongs to',
+    () async {
+      // Two live networks is exactly when the first guess can be wrong, so the
+      // choice has to survive being made.
+      final service = serviceWith([
+        _FakeInterface('WLAN', ['192.168.21.5']),
+        _FakeInterface('以太网 2', ['192.168.255.10']),
+      ]);
 
-    final chosen = await service.resolveLanAddress(
-      preferredAddress: '192.168.255.10',
-    );
+      final chosen = await service.resolveLanAddress(
+        preferredAddress: '192.168.255.10',
+      );
 
-    expect(chosen?.address, '192.168.255.10');
-    expect(chosen?.interfaceName, '以太网 2');
-    expect(
-      await service.getHttpProxyUrl(1080, preferredAddress: '192.168.255.10'),
-      'http://192.168.255.10:1080',
-    );
-  });
+      expect(chosen?.address, '192.168.255.10');
+      expect(chosen?.interfaceName, '以太网 2');
+      expect(
+        await service.getHttpProxyUrl(1080, preferredAddress: '192.168.255.10'),
+        'http://192.168.255.10:1080',
+      );
+    },
+  );
 
   test('falls back when a remembered address is gone', () async {
     final service = serviceWith([

@@ -122,12 +122,7 @@ class WindowStateService {
     for (final display in displays) {
       final origin = display.visiblePosition ?? Offset.zero;
       final size = display.visibleSize ?? display.size;
-      final area = Rect.fromLTWH(
-        origin.dx,
-        origin.dy,
-        size.width,
-        size.height,
-      );
+      final area = Rect.fromLTWH(origin.dx, origin.dy, size.width, size.height);
       final overlap = area.intersect(frame);
       if (overlap.width >= _minimumVisibleWidth &&
           overlap.height >= _minimumVisibleHeight) {

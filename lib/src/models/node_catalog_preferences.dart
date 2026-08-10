@@ -113,7 +113,8 @@ class NodeCatalogPreferences {
     'nodes': nodes.map((node) => node.toJson()).toList(),
     'fetchedAt': fetchedAt?.toUtc().toIso8601String(),
     'verifications': {
-      for (final entry in verifications.entries) entry.key: entry.value.toJson(),
+      for (final entry in verifications.entries)
+        entry.key: entry.value.toJson(),
     },
   };
 

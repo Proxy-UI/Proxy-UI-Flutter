@@ -9,7 +9,7 @@ on:
 env:
   PRIVATE_REPO: acking-you/proxy-everything
   # Update this version when new native library releases are available
-  LIB_VERSION: '0.4.10'
+  LIB_VERSION: '0.4.25'
 
 jobs:
   analyze-and-build:
@@ -21,7 +21,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.6'
+          # Keep in step with `.fvmrc` and `build.yaml`. `dart format` output
+          # changes between SDKs, so checking formatting on a different one
+          # fails on code the pinned SDK considers correctly formatted.
+          flutter-version: '3.44.9'
           channel: 'stable'
           cache: true
 
@@ -58,15 +61,18 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Check formatting
-        run: dart format --set-exit-if-changed lib/
+        run: dart format --set-exit-if-changed lib/ test/
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build APK (Android)
         run: flutter build apk --release
 
-      - name: Upload release APK
+      - name: Upload APK (compile check only, not distributable)
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
+          name: ci-check-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
 
@@ -77,10 +83,12 @@ jobs:
           echo "### Code Quality" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ Analysis passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ Formatting checked" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ Release APK built" >> $GITHUB_STEP_SUMMARY
+          echo "- ✓ Tests passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✓ APK compiled" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Release APK" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download Release APK](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 APK (compile check only)" >> $GITHUB_STEP_SUMMARY
+          echo "> ⚠️ Signed with a debug key generated on this runner, so it cannot update an installed copy. Release APKs are built locally." >> $GITHUB_STEP_SUMMARY
+          echo "🔗 [Download](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
             SIZE=$(ls -lh build/app/outputs/flutter-apk/app-release.apk | awk '{print $5}')
