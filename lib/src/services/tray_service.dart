@@ -134,10 +134,18 @@ class TrayService with TrayListener {
   ///
   /// Returns false when the call did not take effect, so callers keep their
   /// "applied" state cleared and retry on the next pass.
-  Future<bool> _call(Future<void> Function() action, String name) async {
+  ///
+  /// [bounded] applies the shared timeout. Pass false for a call that blocks
+  /// for as long as the user takes, which is not the same thing as a call that
+  /// has hung.
+  Future<bool> _call(
+    Future<void> Function() action,
+    String name, {
+    bool bounded = true,
+  }) async {
     if (!_trayAvailable) return false;
     try {
-      await action().timeout(_callTimeout);
+      await (bounded ? action().timeout(_callTimeout) : action());
       return true;
     } on TimeoutException {
       debugPrint('Tray call "$name" timed out');
@@ -321,7 +329,22 @@ class TrayService with TrayListener {
 
   Future<void> _popUpContextMenu() async {
     await _enqueue(_applyMenu);
-    await _call(trayManager.popUpContextMenu, 'popUpContextMenu');
+    // `bringAppToFront` is the plugin's only way to reach the
+    // `SetForegroundWindow` that Win32 requires before `TrackPopupMenu`:
+    // without it the menu belongs to a window that is not in the foreground,
+    // and Windows then leaves it on screen when the user clicks away or opens
+    // something else. The flag is marked deprecated upstream but is still the
+    // documented fix, and 0.5.3 is the newest release.
+    //
+    // Unbounded because `TrackPopupMenu` is modal: the call does not return
+    // until the menu closes, so the shared timeout would fire on any menu a
+    // person actually reads before choosing.
+    await _call(
+      // ignore: deprecated_member_use
+      () => trayManager.popUpContextMenu(bringAppToFront: true),
+      'popUpContextMenu',
+      bounded: false,
+    );
   }
 
   Future<void> showWindow() async {
