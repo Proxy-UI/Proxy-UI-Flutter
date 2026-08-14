@@ -201,12 +201,27 @@ class TrayService with TrayListener {
       _TrayStatus.disconnected => ('tray_icon_inactive', 'Disconnected'),
       _TrayStatus.error => ('tray_icon_error', 'Connection error'),
     };
-    final iconPath = Platform.isWindows
-        ? 'assets/tray/$iconName.ico'
-        : 'assets/tray/$iconName.png';
+    // macOS gets its own set: a template image is black plus alpha, and the
+    // system tints it to match the menu bar, inverting it while the item is
+    // highlighted. The colour icons the other platforms use would be flattened
+    // into one silhouette, so those carry the state in the badge shape instead.
+    //
+    // The 2x file is named directly because the plugin reads the asset with
+    // rootBundle.load, which takes an exact key and never resolves a resolution
+    // variant, then pins the image to 18pt.
+    final iconPath = switch (defaultTargetPlatform) {
+      TargetPlatform.windows => 'assets/tray/$iconName.ico',
+      TargetPlatform.macOS => 'assets/tray/${iconName}_macos@2x.png',
+      _ => 'assets/tray/$iconName.png',
+    };
 
     _appliedIconStatus = null;
-    if (!await _call(() => trayManager.setIcon(iconPath), 'setIcon')) return;
+    if (!await _call(
+      () => trayManager.setIcon(iconPath, isTemplate: Platform.isMacOS),
+      'setIcon',
+    )) {
+      return;
+    }
     if (!await _call(
       () => trayManager.setToolTip('Proxy Everything - $tooltipStatus'),
       'setToolTip',
@@ -351,6 +366,17 @@ class TrayService with TrayListener {
     if (await windowManager.isMinimized()) {
       await windowManager.restore();
     }
+    await windowManager.show();
+    await windowManager.focus();
+
+    // macOS hides by ordering the window out, which also drops the app from the
+    // foreground. A single show/focus pair sometimes lands while the shell still
+    // owns activation — the click on the tray just gave it away — and the window
+    // stays gone with no way back except relaunching. Confirm it really came
+    // back and ask once more if it did not.
+    if (!Platform.isMacOS) return;
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (await windowManager.isVisible()) return;
     await windowManager.show();
     await windowManager.focus();
   }

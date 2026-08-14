@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  <!-- macOS template image: black plus alpha only. The system tints it to match
+       the menu bar, so state reads from the badge shape, never from colour.
+       disconnected = hollow outline, no badge, so idle reads lighter than the
+       two states that carry one. -->
+  <path d="M4.5 16.2 30.5 4.8 21.6 32 15.2 20.9 4.5 16.2Z" fill="none" stroke="black"
+        stroke-width="2.4" stroke-linejoin="round"/>
+</svg>

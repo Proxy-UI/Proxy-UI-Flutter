@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  <!-- macOS template image: black plus alpha only. The system tints it to match
+       the menu bar, so state reads from the badge shape, never from colour.
+       connected = filled check badge. -->
+  <mask id="halo">
+    <rect width="36" height="36" fill="white"/>
+    <circle cx="26.5" cy="26.5" r="8.6" fill="black"/>
+  </mask>
+  <g mask="url(#halo)">
+    <path d="M4.5 16.2 30.5 4.8 21.6 32 15.2 20.9 4.5 16.2Z" fill="black"/>
+  </g>
+  <circle cx="26.5" cy="26.5" r="6.4" fill="black"/>
+  <path d="M23.5 26.6 25.8 29 30 24.2" fill="none" stroke="white" stroke-width="2.1"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
