@@ -339,7 +339,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed && cp \"$PROJECT_DIR/../native/macos/libhttp_proxy.dylib\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Frameworks/\" 2>/dev/null || true\n";
+			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed && cp \"$PROJECT_DIR/../native/macos/libhttp_proxy.dylib\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Frameworks/\" 2>/dev/null || true\n# The privileged TUN helper goes next to the main executable so native code can\n# find it relative to its own path. macOS needs root to create a utun device and\n# cannot elevate a running app, so without this the TUN switch only ever reports\n# a missing helper.\ncp \"$PROJECT_DIR/../native/macos/http-proxy-tun-helper\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/MacOS/\" 2>/dev/null || true\n";
 		};
 		33CC111E2044C6BF0003C045 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;

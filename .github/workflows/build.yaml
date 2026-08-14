@@ -48,6 +48,9 @@ jobs:
               -D "$WORK_DIR" || continue
             tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
             cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.dylib" "native/macos/libhttp_proxy-${target}.dylib" || true
+            # macOS needs root to create a utun device and cannot elevate a
+            # running app, so TUN mode runs in this separately authorized helper.
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/http-proxy-tun-helper" "native/macos/http-proxy-tun-helper-${target}" || true
           done
 
           # Windows
@@ -114,8 +117,22 @@ jobs:
           elif [ -f "libhttp_proxy-x86_64-apple-darwin.dylib" ]; then
             cp libhttp_proxy-x86_64-apple-darwin.dylib libhttp_proxy.dylib
           fi
+          if [ -f "http-proxy-tun-helper-x86_64-apple-darwin" ] && [ -f "http-proxy-tun-helper-aarch64-apple-darwin" ]; then
+            lipo -create \
+              http-proxy-tun-helper-x86_64-apple-darwin \
+              http-proxy-tun-helper-aarch64-apple-darwin \
+              -output http-proxy-tun-helper
+          elif [ -f "http-proxy-tun-helper-aarch64-apple-darwin" ]; then
+            cp http-proxy-tun-helper-aarch64-apple-darwin http-proxy-tun-helper
+          elif [ -f "http-proxy-tun-helper-x86_64-apple-darwin" ]; then
+            cp http-proxy-tun-helper-x86_64-apple-darwin http-proxy-tun-helper
+          fi
           # Sign the dylib before Flutter build
           codesign --force --sign - libhttp_proxy.dylib
+          if [ -f "http-proxy-tun-helper" ]; then
+            chmod +x http-proxy-tun-helper
+            codesign --force --sign - http-proxy-tun-helper
+          fi
           ls -la
 
       - uses: subosito/flutter-action@v2
@@ -148,8 +165,20 @@ jobs:
           cp native/macos/libhttp_proxy.dylib "$DYLIB_PATH"
           # Fix the dylib install name to use @rpath
           install_name_tool -id "@rpath/libhttp_proxy.dylib" "$DYLIB_PATH"
+          # The Xcode phase already copies the helper, but re-stage it here for
+          # the same reason as the dylib: keep this step the single source of
+          # truth for what ends up in the shipped bundle. Native code locates it
+          # relative to the main executable, so it belongs in Contents/MacOS.
+          if [ -f native/macos/http-proxy-tun-helper ]; then
+            cp native/macos/http-proxy-tun-helper "$APP_DIR/Contents/MacOS/http-proxy-tun-helper"
+            chmod +x "$APP_DIR/Contents/MacOS/http-proxy-tun-helper"
+          else
+            echo "::error::http-proxy-tun-helper is missing; macOS TUN mode would not work"
+            exit 1
+          fi
           # Sign the dylib and app
           codesign --force --sign - "$DYLIB_PATH"
+          codesign --force --sign - "$APP_DIR/Contents/MacOS/http-proxy-tun-helper"
           codesign --force --deep --sign - "$APP_DIR"
 
       - name: Create DMG

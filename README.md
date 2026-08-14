@@ -51,18 +51,32 @@ fvm flutter run -d windows
 
 #### macOS
 
-There is no staging script for macOS yet, so build the native library from the
-parent repository and place it where Xcode expects it:
+Stage the native artifacts from the parent repository:
 
 ```bash
 # in the parent proxy-everything repository
-cargo build -p proxy-ffi --release
+bash scripts/macos/stage-ui-native.sh --configuration Release
+```
+
+That builds and stages two files into `native/macos/`, both of which the app
+needs: `libhttp_proxy.dylib` and `http-proxy-tun-helper`. The helper exists
+because macOS requires root to create a utun device and offers no way to elevate
+a running app, so TUN mode runs in a separate process started through an
+administrator prompt. Without it the TUN switch can only report a missing helper.
+
+The equivalent by hand, if you would rather not use the script:
+
+```bash
+# in the parent proxy-everything repository
+cargo build -p proxy-ffi -p proxy-client --bin http-proxy-tun-helper --release
 
 # in this repository
 mkdir -p native/macos
 cp ../proxy-everything/target/release/libhttp_proxy.dylib native/macos/
+cp ../proxy-everything/target/release/http-proxy-tun-helper native/macos/
 install_name_tool -id "@rpath/libhttp_proxy.dylib" native/macos/libhttp_proxy.dylib
 codesign --force --sign - native/macos/libhttp_proxy.dylib
+codesign --force --sign - native/macos/http-proxy-tun-helper
 ```
 
 The `install_name_tool` step is required: without an `@rpath` install name the
@@ -82,15 +96,33 @@ generate one; from 3.44.9 it wires plugins through Swift Package Manager and
 never runs `pod install`, leaving `PODS_ROOT` empty. Note the flag is a global
 Flutter setting, not a per-project one.
 
-The dylib is only embedded by the Xcode phase, so re-stage and re-sign it after
-each build, matching what CI does:
+The native files are only embedded by the Xcode phase, so re-stage and re-sign
+them after each build, matching what CI does:
 
 ```bash
 APP=build/macos/Build/Products/Release/proxy_ui.app
 cp native/macos/libhttp_proxy.dylib "$APP/Contents/Frameworks/"
+cp native/macos/http-proxy-tun-helper "$APP/Contents/MacOS/"
 codesign --force --sign - "$APP/Contents/Frameworks/libhttp_proxy.dylib"
+codesign --force --sign - "$APP/Contents/MacOS/http-proxy-tun-helper"
 codesign --force --deep --sign - "$APP"
 ```
+
+The helper lives in `Contents/MacOS/` rather than `Contents/Frameworks/` because
+native code locates it relative to its own executable path.
+
+##### TUN mode on macOS
+
+Start the local proxy first, then use the TUN switch. Enabling it asks for an
+administrator password once per session; the app itself stays unprivileged and
+keeps serving the local SOCKS5 listener while the authorized helper owns the
+utun device and the system routes. Turning the switch off restores the previous
+routes and DNS settings, and so does quitting or crashing the app — the helper
+notices its control socket closing and cleans up on its own.
+
+Use an IP address rather than a hostname for the remote proxy endpoint. Only the
+addresses resolved before setup receive a physical route, and macOS has no
+process-level bypass to keep the app's own later lookups out of the tunnel.
 
 #### Windows
 
