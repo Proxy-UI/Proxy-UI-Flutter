@@ -37,7 +37,7 @@ A cross-platform Flutter GUI for encrypted proxy client.
 - Visual Studio 2022 with the Desktop development with C++ workload (Windows)
 - Rust toolchain from the parent `proxy-everything` repository
 
-Flutter is pinned to 3.38.6 in `.fvmrc`. Do not invoke a globally installed
+Flutter is pinned to 3.44.9 in `.fvmrc`. Do not invoke a globally installed
 `flutter` or `dart`; use `fvm flutter` and `fvm dart` so local and CI builds use
 the same SDK.
 
@@ -48,6 +48,51 @@ fvm install
 fvm flutter pub get
 fvm flutter run -d windows
 ```
+
+#### macOS
+
+There is no staging script for macOS yet, so build the native library from the
+parent repository and place it where Xcode expects it:
+
+```bash
+# in the parent proxy-everything repository
+cargo build -p proxy-ffi --release
+
+# in this repository
+mkdir -p native/macos
+cp ../proxy-everything/target/release/libhttp_proxy.dylib native/macos/
+install_name_tool -id "@rpath/libhttp_proxy.dylib" native/macos/libhttp_proxy.dylib
+codesign --force --sign - native/macos/libhttp_proxy.dylib
+```
+
+The `install_name_tool` step is required: without an `@rpath` install name the
+bundled app looks for the dylib at its absolute build path and fails to load it.
+
+Then keep CocoaPods for plugin integration and build:
+
+```bash
+fvm flutter config --no-enable-swift-package-manager
+fvm flutter build macos --release
+```
+
+Without that flag the build fails with `Unable to load contents of file list:
+'/Target Support Files/Pods-Runner/…'`. `macos/Runner.xcodeproj` is committed
+carrying CocoaPods build phases and no Podfile is tracked, so Flutter has to
+generate one; from 3.44.9 it wires plugins through Swift Package Manager and
+never runs `pod install`, leaving `PODS_ROOT` empty. Note the flag is a global
+Flutter setting, not a per-project one.
+
+The dylib is only embedded by the Xcode phase, so re-stage and re-sign it after
+each build, matching what CI does:
+
+```bash
+APP=build/macos/Build/Products/Release/proxy_ui.app
+cp native/macos/libhttp_proxy.dylib "$APP/Contents/Frameworks/"
+codesign --force --sign - "$APP/Contents/Frameworks/libhttp_proxy.dylib"
+codesign --force --deep --sign - "$APP"
+```
+
+#### Windows
 
 The desktop app requires the Rust `http_proxy` native library. Windows TUN mode
 also requires `wintun.dll`; the parent build scripts stage both DLLs. When developing
