@@ -2,8 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- TUN mode cannot work inside the App Sandbox. Enabling it runs a helper
+	     with administrator rights, which needs a control socket outside the
+	     container and an osascript authorization prompt; a sandboxed process can
+	     do neither. The shipped app only worked because the build re-signs it
+	     ad-hoc, which discards these entitlements. Stating it here keeps that
+	     from silently reverting the day the app is signed with a real identity. -->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<key>com.apple.security.network.server</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
