@@ -67,8 +67,11 @@ administrator prompt. Without it the TUN switch can only report a missing helper
 The equivalent by hand, if you would rather not use the script:
 
 ```bash
-# in the parent proxy-everything repository
-cargo build -p proxy-ffi -p proxy-client --bin http-proxy-tun-helper --release
+# in the parent proxy-everything repository.
+# Two commands: `--bin` filters targets across the whole package selection, so
+# combining these would skip the proxy-ffi library and leave a stale dylib.
+cargo build -p proxy-ffi --release
+cargo build -p proxy-client --bin http-proxy-tun-helper --release
 
 # in this repository
 mkdir -p native/macos
