@@ -127,6 +127,14 @@ jobs:
           elif [ -f "http-proxy-tun-helper-x86_64-apple-darwin" ]; then
             cp http-proxy-tun-helper-x86_64-apple-darwin http-proxy-tun-helper
           fi
+          # The Runner links -lhttp_proxy (see macos/Runner/Configs/Release.xcconfig),
+          # and the linker copies whatever install name the dylib carries at that
+          # moment into the executable's load command. Rust publishes it with the
+          # absolute path from its own build machine, so the rewrite has to happen
+          # here, before the Flutter build. Doing it afterwards fixes only the
+          # bundled copy: the executable keeps pointing at /Users/runner/... and
+          # the shipped app dies on launch with "Library not loaded".
+          install_name_tool -id "@rpath/libhttp_proxy.dylib" libhttp_proxy.dylib
           # Sign the dylib before Flutter build
           codesign --force --sign - libhttp_proxy.dylib
           if [ -f "http-proxy-tun-helper" ]; then
@@ -157,14 +165,32 @@ jobs:
           flutter pub get
           flutter build macos --release
 
-      - name: Copy dylib and fix install name
+      - name: Copy dylib and verify install name
         run: |
           APP_DIR="build/macos/Build/Products/Release/proxy_ui.app"
           DYLIB_PATH="$APP_DIR/Contents/Frameworks/libhttp_proxy.dylib"
           mkdir -p "$APP_DIR/Contents/Frameworks"
           cp native/macos/libhttp_proxy.dylib "$DYLIB_PATH"
-          # Fix the dylib install name to use @rpath
-          install_name_tool -id "@rpath/libhttp_proxy.dylib" "$DYLIB_PATH"
+          # The install name is already @rpath from the staging step, and this
+          # copy inherits it. Check the executable rather than trusting that:
+          # a bad install name never breaks this build, it only surfaces when
+          # someone launches the release, which is how it shipped before.
+          EXE="$APP_DIR/Contents/MacOS/proxy_ui"
+          if [ ! -f "$EXE" ]; then
+            echo "::error::$EXE is missing; the Flutter build did not produce an app"
+            exit 1
+          fi
+          LOADS=$(otool -L "$EXE" | grep libhttp_proxy || true)
+          if [ -z "$LOADS" ]; then
+            echo "::error::proxy_ui has no libhttp_proxy.dylib load command"
+            exit 1
+          fi
+          BAD=$(printf '%s\n' "$LOADS" | grep -v "@rpath/libhttp_proxy.dylib" || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::proxy_ui does not load libhttp_proxy.dylib through @rpath"
+            echo "$BAD"
+            exit 1
+          fi
           # The Xcode phase already copies the helper, but re-stage it here for
           # the same reason as the dylib: keep this step the single source of
           # truth for what ends up in the shipped bundle. Native code locates it
