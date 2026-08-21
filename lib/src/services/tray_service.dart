@@ -416,7 +416,7 @@ class TrayService with TrayListener {
     switch (key) {
       case 'proxy':
         if (proxyState.isRunning) {
-          proxyState.stop();
+          await proxyState.stop();
         } else {
           final started = await proxyState.start();
           if (!started) {
@@ -490,11 +490,13 @@ class TrayService with TrayListener {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
     proxyState?.removeListener(_onProxyStateChanged);
-    // Stopping releases the native system-proxy guard. `exit` skips Dart and
-    // Rust teardown, so the system proxy would otherwise keep pointing at a
-    // listener that no longer exists.
-    if (proxyState != null && proxyState.isRunning) {
-      proxyState.stop();
+    // Stopping releases the native system-proxy guard and, on macOS, waits for
+    // the privileged helper to put the system routes and DNS back. `exit` below
+    // skips Dart and Rust teardown, so without awaiting this the machine can be
+    // left pointing at a proxy listener and a tunnel resolver that are both gone.
+    // `stop` also covers a TUN session that outlived the listener.
+    if (proxyState != null && (proxyState.isRunning || proxyState.isTunRunning)) {
+      await proxyState.stop();
     }
     try {
       await trayManager.destroy();

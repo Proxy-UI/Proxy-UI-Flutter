@@ -54,7 +54,7 @@ class _ProxyPageState extends State<ProxyPage> {
     if (state.isProxyOperationInProgress) return;
 
     if (state.isRunning) {
-      final success = state.stop();
+      final success = await state.stop();
       if (mounted) {
         if (success) {
           ToastUtils.showSuccess('Proxy stopped');

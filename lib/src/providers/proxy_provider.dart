@@ -345,7 +345,7 @@ class ProxyState extends ChangeNotifier {
 
     // Stop first if already running to apply new config
     if (_isRunning) {
-      if (!stop()) {
+      if (!await stop()) {
         return false;
       }
     }
@@ -569,23 +569,38 @@ class ProxyState extends ChangeNotifier {
 
   /// Release the local port after the elevated replacement has been accepted.
   /// Keep `tunEnabled` persisted so the new process knows to complete TUN setup.
+  ///
+  /// Deliberately not awaited: TUN is not yet running in this unelevated process
+  /// — the whole point of the handoff is that it could not start it — so there is
+  /// no route or DNS teardown to wait for, only the listener to release.
   void stopForElevationHandoff() {
     if (_isRunning) {
-      _service.stop();
+      unawaited(_service.stop());
     }
     _isRunning = false;
     _isTunRunning = false;
     notifyListeners();
   }
 
-  bool stop() {
+  /// Stop the proxy and any TUN session it owns.
+  ///
+  /// Completes only after native teardown has restored the system routes and
+  /// DNS, so a caller that exits the process afterwards cannot cut that short.
+  Future<bool> stop() async {
     if (_isProxyTransitioning) {
       _lastError = 'Proxy operation is already in progress';
       _safeNotifyListeners();
       return false;
     }
     if (_isTunBusy) return false;
-    if (!_isRunning) return true;
+    // TUN can outlive the listener if a previous stop failed part-way. Cancel it
+    // rather than returning early, or its routes and DNS stay installed.
+    if (!_isRunning) {
+      if (_isTunRunning) {
+        await setTunEnabled(false);
+      }
+      return true;
+    }
 
     _isProxyTransitioning = true;
     _lastError = null;
@@ -595,7 +610,7 @@ class ProxyState extends ChangeNotifier {
       // `proxy_stop` cancels the TUN child token before the local listener
       // token, so no separate blocking FFI call is needed on whole-proxy
       // shutdown.
-      final result = _service.stop();
+      final result = await _service.stop();
       if (result == ProxyResult.ok || result == ProxyResult.notRunning) {
         _isRunning = false;
         _isTunRunning = false;
@@ -926,7 +941,7 @@ class ProxyState extends ChangeNotifier {
     // non-TUN HTTP/SOCKS sessions are not owned by the TUN relay and therefore
     // cannot all be drained by stopping capture.
     if (_isRunning) {
-      if (!stop()) return false;
+      if (!await stop()) return false;
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
 

@@ -1,5 +1,9 @@
 import 'dart:async' show unawaited;
 import 'dart:io';
+// `AppExitResponse` for the platform-quit hook. Flutter's own bindings take it
+// straight from `dart:ui`; no framework library re-exports it.
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toastification/toastification.dart';
@@ -128,6 +132,31 @@ class _ProxyAppState extends State<ProxyApp>
     if (state == AppLifecycleState.resumed) {
       unawaited(TrayService.instance.handleSystemResume());
     }
+  }
+
+  /// Release the system proxy and the tunnel's routes and DNS before the process
+  /// goes away.
+  ///
+  /// The tray's Quit entry handles its own teardown, but a platform quit — Cmd-Q
+  /// or Dock > Quit on macOS, a session logout anywhere — reaches the engine
+  /// directly. Without this the machine keeps a system proxy pointing at a dead
+  /// listener and, with TUN active, a resolver pointing into a tunnel that no
+  /// longer exists.
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      return super.didRequestAppExit();
+    }
+    if (mounted) {
+      final proxyState = context.read<ProxyState>();
+      // Awaiting is the point: the exit must not race the privileged helper
+      // restoring DNS. `stop` also covers TUN outliving the listener.
+      if (proxyState.isRunning || proxyState.isTunRunning) {
+        await proxyState.stop();
+      }
+      await proxyState.flushDesktopLogs();
+    }
+    return AppExitResponse.exit;
   }
 
   @override

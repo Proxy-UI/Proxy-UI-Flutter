@@ -58,6 +58,36 @@ void main() {
     },
   );
 
+  test('stopping tears TUN down even when the listener is already gone', () async {
+    final service = _FakeProxyService();
+    final state = ProxyState(service: service);
+    addTearDown(state.dispose);
+    await _waitUntilInitialized(state);
+
+    state.updateConfig(
+      ProxyConfigModel(serverHost: 'node.example', serverPort: 1081, localPort: 18081, setSystemProxy: false),
+    );
+    expect(await state.start(), isTrue);
+    expect(await state.setTunEnabled(true), isTrue);
+
+    // The listener dies but capture does not, which is where TUN owns the system
+    // routes and DNS with nothing left to release them.
+    service.simulateListenerLoss();
+    service.calls.clear();
+
+    expect(await state.stop(), isTrue);
+    // Either route is acceptable — `stop` reaches native, whose `!running`
+    // branch cancels TUN, or the provider asks for teardown directly. What must
+    // not happen is returning with capture still active and its DNS installed.
+    expect(
+      service.calls.isNotEmpty,
+      isTrue,
+      reason: 'stopping must reach native so TUN routes and DNS are restored',
+    );
+    expect(state.isTunRunning, isFalse);
+    expect(service.isTunRunning, isFalse);
+  });
+
   test(
     'failed TUN restart restores the previous upstream and routes',
     () async {
@@ -202,10 +232,17 @@ class _FakeProxyService extends ProxyService {
   }
 
   @override
-  int stop() {
+  Future<int> stop() async {
+    calls.add('stop');
     _running = false;
     _tunRunning = false;
     return ProxyResult.ok;
+  }
+
+  /// Drop the listener without touching TUN, reproducing the inconsistent state
+  /// a partially failed stop leaves behind.
+  void simulateListenerLoss() {
+    _running = false;
   }
 
   @override

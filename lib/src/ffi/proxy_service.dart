@@ -548,13 +548,22 @@ class ProxyService {
     }
   }
 
-  /// Stop proxy.
-  int stop() {
+  static int _stopIsolate(int handleAddress) {
+    final ffi = ProxyFFI();
+    return ffi.proxyStop(Pointer<Void>.fromAddress(handleAddress));
+  }
+
+  /// Stop the proxy, and any TUN session it owns.
+  ///
+  /// Native code waits for TUN teardown to restore the system routes and DNS
+  /// before returning, so this stays off the UI isolate for the same reason
+  /// [stopTun] does.
+  Future<int> stop() async {
     if (_handle == null) return ProxyResult.invalidParam;
     if (Platform.isAndroid) {
       unawaited(AndroidVpnService.instance.stopInterface());
     }
-    return _ffi.proxyStop(_handle!);
+    return compute(_stopIsolate, _handle!.address);
   }
 
   /// Destroy proxy handle and free resources.
