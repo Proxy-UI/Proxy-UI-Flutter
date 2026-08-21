@@ -102,6 +102,64 @@ void main() {
     },
   );
 
+  test('TUN process forest does not collapse macOS apps under launchd', () {
+    TunProcessInfo process(
+      String name,
+      int pid, {
+      int? parentPid,
+      required String path,
+    }) {
+      return TunProcessInfo(
+        name: name,
+        pids: [pid],
+        executablePaths: [path],
+        instances: [
+          TunProcessInstance(
+            pid: pid,
+            parentPid: parentPid,
+            executablePath: path,
+          ),
+        ],
+      );
+    }
+
+    // On macOS every GUI application descends from launchd, so that edge has to
+    // be cut or the picker renders one tree containing everything.
+    final forest = buildTunProcessForest([
+      process('launchd', 1, path: '/sbin/launchd'),
+      process(
+        'firefox',
+        200,
+        parentPid: 1,
+        path: '/Applications/Firefox.app/Contents/MacOS/firefox',
+      ),
+      process(
+        'code',
+        300,
+        parentPid: 1,
+        path: '/Applications/Visual Studio Code.app/Contents/MacOS/Electron',
+      ),
+      // A genuine parent/child pair inside one application must survive.
+      process(
+        'code helper',
+        301,
+        parentPid: 300,
+        path:
+            '/Applications/Visual Studio Code.app/Contents/Frameworks/'
+            'Code Helper.app/Contents/MacOS/Code Helper',
+      ),
+    ]);
+
+    final roots = {for (final root in forest) root.process.name: root};
+    expect(roots.keys, containsAll(['firefox', 'code']));
+    expect(
+      roots['firefox']!.children,
+      isEmpty,
+      reason: 'unrelated applications must not be nested under each other',
+    );
+    expect(roots['code']!.children.single.process.name, 'code helper');
+  });
+
   test('TUN process search recognizes game initialisms', () {
     const process = TunProcessInfo(
       name: 'league of legends',

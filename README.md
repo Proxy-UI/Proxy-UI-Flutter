@@ -123,9 +123,15 @@ utun device and the system routes. Turning the switch off restores the previous
 routes and DNS settings, and so does quitting or crashing the app — the helper
 notices its control socket closing and cleans up on its own.
 
-Use an IP address rather than a hostname for the remote proxy endpoint. Only the
-addresses resolved before setup receive a physical route, and macOS has no
-process-level bypass to keep the app's own later lookups out of the tunnel.
+The TUN bypass picker (the shield button next to the switch) selects applications
+to keep out of the tunnel, and works while a session is running: changes are sent
+to the helper, which reroutes new connections and closes established ones whose
+decision changed so the application reconnects on the new path. The app's own
+executable is always bypassed and cannot be deselected.
+
+The list covers processes owned by the current user. Unlike Windows, there are no
+executable icons and no dormant installed applications, because macOS keeps icons
+inside `.app` bundles and only running processes can be enumerated unprivileged.
 
 #### Windows
 

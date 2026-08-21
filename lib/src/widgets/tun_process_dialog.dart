@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,7 +10,22 @@ import '../utils/toast_utils.dart';
 
 enum _ProcessScope { all, running, installed }
 
-/// Windows process picker for the runtime-updatable TUN bypass policy.
+/// Suffix used when naming an executable in the UI.
+///
+/// The native side normalizes names by stripping `.exe`, so Windows rows read
+/// naturally with it restored. macOS executables have no extension.
+final String _executableSuffix = Platform.isWindows ? '.exe' : '';
+
+/// Whether this platform reports applications that are installed but not
+/// running. Only Windows enumerates app registration and Start Menu shortcuts;
+/// macOS lists live processes, so an "Installed" filter would always be empty.
+final bool _reportsInstalledApplications = Platform.isWindows;
+
+/// Process picker for the runtime-updatable TUN bypass policy.
+///
+/// Available on Windows and macOS. The two differ in what the native side can
+/// report: Windows adds executable icons and dormant installed applications,
+/// while macOS lists the current user's running processes.
 class TunProcessDialog extends StatefulWidget {
   const TunProcessDialog({super.key});
 
@@ -219,22 +236,25 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
               alignment: Alignment.centerLeft,
               child: SegmentedButton<_ProcessScope>(
                 showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(
+                segments: [
+                  const ButtonSegment(
                     value: _ProcessScope.all,
                     icon: Icon(Icons.apps_outlined),
                     label: Text('All'),
                   ),
-                  ButtonSegment(
+                  const ButtonSegment(
                     value: _ProcessScope.running,
                     icon: Icon(Icons.play_circle_outline),
                     label: Text('Running'),
                   ),
-                  ButtonSegment(
-                    value: _ProcessScope.installed,
-                    icon: Icon(Icons.inventory_2_outlined),
-                    label: Text('Installed'),
-                  ),
+                  // Omitted where the platform never reports dormant apps, so
+                  // the filter cannot select an always-empty list.
+                  if (_reportsInstalledApplications)
+                    const ButtonSegment(
+                      value: _ProcessScope.installed,
+                      icon: Icon(Icons.inventory_2_outlined),
+                      label: Text('Installed'),
+                    ),
                 ],
                 selected: {_scope},
                 onSelectionChanged: (selection) => setState(() {
@@ -367,7 +387,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     final childApplications = node.descendants.length;
     final details = <String>[
       if (isSelf) 'Current process | always bypassed',
-      if (inherited) 'Included by ${row.inheritedBy}.exe',
+      if (inherited) 'Included by ${row.inheritedBy}$_executableSuffix',
       if (!isSelf && !inherited)
         process.pids.isEmpty
             ? process.installed
@@ -436,7 +456,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                         children: [
                           Expanded(
                             child: Text(
-                              '${process.displayName}.exe',
+                              '${process.displayName}$_executableSuffix',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodyLarge,
@@ -445,7 +465,8 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                           if (inherited)
                             Tooltip(
                               message:
-                                  'Bypassed through ${row.inheritedBy}.exe',
+                                  'Bypassed through '
+                                  '${row.inheritedBy}$_executableSuffix',
                               child: const Icon(
                                 Icons.account_tree_outlined,
                                 size: 18,

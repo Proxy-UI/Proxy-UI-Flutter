@@ -72,6 +72,10 @@ bool tunProcessMatchesQuery(TunProcessInfo process, String query) {
 /// applications, so those edges are intentionally cut. Non-system launcher
 /// chains, such as RiotClientServices -> LeagueClient -> game processes, remain
 /// visible and match the native ancestor-based bypass behavior.
+///
+/// macOS needs the same treatment for a different reason: `launchd` is the
+/// ancestor of every GUI application, so leaving that edge intact would collapse
+/// the whole list into a single tree rooted at it.
 List<TunProcessTreeNode> buildTunProcessForest(List<TunProcessInfo> processes) {
   final byName = <String, TunProcessInfo>{
     for (final process in processes) process.name: process,
@@ -182,7 +186,12 @@ bool _isWindowsSystemPath(String path) {
       normalized.endsWith(r'\windows\explorer.exe');
 }
 
+/// Names that never act as an application parent.
+///
+/// Kept as one set across platforms: these are basenames, they do not collide,
+/// and a Windows name simply never appears in a macOS snapshot.
 const _systemBoundaryNames = <String>{
+  // Windows system and shell processes.
   'cmd',
   'conhost',
   'csrss',
@@ -200,4 +209,12 @@ const _systemBoundaryNames = <String>{
   'wininit',
   'winlogon',
   'windowsterminal',
+  // macOS session and shell processes. `launchd` is the ancestor of everything,
+  // and the login/terminal shells would otherwise adopt unrelated applications.
+  'bash',
+  'launchd',
+  'login',
+  'loginwindow',
+  'sh',
+  'zsh',
 };

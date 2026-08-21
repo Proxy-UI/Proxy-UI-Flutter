@@ -13,6 +13,14 @@ import '../widgets/android_vpn_app_dialog.dart';
 import '../widgets/lan_proxy_link.dart';
 import '../widgets/tun_process_dialog.dart';
 
+/// Whether this platform can pick processes to keep out of the tunnel.
+///
+/// Windows and macOS both resolve a captured session back to its owning process
+/// and can relay it directly through the physical interface. Android and iOS
+/// leave per-application routing to the platform VPN API, which has its own
+/// picker, and Linux has no process enumeration wired up.
+final bool _supportsTunProcessBypass = Platform.isWindows || Platform.isMacOS;
+
 /// Proxy control page with simple switch and config FAB
 class ProxyPage extends StatefulWidget {
   final GlobalKey<ScaffoldState> scaffoldKey;
@@ -375,7 +383,7 @@ class _ProxyPageState extends State<ProxyPage> {
                         tooltip:
                             'VPN applications (${state.config.androidVpnPackages.length})',
                       ),
-                    if (Platform.isWindows)
+                    if (_supportsTunProcessBypass)
                       IconButton(
                         onPressed: state.isTunBusy
                             ? null
@@ -667,7 +675,7 @@ class _ProxyPageState extends State<ProxyPage> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              if (Platform.isWindows)
+                              if (_supportsTunProcessBypass)
                                 IconButton(
                                   onPressed: state.isTunBusy
                                       ? null
