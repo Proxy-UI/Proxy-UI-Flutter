@@ -65,7 +65,12 @@ void main() {
     await _waitUntilInitialized(state);
 
     state.updateConfig(
-      ProxyConfigModel(serverHost: 'node.example', serverPort: 1081, localPort: 18081, setSystemProxy: false),
+      ProxyConfigModel(
+        serverHost: 'node.example',
+        serverPort: 1081,
+        localPort: 18081,
+        setSystemProxy: false,
+      ),
     );
     expect(await state.start(), isTrue);
     expect(await state.setTunEnabled(true), isTrue);

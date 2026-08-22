@@ -495,7 +495,8 @@ class TrayService with TrayListener {
     // skips Dart and Rust teardown, so without awaiting this the machine can be
     // left pointing at a proxy listener and a tunnel resolver that are both gone.
     // `stop` also covers a TUN session that outlived the listener.
-    if (proxyState != null && (proxyState.isRunning || proxyState.isTunRunning)) {
+    if (proxyState != null &&
+        (proxyState.isRunning || proxyState.isTunRunning)) {
       await proxyState.stop();
     }
     try {
