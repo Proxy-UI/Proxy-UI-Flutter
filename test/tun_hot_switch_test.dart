@@ -17,6 +17,42 @@ void main() {
   });
 
   test(
+    'applying bypass repeatedly preserves the running TUN and listener',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(
+          serverHost: 'node.example',
+          serverPort: 1081,
+          localPort: 18080,
+          setSystemProxy: false,
+        ),
+      );
+      expect(await state.start(), isTrue);
+      expect(await state.setTunEnabled(true), isTrue);
+      service.calls.clear();
+
+      for (final processes in [
+        <String>['browser'],
+        ['browser', 'game'],
+        ['game'],
+        <String>[],
+      ]) {
+        expect(await state.updateTunBypassProcesses(processes), isTrue);
+        expect(service.lastBypassProcesses, processes);
+        expect(state.config.tunBypassProcesses, processes);
+        expect(state.isRunning, isTrue);
+        expect(state.isTunRunning, isTrue);
+      }
+      expect(service.calls, List.filled(4, 'setTunBypassProcesses'));
+      expect(service.listenerStartCount, 1);
+    },
+  );
+
+  test(
     'active TUN switches upstream without restarting the local listener',
     () async {
       final service = _FakeProxyService();
@@ -179,6 +215,7 @@ class _FakeProxyService extends ProxyService {
   final Queue<int> tunStartResults = Queue<int>();
   var listenerStartCount = 0;
   var lastAllowLan = false;
+  List<String> lastBypassProcesses = [];
   var _running = false;
   var _tunRunning = false;
   String? _error;
@@ -226,6 +263,13 @@ class _FakeProxyService extends ProxyService {
     calls.add('stopTun');
     _tunRunning = false;
     _error = null;
+    return ProxyResult.ok;
+  }
+
+  @override
+  int setTunBypassProcesses(List<String> processes) {
+    calls.add('setTunBypassProcesses');
+    lastBypassProcesses = List.of(processes);
     return ProxyResult.ok;
   }
 
