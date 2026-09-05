@@ -65,7 +65,8 @@ jobs:
               x86_64-pc-windows-msvc) dest="x64" ;;
               aarch64-pc-windows-msvc) dest="arm64" ;;
             esac
-            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/http_proxy.dll" "native/windows/$dest/" || true
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/http_proxy.dll" "native/windows/$dest/"
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/wintun.dll" "native/windows/$dest/"
           done
 
           # Linux
@@ -245,6 +246,16 @@ jobs:
           dart pub global activate fastforge
           flutter pub get
           dart pub global run fastforge:main release --name production
+
+      - name: Verify Windows bundle
+        shell: pwsh
+        run: |
+          $bundle = 'build/windows/x64/runner/Release'
+          foreach ($required in @('proxy_ui.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $bundle $required))) {
+              throw "Windows release bundle is missing $required"
+            }
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
