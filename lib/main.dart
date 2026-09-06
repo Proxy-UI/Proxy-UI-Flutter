@@ -1,9 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:io';
-// `AppExitResponse` for the platform-quit hook. Flutter's own bindings take it
-// straight from `dart:ui`; no framework library re-exports it.
-import 'dart:ui' show AppExitResponse;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toastification/toastification.dart';
@@ -12,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'src/providers/proxy_provider.dart';
 import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
+import 'src/services/desktop_exit_service.dart';
 import 'src/services/desktop_log_service.dart';
 import 'src/services/desktop_settings.dart';
 import 'src/services/single_instance_service.dart';
@@ -26,6 +25,8 @@ void main(List<String> arguments) async {
   // Initialize window manager for desktop platforms
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
+    // Install the native close guard before the window can first be shown.
+    await windowManager.setPreventClose(true);
 
     try {
       await desktopLogService.initialize();
@@ -83,6 +84,8 @@ class ProxyApp extends StatefulWidget {
 
 class _ProxyAppState extends State<ProxyApp>
     with WindowListener, WidgetsBindingObserver {
+  DesktopExitService? _exitService;
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +93,19 @@ class _ProxyAppState extends State<ProxyApp>
 
     // Initialize tray and window listener for desktop platforms
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      final exitService = DesktopExitService(
+        platform: defaultTargetPlatform,
+        hideToTray: () async {
+          // Capture the frame before hiding, including programmatic moves that
+          // window_manager does not report as interactive move/resize events.
+          await WindowStateService.instance.saveNow();
+          await TrayService.instance.hideWindow();
+        },
+        prepareToQuit: _prepareToQuit,
+      );
+      _exitService = exitService;
+      WidgetsBinding.instance.addObserver(exitService);
+      windowManager.addListener(exitService);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         TrayService.instance.initialize(context.read<ProxyState>());
@@ -98,30 +114,23 @@ class _ProxyAppState extends State<ProxyApp>
         SingleInstanceService.instance.initialize();
       });
       windowManager.addListener(this);
-      windowManager.setPreventClose(true);
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    final exitService = _exitService;
+    if (exitService != null) {
+      WidgetsBinding.instance.removeObserver(exitService);
+      windowManager.removeListener(exitService);
+    }
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       windowManager.removeListener(this);
       TrayService.instance.dispose();
       WindowStateService.instance.dispose();
     }
     super.dispose();
-  }
-
-  @override
-  Future<void> onWindowClose() async {
-    // The reliable moment to record the frame: window_manager only reports
-    // "moved"/"resized" after an interactive drag, so snapping or any
-    // programmatic move would otherwise never be saved.
-    await WindowStateService.instance.saveNow();
-    // Hide to tray instead of closing. The tray menu's show/hide entry tracks
-    // this, so it has to learn about the change here too.
-    await TrayService.instance.hideWindow();
   }
 
   @override
@@ -134,19 +143,10 @@ class _ProxyAppState extends State<ProxyApp>
     }
   }
 
-  /// Release the system proxy and the tunnel's routes and DNS before the process
-  /// goes away.
-  ///
-  /// The tray's Quit entry handles its own teardown, but a platform quit — Cmd-Q
-  /// or Dock > Quit on macOS, a session logout anywhere — reaches the engine
-  /// directly. Without this the machine keeps a system proxy pointing at a dead
-  /// listener and, with TUN active, a resolver pointing into a tunnel that no
-  /// longer exists.
-  @override
-  Future<AppExitResponse> didRequestAppExit() async {
-    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      return super.didRequestAppExit();
-    }
+  /// Cmd-Q and Dock > Quit on macOS must await route/DNS restoration. The tray's
+  /// explicit Quit entry awaits its own teardown; Windows session shutdown has
+  /// a separate native WM_ENDSESSION cleanup hook.
+  Future<void> _prepareToQuit() async {
     if (mounted) {
       final proxyState = context.read<ProxyState>();
       // Awaiting is the point: the exit must not race the privileged helper
@@ -156,7 +156,6 @@ class _ProxyAppState extends State<ProxyApp>
       }
       await proxyState.flushDesktopLogs();
     }
-    return AppExitResponse.exit;
   }
 
   @override

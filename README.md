@@ -29,6 +29,16 @@ A cross-platform Flutter GUI for encrypted proxy client.
 | Windows | ✅ |
 | Web | ⚠️ (UI only, no FFI) |
 
+## Desktop window and exit behavior
+
+Closing the window (Windows **×** / Alt-F4, or the macOS red close button)
+hides it to the tray while the proxy and TUN continue running. Click the tray
+icon to reopen it; macOS also supports reopening from the Dock.
+
+Use the tray menu's **Quit**, or **Cmd-Q** / **Dock > Quit** on macOS, to stop
+the services and exit. These quit paths wait for TUN routes and DNS to be
+restored before terminating the process.
+
 ## Build
 
 ### Prerequisites
