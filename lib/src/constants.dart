@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 
 /// Responsive breakpoints
@@ -39,8 +40,20 @@ enum ColorSeed {
   deepOrange('Deep Orange', Colors.deepOrange),
   pink('Pink', Colors.pink);
 
-  const ColorSeed(this.label, this.color);
-  final String label;
+  const ColorSeed(this._englishLabel, this.color);
+  final String _englishLabel;
+  String get englishLabel => _englishLabel;
+  String get label => switch (this) {
+    ColorSeed.baseColor => appStrings.mBaseline,
+    ColorSeed.indigo => appStrings.indigo,
+    ColorSeed.blue => appStrings.blue,
+    ColorSeed.teal => appStrings.teal,
+    ColorSeed.green => appStrings.green,
+    ColorSeed.yellow => appStrings.yellow,
+    ColorSeed.orange => appStrings.orange,
+    ColorSeed.deepOrange => appStrings.deepOrange,
+    ColorSeed.pink => appStrings.pink,
+  };
   final Color color;
 }
 

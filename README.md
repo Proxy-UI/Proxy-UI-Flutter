@@ -2,6 +2,20 @@
 
 A cross-platform Flutter GUI for encrypted proxy client.
 
+## Interface language
+
+The translate button in the global title bar selects **System default**,
+**简体中文**, or **English**. The selection is saved across launches and updates
+navigation, proxy controls, nodes, subscriptions, logs, settings, dialogs, and
+tray menus without restarting the proxy or TUN. The same control in the TUN
+guide changes the application language. Original native logs, process names,
+paths, and executable commands remain intact.
+
+Translations use Flutter `gen-l10n` with `lib/l10n/app_en.arb` and
+`lib/l10n/app_zh.arb`. Add matching entries to both files, then run
+`fvm flutter gen-l10n` from this directory. Generated localization sources are
+ignored; normal FVM builds regenerate them.
+
 ## Features
 
 - **Proxy Control**: One-tap start/stop proxy with visual status indicator
@@ -132,6 +146,35 @@ keeps serving the local SOCKS5 listener while the authorized helper owns the
 utun device and the system routes. Turning the switch off restores the previous
 routes and DNS settings, and so does quitting or crashing the app — the helper
 notices its control socket closing and cleans up on its own.
+
+System proxy mode configures the primary network service (for example Wi-Fi),
+even while a VPN captures Internet routes. HTTP, HTTPS, and SOCKS settings are
+restored independently on that same service when the proxy stops. A failure to
+apply the requested system proxy is reported as a startup error.
+
+Before requesting administrator access, TUN checks whether another tunnel
+already owns Internet routes. A conflict leaves routes, DNS, and the local proxy
+unchanged and is reported in the UI. Closing another VPN's window may leave its
+background service running. The TUN helper sends its forwarding diagnostics to
+the UI Logs tab, and direct relays retain the physical DNS servers captured
+before TUN setup changes DNS.
+
+On macOS, the question-mark button next to TUN opens a read-only diagnostic
+guide; TUN setup failures open the same guide automatically. It checks the
+selected Internet/fake-IP routes, maps each utun socket to its current owning
+PID, and displays the executable path without collecting process arguments.
+Interface names are reusable, so an active Proxy UI helper is identified as
+this app rather than attributed to a previously running VPN.
+
+The guide provides localized step-by-step instructions, copyable route checks,
+and application reopen commands. When the current owner is an identified
+third-party application, it offers a temporary SIGTERM command matched by its
+escaped full executable path rather than a stale PID. The command requests all
+running instances of that executable to exit and can interrupt their connections.
+A specific client hint appears only after its executable is identified. All commands are copied for manual use; diagnostics never
+stop processes or modify routes. Recheck refreshes the evidence and enables
+retry only when both route lookups succeed without selecting a utun interface.
+Unknown owners and system processes do not receive termination commands.
 
 The TUN bypass picker (the shield button next to the switch) selects applications
 to keep out of the tunnel, and works while a session is running: changes are sent

@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -82,7 +83,7 @@ class DesktopLogService {
       await Process.start('xdg-open', [path], mode: ProcessStartMode.detached);
       return;
     }
-    throw UnsupportedError('Log folders are only available on desktop');
+    throw UnsupportedError(appStrings.logFoldersAreOnlyAvailableOnDesktop);
   }
 
   /// Queues one entry for ordered disk persistence.
@@ -109,7 +110,7 @@ class DesktopLogService {
   /// Creates and opens the log directory in the platform file manager.
   Future<void> openLogDirectory() async {
     if (!enabled) {
-      throw UnsupportedError('Log folders are only available on desktop');
+      throw UnsupportedError(appStrings.logFoldersAreOnlyAvailableOnDesktop);
     }
     final directory = await _ensureLogDirectory();
     await _cleanupIfNeeded(directory, _clock());

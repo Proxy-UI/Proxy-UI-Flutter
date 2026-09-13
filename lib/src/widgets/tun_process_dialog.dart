@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -172,11 +173,12 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     if (success) {
       Navigator.of(context).pop();
       ToastUtils.showSuccess(
-        'Bypass applied; affected connections are reconnecting',
+        context.l10n.bypassAppliedAffectedConnectionsAreReconnecting,
       );
     } else {
       ToastUtils.showError(
-        context.read<ProxyState>().lastError ?? 'Failed to update TUN bypass',
+        context.read<ProxyState>().lastError ??
+            context.l10n.failedToUpdateTunBypass,
       );
     }
   }
@@ -210,10 +212,10 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
         children: [
           const Icon(Icons.account_tree_outlined),
           const SizedBox(width: 12),
-          const Expanded(child: Text('Bypass Applications')),
+          Expanded(child: Text(context.l10n.bypassApplications)),
           IconButton(
             onPressed: _loading ? null : _loadProcesses,
-            tooltip: 'Refresh processes',
+            tooltip: context.l10n.refreshProcesses,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -226,8 +228,8 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
             TextField(
               controller: _searchController,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Search applications, paths, or PIDs',
+              decoration: InputDecoration(
+                labelText: context.l10n.searchApplicationsPathsOrPids,
                 prefixIcon: Icon(Icons.search),
               ),
             ),
@@ -237,23 +239,23 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
               child: SegmentedButton<_ProcessScope>(
                 showSelectedIcon: false,
                 segments: [
-                  const ButtonSegment(
+                  ButtonSegment(
                     value: _ProcessScope.all,
                     icon: Icon(Icons.apps_outlined),
-                    label: Text('All'),
+                    label: Text(context.l10n.all2),
                   ),
-                  const ButtonSegment(
+                  ButtonSegment(
                     value: _ProcessScope.running,
                     icon: Icon(Icons.play_circle_outline),
-                    label: Text('Running'),
+                    label: Text(context.l10n.running),
                   ),
                   // Omitted where the platform never reports dormant apps, so
                   // the filter cannot select an always-empty list.
                   if (_reportsInstalledApplications)
-                    const ButtonSegment(
+                    ButtonSegment(
                       value: _ProcessScope.installed,
                       icon: Icon(Icons.inventory_2_outlined),
-                      label: Text('Installed'),
+                      label: Text(context.l10n.installed),
                     ),
                 ],
                 selected: {_scope},
@@ -267,7 +269,10 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
               children: [
                 Expanded(
                   child: Text(
-                    '${_selected.length + (_selfProcess == null ? 0 : 1)} selected',
+                    context.l10n.selected(
+                      (_selected.length + (_selfProcess == null ? 0 : 1))
+                          .toString(),
+                    ),
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ),
@@ -277,11 +282,11 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                     controller: _manualController,
                     onSubmitted: (_) => _addManualProcess(),
                     decoration: InputDecoration(
-                      labelText: 'Executable name',
+                      labelText: context.l10n.executableName,
                       prefixIcon: const Icon(Icons.add_box_outlined),
                       suffixIcon: IconButton(
                         onPressed: _addManualProcess,
-                        tooltip: 'Add process',
+                        tooltip: context.l10n.addProcess,
                         icon: const Icon(Icons.add),
                       ),
                     ),
@@ -306,7 +311,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancel),
         ),
         FilledButton.icon(
           onPressed: _saving ? null : _save,
@@ -316,7 +321,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
-          label: const Text('Apply'),
+          label: Text(context.l10n.apply),
         ),
       ],
     );
@@ -386,21 +391,30 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     final path = process.executablePaths.firstOrNull;
     final childApplications = node.descendants.length;
     final details = <String>[
-      if (isSelf) 'Current process | always bypassed',
-      if (inherited) 'Included by ${row.inheritedBy}$_executableSuffix',
+      if (isSelf) context.l10n.currentProcessAlwaysBypassed,
+      if (inherited)
+        context.l10n.includedBy(
+          (row.inheritedBy).toString(),
+          (_executableSuffix).toString(),
+        ),
       if (!isSelf && !inherited)
         process.pids.isEmpty
             ? process.installed
-                  ? 'Installed | not currently running'
-                  : 'Not currently running'
+                  ? context.l10n.installedNotCurrentlyRunning
+                  : context.l10n.notCurrentlyRunning
             : process.pids.length == 1
-            ? 'PID ${process.pids.single}'
-            : '${process.pids.length} instances',
-      if (process.installed && process.pids.isNotEmpty) 'Installed',
+            ? context.l10n.pid((process.pids.single).toString())
+            : context.l10n.instances((process.pids.length).toString()),
+      if (process.installed && process.pids.isNotEmpty) context.l10n.installed,
       if (childApplications > 0)
-        '$childApplications child applications | ${node.descendantInstanceCount} processes',
+        context.l10n.childApplicationsProcesses(
+          (childApplications).toString(),
+          (node.descendantInstanceCount).toString(),
+        ),
       if (process.aliases.isNotEmpty)
-        'Registered as ${process.aliases.take(2).join(', ')}',
+        context.l10n.registeredAs(
+          (process.aliases.take(2).join(', ')).toString(),
+        ),
       ?path,
     ];
 
@@ -429,8 +443,8 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                             }
                           }),
                           tooltip: _expanded.contains(name)
-                              ? 'Collapse process tree'
-                              : 'Expand process tree',
+                              ? context.l10n.collapseProcessTree
+                              : context.l10n.expandProcessTree,
                           icon: Icon(
                             _expanded.contains(name)
                                 ? Icons.expand_more
@@ -464,9 +478,10 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                           ),
                           if (inherited)
                             Tooltip(
-                              message:
-                                  'Bypassed through '
-                                  '${row.inheritedBy}$_executableSuffix',
+                              message: context.l10n.bypassedThrough(
+                                (row.inheritedBy).toString(),
+                                (_executableSuffix).toString(),
+                              ),
                               child: const Icon(
                                 Icons.account_tree_outlined,
                                 size: 18,

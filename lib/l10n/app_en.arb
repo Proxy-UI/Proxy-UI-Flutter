@@ -1,0 +1,831 @@
+{
+  "@@locale": "en",
+  "proxyOperationIsAlreadyInProgress": "Proxy operation is already in progress",
+  "waitForTunSetupToFinish": "Wait for TUN setup to finish",
+  "serverHostIsRequired": "Server host is required",
+  "serverPortMustBeBetweenAnd": "Server port must be between 1 and 65535",
+  "localPortMustBeBetweenAnd": "Local port must be between 1 and 65535",
+  "failedToStartProxy": "Failed to start proxy: {value0}",
+  "@failedToStartProxy": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "selectAtLeastOneApplicationForVpnOnlyMode": "Select at least one application for VPN-only mode",
+  "previousApplicationPolicyWasRestored": "{value0} Previous application policy was restored.",
+  "@previousApplicationPolicyWasRestored": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "previousApplicationPolicyCouldNotBeRestored": "{value0} Previous application policy could not be restored: {value1}",
+  "@previousApplicationPolicyCouldNotBeRestored": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "startTheLocalProxyBeforeEnablingTunMode": "Start the local proxy before enabling TUN mode",
+  "administratorPermissionWasNotGrantedTunModeWasNot": "Administrator permission was not granted. TUN mode was not changed.",
+  "portMustBeBetweenAnd": "Port must be between 1 and 65535",
+  "pleaseEnterServerHost": "Please enter server host",
+  "nodeUnreachable": "Node unreachable: {value0}",
+  "@nodeUnreachable": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "nodeUnreachableConnectionTimeout": "Node unreachable: connection timeout",
+  "waitForTheCurrentTunOperationToFinish": "Wait for the current TUN operation to finish",
+  "failedToPauseTunForNodeSwitch": "Failed to pause TUN for node switch: {value0}",
+  "@failedToPauseTunForNodeSwitch": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "cannotSwitchTo": "Cannot switch to {value0}: {value1}.",
+  "@cannotSwitchTo": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToSwitchUpstream": "Failed to switch upstream: {value0}.",
+  "@failedToSwitchUpstream": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToRestartTunFor": "Failed to restart TUN for {value0}: {value1}.",
+  "@failedToRestartTunFor": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "upstreamRollbackReturned": "upstream rollback returned {value0}",
+  "@upstreamRollbackReturned": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "previousNodeAndTunRoutesWereRestored": "{value0} Previous node and TUN routes were restored.",
+  "@previousNodeAndTunRoutesWereRestored": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "rollbackCouldNotRestoreTunModeTrafficCaptureIs": "{value0} Rollback could not restore TUN mode: {value1}. Traffic capture is now off.",
+  "@rollbackCouldNotRestoreTunModeTrafficCaptureIs": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "addressIsEmpty": "Address is empty",
+  "invalidAddressFormat": "Invalid address format: {value0}",
+  "@invalidAddressFormat": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "invalidPort": "Invalid port: {value0}",
+  "@invalidPort": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "nA": "N/A",
+  "proxyStopped": "Proxy stopped",
+  "failedToStopProxy": "Failed to stop proxy",
+  "proxyStarted": "Proxy started",
+  "failedToStartProxy2": "Failed to start proxy",
+  "changeLocalProxyServerPort": "Change local proxy server port",
+  "enterAPortNumber": "Enter a port number (1-65535)",
+  "dismiss": "Dismiss",
+  "okay": "Okay",
+  "invalidPortNumber": "Invalid port number (1-65535)",
+  "restartingWithAdministratorPrivilegesForTun": "Restarting with administrator privileges for TUN",
+  "tunModeEnabled": "TUN mode enabled",
+  "tunModeDisabled": "TUN mode disabled",
+  "failedToChangeTunMode": "Failed to change TUN mode",
+  "tunSetupFailed": "TUN setup failed",
+  "close": "Close",
+  "configExportedToClipboard": "Config exported to clipboard",
+  "failedToCopy": "Failed to copy: {value0}",
+  "@failedToCopy": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "clipboardIsEmpty": "Clipboard is empty",
+  "configImportedSuccessfully": "Config imported successfully",
+  "invalidConfigFormat": "Invalid config format",
+  "tcpUdpProxy": "{value0} / TCP + UDP proxy",
+  "@tcpUdpProxy": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "tcpProxyUdpDirect": "{value0} / TCP proxy + UDP direct",
+  "@tcpProxyUdpDirect": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "tcpProxyUdpBlocked": "{value0} / TCP proxy + UDP blocked",
+  "@tcpProxyUdpBlocked": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "socksTcpUdp": "SOCKS5 TCP + UDP",
+  "socksTcpOnly": "SOCKS5 TCP only",
+  "configuringVpn": "Configuring VPN...",
+  "configuringTun": "Configuring TUN...",
+  "startTheProxyToEnable": "Start the proxy to enable",
+  "routingVia": "Routing via 127.0.0.1:{value0}",
+  "@routingVia": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "capturingVia": "Capturing via 127.0.0.1:{value0}",
+  "@capturingVia": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceTrafficIsNotCaptured": "Device traffic is not captured",
+  "systemTrafficCaptureIsOff": "System traffic capture is off",
+  "configureAServerToGetStarted": "Configure a server to get started",
+  "connected": "Connected",
+  "disconnected": "Disconnected",
+  "vpnService": "VPN Service",
+  "tunMode": "TUN Mode",
+  "vpnApplications": "VPN applications ({value0})",
+  "@vpnApplications": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "tunBypassProcesses": "TUN bypass processes ({value0})",
+  "@tunBypassProcesses": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "config": "Config",
+  "lan": "LAN {value0}",
+  "@lan": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "port": "Port {value0}",
+  "@port": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "importLabel": "Import",
+  "exportLabel": "Export",
+  "lan2": "LAN: {value0}",
+  "@lan2": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "port2": "Port: {value0}",
+  "@port2": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "importFromClipboard": "Import from clipboard",
+  "exportToClipboard": "Export to clipboard",
+  "configureServerFirst": "Configure server first",
+  "configuringAndroidVpn": "Configuring Android VPN...",
+  "configuringAdapterAndRoutes": "Configuring adapter and routes...",
+  "startTheLocalProxyFirst": "Start the local proxy first",
+  "vpnTraffic": "VPN traffic -> 127.0.0.1:{value0}",
+  "@vpnTraffic": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "allTraffic": "All traffic -> 127.0.0.1:{value0}",
+  "@allTraffic": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "androidVpnIsOff": "Android VPN is off",
+  "deviceTrafficCaptureIsOff": "Device traffic capture is off",
+  "subscriptionService": "Subscription Service",
+  "clashAndroid": "Clash (Android)",
+  "shadowrocketIos": "Shadowrocket (iOS)",
+  "processing": "Processing...",
+  "stopService": "Stop Service",
+  "startService": "Start Service",
+  "configurePort": "Configure Port",
+  "port3": "Port",
+  "portNumber": "Port number (1024-65535)",
+  "cancel": "Cancel",
+  "invalidPortNumber2": "Invalid port number (1024-65535)",
+  "start": "Start",
+  "failedToStartService": "Failed to start service: {value0}",
+  "@failedToStartService": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "status": "Status: {value0}",
+  "@status": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "running": "Running",
+  "stopped": "Stopped",
+  "urlCopiedToClipboard": "URL copied to clipboard",
+  "copyUrl": "Copy URL",
+  "important": "Important",
+  "ensureTheLocalProxyIsRunningImportTheSubscription": "1. Ensure the local proxy is running\n2. Import the subscription URL to your client\n3. Select the LocalProxy node\n4. For same-device usage: Add subscription BEFORE starting VPN\n5. For cross-device usage: Ensure devices are on the same network",
+  "couldNotOpenTheLogFolder": "Could not open the log folder: {value0}",
+  "@couldNotOpenTheLogFolder": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "searchLogsGrep": "Search logs (grep)...",
+  "openLogFolder": "Open log folder",
+  "clearLogs": "Clear logs",
+  "noMatchingLogs": "No matching logs",
+  "noLogsYet": "No logs yet",
+  "tryADifferentSearchTerm": "Try a different search term",
+  "startTheProxyToSeeActivity": "Start the proxy to see activity",
+  "failedToExport": "Failed to export: {value0}",
+  "@failedToExport": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "switchedTo": "Switched to {value0}",
+  "@switchedTo": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToSwitchNode": "Failed to switch node",
+  "failedToSwitch": "Failed to switch: {value0}",
+  "@failedToSwitch": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "testedNodes": "Tested {value0} nodes",
+  "@testedNodes": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "testedReachableFailed": "Tested {value0}: {value1} reachable, {value2} failed",
+  "@testedReachableFailed": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      },
+      "value2": {
+        "type": "String"
+      }
+    }
+  },
+  "controlServer": "Control Server",
+  "host": "Host",
+  "eG": "e.g. 192.168.1.100",
+  "sessionKeyOptional": "Session Key (optional)",
+  "fetchNodes": "Fetch Nodes",
+  "error": "Error: {value0}",
+  "@error": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "retry": "Retry",
+  "noNodesAvailable": "No nodes available",
+  "pullDownToRefresh": "Pull down to refresh",
+  "all": "All ({value0})",
+  "@all": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "testAll": "Test all",
+  "sortNodes": "Sort nodes",
+  "serverOrder": "Server order",
+  "latency": "Latency",
+  "searchNodesRegionsAddressesOrGroups": "Search nodes, regions, addresses, or groups",
+  "clearSearch": "Clear search",
+  "groups": "Groups",
+  "all2": "All",
+  "noNodesMatch": "No nodes match \"{value0}\"",
+  "@noNodesMatch": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "noNodesInGroup": "No nodes in group \"{value0}\"",
+  "@noNodesInGroup": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "currentNode": "CURRENT NODE",
+  "lastSeen": "Last seen: {value0}",
+  "@lastSeen": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "latencyMs": "Latency: {value0}ms",
+  "@latencyMs": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "testLabel": "Test",
+  "switchLabel": "Switch",
+  "sAgo": "{value0}s ago",
+  "@sAgo": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "mAgo": "{value0}m ago",
+  "@mAgo": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "hAgo": "{value0}h ago",
+  "@hAgo": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "dAgo": "{value0}d ago",
+  "@dAgo": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "thisNodeDidNotAnswer": "This node did not answer",
+  "unreachable": "Unreachable · {value0}",
+  "@unreachable": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "noAnswer": "no answer",
+  "egress": "Egress {value0}",
+  "@egress": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "catalogueSays": "{value0} — catalogue says {value1}",
+  "@catalogueSays": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "trafficLeavesFrom": "Traffic leaves from {value0}{value1}",
+  "@trafficLeavesFrom": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotReach": "Could not reach {value0}",
+  "@couldNotReach": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "toggleBrightness": "Toggle brightness",
+  "selectASeedColor": "Select a seed color",
+  "brightness": "Brightness",
+  "proxy": "Proxy",
+  "logs": "Logs",
+  "subscription": "Subscription",
+  "nodes": "Nodes",
+  "mBaseline": "M3 Baseline",
+  "indigo": "Indigo",
+  "blue": "Blue",
+  "teal": "Teal",
+  "green": "Green",
+  "yellow": "Yellow",
+  "orange": "Orange",
+  "deepOrange": "Deep Orange",
+  "pink": "Pink",
+  "unknown": "UNKNOWN",
+  "startingAtSignInIsOnlyAvailableOnWindows": "Starting at sign-in is only available on Windows",
+  "windowsRefusedToChangeTheSignInEntry": "Windows refused to change the sign-in entry",
+  "thisBuildDoesNotSupportStartingAtSignIn": "This build does not support starting at sign-in",
+  "androidReturnedNoVpnFileDescriptor": "Android returned no VPN file descriptor",
+  "logFoldersAreOnlyAvailableOnDesktop": "Log folders are only available on desktop",
+  "connectionError": "Connection error",
+  "updating": "Updating…",
+  "connectedTunCapturing": "Connected · TUN capturing",
+  "tunMode2": "TUN mode",
+  "switchNode": "Switch node",
+  "showWindow": "Show window",
+  "quit": "Quit",
+  "couldNotStart": "Could not start",
+  "couldNotSwitchNode": "Could not switch node",
+  "couldNotSwitchNode2": "Could not switch node: {value0}",
+  "@couldNotSwitchNode2": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "lanProxyLinkCopied": "LAN proxy link copied",
+  "lanHttpProxy": "LAN HTTP proxy · {value0}",
+  "@lanHttpProxy": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "lanHttpProxy2": "LAN HTTP proxy",
+  "findingLanAddress": "Finding LAN address...",
+  "lanAddressUnavailable": "LAN address unavailable",
+  "chooseTheNetworkToShareOn": "Choose the network to share on",
+  "refreshLanAddress": "Refresh LAN address",
+  "copyLanProxyLink": "Copy LAN proxy link",
+  "bypassAppliedAffectedConnectionsAreReconnecting": "Bypass applied; affected connections are reconnecting",
+  "failedToUpdateTunBypass": "Failed to update TUN bypass",
+  "bypassApplications": "Bypass Applications",
+  "refreshProcesses": "Refresh processes",
+  "searchApplicationsPathsOrPids": "Search applications, paths, or PIDs",
+  "installed": "Installed",
+  "selected": "{value0} selected",
+  "@selected": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "executableName": "Executable name",
+  "addProcess": "Add process",
+  "apply": "Apply",
+  "currentProcessAlwaysBypassed": "Current process | always bypassed",
+  "includedBy": "Included by {value0}{value1}",
+  "@includedBy": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "installedNotCurrentlyRunning": "Installed | not currently running",
+  "notCurrentlyRunning": "Not currently running",
+  "pid": "PID {value0}",
+  "@pid": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "instances": "{value0} instances",
+  "@instances": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "childApplicationsProcesses": "{value0} child applications | {value1} processes",
+  "@childApplicationsProcesses": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "registeredAs": "Registered as {value0}",
+  "@registeredAs": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "collapseProcessTree": "Collapse process tree",
+  "expandProcessTree": "Expand process tree",
+  "bypassedThrough": "Bypassed through {value0}{value1}",
+  "@bypassedThrough": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      },
+      "value1": {
+        "type": "String"
+      }
+    }
+  },
+  "invalidServerPort": "Invalid server port (1-65535)",
+  "invalidLocalPort": "Invalid local port (1-65535)",
+  "configurationSaved": "Configuration saved",
+  "proxyConfiguration": "Proxy Configuration",
+  "server": "Server",
+  "serverHost": "Server Host",
+  "eGProxyExampleCom": "e.g., proxy.example.com",
+  "serverPort": "Server Port",
+  "sessionKey": "Session Key",
+  "characters": "32 characters",
+  "local": "Local",
+  "localPort": "Local Port",
+  "portForLocalProxyServer": "Port for local proxy server",
+  "allowLan": "Allow LAN",
+  "listenOnAllInterfacesUseOnlyOnTrustedNetworks": "Listen on all interfaces. Use only on trusted networks.",
+  "options": "Options",
+  "autoProxy": "Auto Proxy",
+  "routeTrafficBasedOnGeoLocation": "Route traffic based on geo-location",
+  "socksUdp": "SOCKS5 UDP",
+  "proxyUdpThroughTheServer": "Proxy UDP through the server",
+  "directUdpFallback": "Direct UDP fallback",
+  "whenSocksUdpIsOffSendVpnTunUdp": "When SOCKS5 UDP is off, send VPN/TUN UDP directly instead of blocking it",
+  "reverseGeo": "Reverse Geo",
+  "reverseGeoLocationRoutingLogic": "Reverse geo-location routing logic",
+  "forceCodec": "Force Codec",
+  "forceEncryptionForAllConnections": "Force encryption for all connections",
+  "desktop": "Desktop",
+  "minimizeToTray": "Minimize to tray",
+  "hideTheTaskbarButtonWhenMinimizedTheTrayIcon": "Hide the taskbar button when minimized. The tray icon brings the window back.",
+  "startAtSignIn": "Start at sign-in",
+  "launchAutomaticallyWhenYouSignInToWindowsThe": "Launch automatically when you sign in to Windows. The proxy still has to be started manually.",
+  "save": "Save",
+  "selectAtLeastOneApplication": "Select at least one application",
+  "vpnApplicationPolicyApplied": "VPN application policy applied",
+  "failedToUpdateVpnApplicationPolicy": "Failed to update VPN application policy",
+  "vpnApplications2": "VPN applications",
+  "refreshApplications": "Refresh applications",
+  "allOtherApplicationsUseVpn": "All other applications use VPN",
+  "bypass": "Bypass",
+  "selectedApplicationsBypassVpn": "Selected applications bypass VPN",
+  "only": "Only",
+  "onlySelectedApplicationsUseVpn": "Only selected applications use VPN",
+  "searchApps": "Search apps",
+  "loadingApplications": "Loading applications...",
+  "apps": "{value0} apps",
+  "@apps": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "noApplicationsFound": "No applications found",
+  "noMatchingApplications": "No matching applications",
+  "systemApplication": "System application",
+  "language": "Language",
+  "systemLanguage": "System default",
+  "languageChangeFailed": "Could not save the language preference",
+  "tunDiagnosticsGuide": "TUN diagnostics and recovery guide",
+  "newLogs": "{value0} new",
+  "@newLogs": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "tunRetryTun": "Retry TUN",
+  "tunRecheck": "Recheck",
+  "tunCopyOriginalError": "Copy original error",
+  "tunOriginalErrorDetails": "Original error details",
+  "tunInspectCurrentRoutes": "Inspect current routes",
+  "tunCopyDiagnosticSummary": "Copy diagnostic summary",
+  "tunDiagnosticSummary": "Diagnostic summary",
+  "tunReopenTheVpnApp": "Reopen the VPN app",
+  "tunTurnOffTunInProxyUiReopen": "Turn off TUN in Proxy UI, reopen the VPN app, and reconnect there. Opening the app alone does not guarantee it reconnects.",
+  "tunRestoreTheOriginalConnectionAfterTesting": "Restore the original connection after testing",
+  "tunClickRecheckAfterDisconnectingRetryBecomesAvailable": "Click Recheck after disconnecting. Retry becomes available when neither route uses utun. You can also inspect routes with these read-only commands. Do not delete VPN routes manually.",
+  "tunRecheckThenRetryTun": "Recheck, then retry TUN",
+  "tunTemporaryDisconnectCommand": "Temporary disconnect command",
+  "tunThisMatchesTheIdentifiedVpnProgramBy": "This matches the identified VPN program by its full path and requests its running instances to exit, interrupting their connections. Terminal may ask for your Mac administrator password; typed characters stay hidden. If it restarts automatically, use its app or contact your administrator.",
+  "tunIfNeededTemporarilyStop": "If needed, temporarily stop {value0}",
+  "@tunIfNeededTemporarilyStop": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "tunOpenTheVpnAppAssociatedWithThe": "Open the VPN app associated with the process above and disconnect. Closing its window may leave the tunnel running. If the owner is unknown, check VPN connections in System Settings.",
+  "tunInIoaTurnOffConnectToCompany": "In iOA, turn off “Connect to company network”. Closing the window may leave SmartVPN running in the background. Company network access will be interrupted.",
+  "tunDisconnectInTheVpnAppFirst": "Disconnect in the VPN app first",
+  "tunThisTunnelBelongsToProxyUiIf": "This tunnel belongs to Proxy UI. If TUN is already on, close this panel and keep using it. If its state is incorrect, turn TUN off in Proxy UI before rechecking.",
+  "tunNeitherCheckedRouteUsesAUtunInterface": "Neither checked route uses a utun interface. You can retry; if it still fails, review the original error below.",
+  "tunTheSystemDidNotProvideCompleteOwnership": "The system did not provide complete ownership information. No stop command is offered.",
+  "tunUnavailable": "unavailable",
+  "tunATunIsCurrentlyHandlingTraffic": "A TUN is currently handling traffic",
+  "tunRouteStatusCouldNotBeConfirmed": "Route status could not be confirmed",
+  "tunProxyUiIsHandlingTrafficThroughIts": "Proxy UI is handling traffic through its own TUN",
+  "tunNoConflictingTunRoutesFound": "No conflicting TUN routes found",
+  "tunAutomaticChecksAreUnavailableRecheckOrCopy": "Automatic checks are unavailable. Recheck or copy the commands below to inspect routes.",
+  "tunCheckingRoutesAndTunOwnership": "Checking routes and TUN ownership…",
+  "tunIdentifyTheConnectionHandlingTrafficThenFollow": "Identify the connection handling traffic, then follow the steps below. Commands are copied for you to run in Terminal.",
+  "tunTunCouldNotStart": "TUN could not start",
+  "tunTunNetworkDiagnostics": "TUN network diagnostics",
+  "tunUnknownProcess": "Unknown process",
+  "copy": "Copy",
+  "copied": "Copied",
+  "copyFailedSelectText": "Copy failed. Select the text to copy it manually.",
+  "resultOk": "OK",
+  "invalidParameter": "Invalid parameter",
+  "connectionFailed": "Connection failed",
+  "runtimeError": "Runtime error",
+  "alreadyRunning": "Already running",
+  "notRunning": "Not running",
+  "unknownErrorCode": "Unknown error ({code})",
+  "@unknownErrorCode": {
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "latencyTestFailed": "Latency test failed",
+  "proxyNotInitialized": "Proxy not initialized",
+  "failedToGetNodes": "Failed to get nodes",
+  "nodeVerificationFailed": "Node verification failed",
+  "failedToGetGroups": "Failed to get groups",
+  "androidVpnValidationFailed": "Android did not validate the VPN network within 10 seconds: {details}; Google Play and background update schedulers may reject it before opening a connection.",
+  "@androidVpnValidationFailed": {
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "diagnosticReadRouteError": "Could not read the route to {destination}. Recheck or inspect it in Terminal.",
+  "@diagnosticReadRouteError": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "diagnosticReadOwnershipError": "Could not read TUN ownership. Recheck or inspect it in Terminal.",
+  "diagnosticReadProcessError": "Could not read the process path for {interface}. Recheck or inspect it in Terminal.",
+  "@diagnosticReadProcessError": {
+    "placeholders": {
+      "interface": {
+        "type": "String"
+      }
+    }
+  },
+  "diagnosticSummaryTitle": "Proxy UI · macOS TUN diagnostics",
+  "diagnosticRouteSummary": "{destination} → {interface} · gateway {gateway}",
+  "@diagnosticRouteSummary": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      },
+      "interface": {
+        "type": "String"
+      },
+      "gateway": {
+        "type": "String"
+      }
+    }
+  }
+}

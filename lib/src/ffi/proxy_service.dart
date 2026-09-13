@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
@@ -458,10 +459,9 @@ class ProxyService {
           ),
         );
         if (!network.validated) {
-          _platformLastError =
-              'Android did not validate the VPN network within 10 seconds: '
-              '${network.diagnostics}; Google Play and background update '
-              'schedulers may reject it before opening a connection.';
+          _platformLastError = appStrings.androidVpnValidationFailed(
+            network.diagnostics,
+          );
           await compute(_stopTunIsolate, handle.address);
           await AndroidVpnService.instance.stopInterface();
           return ProxyResult.runtimeError;
@@ -609,7 +609,7 @@ class ProxyService {
           return {'success': true, 'latencyMs': result.latencyMs};
         } else {
           final error = result.error == nullptr
-              ? 'Latency test failed'
+              ? null
               : result.error.toDartString();
           return {'success': false, 'error': error};
         }
@@ -627,7 +627,7 @@ class ProxyService {
   /// Test proxy latency (only works when proxy is running).
   /// Tests real-world latency by sending HTTPS request through local proxy.
   Future<int?> testLatency({String? testUrl, int timeoutMs = 10000}) async {
-    if (_handle == null) throw StateError('Proxy not initialized');
+    if (_handle == null) throw StateError(appStrings.proxyNotInitialized);
 
     final result = await compute(_testLatencyIsolate, {
       'handleAddress': _handle!.address,
@@ -638,7 +638,7 @@ class ProxyService {
     if (result['success'] == true) {
       return result['latencyMs'] as int;
     } else {
-      throw Exception(result['error'] ?? 'Latency test failed');
+      throw Exception(result['error'] ?? appStrings.latencyTestFailed);
     }
   }
 
@@ -679,7 +679,7 @@ class ProxyService {
           return {'success': true, 'nodes': nodes};
         } else {
           final error = result.error == nullptr
-              ? 'Failed to get nodes'
+              ? null
               : result.error.toDartString();
           return {'success': false, 'error': error};
         }
@@ -734,9 +734,7 @@ class ProxyService {
         return {
           'success': false,
           'latencyMs': result.latencyMs,
-          'error': result.error == nullptr
-              ? 'Node verification failed'
-              : result.error.toDartString(),
+          'error': result.error == nullptr ? null : result.error.toDartString(),
         };
       } finally {
         final resultPtr = calloc<NodeProbeResult>();
@@ -774,7 +772,11 @@ class ProxyService {
       countryCode: (result['countryCode'] as String?) ?? '',
       egressIp: (result['egressIp'] as String?) ?? '',
       latencyMs: latency is int ? latency : null,
-      error: result['error'] as String?,
+      error:
+          result['error'] as String? ??
+          (result['success'] == true
+              ? null
+              : appStrings.nodeVerificationFailed),
     );
   }
 
@@ -819,7 +821,7 @@ class ProxyService {
           return {'success': true, 'groups': groups};
         } else {
           final error = result.error == nullptr
-              ? 'Failed to get groups'
+              ? null
               : result.error.toDartString();
           return {'success': false, 'error': error};
         }
@@ -867,7 +869,7 @@ class ProxyService {
           )
           .toList();
     } else {
-      throw Exception(result['error'] ?? 'Failed to get nodes');
+      throw Exception(result['error'] ?? appStrings.failedToGetNodes);
     }
   }
 
@@ -898,7 +900,7 @@ class ProxyService {
           )
           .toList();
     } else {
-      throw Exception(result['error'] ?? 'Failed to get groups');
+      throw Exception(result['error'] ?? appStrings.failedToGetGroups);
     }
   }
 }

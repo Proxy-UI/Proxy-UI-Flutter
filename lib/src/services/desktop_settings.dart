@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -67,7 +68,7 @@ class DesktopSettings extends ChangeNotifier {
   /// can tell the user instead of showing a switch that silently springs back.
   Future<String?> setLaunchAtStartup(bool value) async {
     if (!supportsLaunchAtStartup) {
-      return 'Starting at sign-in is only available on Windows';
+      return appStrings.startingAtSignInIsOnlyAvailableOnWindows;
     }
     if (_launchAtStartup == value) return null;
 
@@ -82,9 +83,9 @@ class DesktopSettings extends ChangeNotifier {
     } on PlatformException catch (error) {
       _launchAtStartup = await _readLaunchAtStartup();
       notifyListeners();
-      return error.message ?? 'Windows refused to change the sign-in entry';
+      return error.message ?? appStrings.windowsRefusedToChangeTheSignInEntry;
     } on MissingPluginException {
-      return 'This build does not support starting at sign-in';
+      return appStrings.thisBuildDoesNotSupportStartingAtSignIn;
     }
   }
 

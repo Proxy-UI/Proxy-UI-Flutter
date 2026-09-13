@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -80,19 +81,19 @@ abstract class ProxyResult {
   static String message(int code) {
     switch (code) {
       case ok:
-        return 'OK';
+        return appStrings.resultOk;
       case invalidParam:
-        return 'Invalid parameter';
+        return appStrings.invalidParameter;
       case connectionFailed:
-        return 'Connection failed';
+        return appStrings.connectionFailed;
       case runtimeError:
-        return 'Runtime error';
+        return appStrings.runtimeError;
       case alreadyRunning:
-        return 'Already running';
+        return appStrings.alreadyRunning;
       case notRunning:
-        return 'Not running';
+        return appStrings.notRunning;
       default:
-        return 'Unknown error ($code)';
+        return appStrings.unknownErrorCode(code);
     }
   }
 }

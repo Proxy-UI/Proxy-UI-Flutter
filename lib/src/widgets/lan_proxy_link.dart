@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -70,7 +71,7 @@ class _LanProxyLinkState extends State<LanProxyLink> {
   Future<void> _copy(String url) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (mounted) {
-      ToastUtils.showSuccess('LAN proxy link copied');
+      ToastUtils.showSuccess(context.l10n.lanProxyLinkCopied);
     }
   }
 
@@ -109,8 +110,10 @@ class _LanProxyLinkState extends State<LanProxyLink> {
                   children: [
                     Text(
                       showInterface
-                          ? 'LAN HTTP proxy · ${selected.interfaceName}'
-                          : 'LAN HTTP proxy',
+                          ? context.l10n.lanHttpProxy(
+                              (selected.interfaceName).toString(),
+                            )
+                          : context.l10n.lanHttpProxy2,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelMedium,
@@ -118,8 +121,8 @@ class _LanProxyLinkState extends State<LanProxyLink> {
                     const SizedBox(height: 2),
                     Text(
                       loading
-                          ? 'Finding LAN address...'
-                          : url ?? 'LAN address unavailable',
+                          ? context.l10n.findingLanAddress
+                          : url ?? context.l10n.lanAddressUnavailable,
                       key: const Key('lan-proxy-url'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -144,7 +147,7 @@ class _LanProxyLinkState extends State<LanProxyLink> {
                 if (addresses.length > 1)
                   PopupMenuButton<LanAddress>(
                     key: const Key('lan-proxy-picker'),
-                    tooltip: 'Choose the network to share on',
+                    tooltip: context.l10n.chooseTheNetworkToShareOn,
                     icon: const Icon(Icons.swap_horiz),
                     onSelected: _select,
                     itemBuilder: (context) => <PopupMenuEntry<LanAddress>>[
@@ -165,8 +168,8 @@ class _LanProxyLinkState extends State<LanProxyLink> {
                     url == null ? Icons.refresh : Icons.content_copy_outlined,
                   ),
                   tooltip: url == null
-                      ? 'Refresh LAN address'
-                      : 'Copy LAN proxy link',
+                      ? context.l10n.refreshLanAddress
+                      : context.l10n.copyLanProxyLink,
                 ),
               ],
             ],

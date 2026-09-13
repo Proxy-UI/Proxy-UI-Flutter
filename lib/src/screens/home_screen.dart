@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -104,12 +105,13 @@ class _HomeScreenState extends State<HomeScreen>
     if (isDesktop) {
       return AppWindowTitleBar(
         title: 'Proxy With Flutter',
-        actions: curLayoutStatus.index <= LayoutStatus.small.index
-            ? [
-                _BrightnessButton(themeState: themeState, compact: true),
-                _ColorSeedButton(themeState: themeState, compact: true),
-              ]
-            : const [],
+        actions: [
+          const LanguageMenuButton(),
+          if (curLayoutStatus.index <= LayoutStatus.small.index) ...[
+            _BrightnessButton(themeState: themeState, compact: true),
+            _ColorSeedButton(themeState: themeState, compact: true),
+          ],
+        ],
       );
     }
     return AppBar(
@@ -120,12 +122,13 @@ class _HomeScreenState extends State<HomeScreen>
       scrolledUnderElevation: 0,
       backgroundColor: Theme.of(context).colorScheme.surface,
       surfaceTintColor: Colors.transparent,
-      actions: curLayoutStatus.index <= LayoutStatus.small.index
-          ? [
-              _BrightnessButton(themeState: themeState),
-              _ColorSeedButton(themeState: themeState),
-            ]
-          : const [],
+      actions: [
+        const LanguageMenuButton(),
+        if (curLayoutStatus.index <= LayoutStatus.small.index) ...[
+          _BrightnessButton(themeState: themeState),
+          _ColorSeedButton(themeState: themeState),
+        ],
+      ],
     );
   }
 
@@ -159,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen>
           body: createScreenFor(screenIndex),
           navigationRail: NavigationRail(
             extended: curLayoutStatus == LayoutStatus.large,
-            destinations: navRailDestinations,
+            destinations: navRailDestinations(context),
             selectedIndex: screenIndex,
             onDestinationSelected: handleScreenChanged,
             trailing: Expanded(
@@ -197,7 +200,7 @@ class _BrightnessButton extends StatelessWidget {
     final isBright = Theme.of(context).brightness == Brightness.light;
     return Tooltip(
       preferBelow: showTooltipBelow,
-      message: 'Toggle brightness',
+      message: context.l10n.toggleBrightness,
       child: IconButton(
         icon: isBright
             ? const Icon(Icons.dark_mode_outlined)
@@ -222,7 +225,7 @@ class _ColorSeedButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton(
       icon: const Icon(Icons.palette_outlined),
-      tooltip: 'Select a seed color',
+      tooltip: context.l10n.selectASeedColor,
       padding: compact ? EdgeInsets.zero : const EdgeInsets.all(8),
       constraints: compact
           ? const BoxConstraints.tightFor(width: 40, height: 40)
@@ -278,8 +281,7 @@ class _ExpandedTrailingActions extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text('Brightness'),
-              Expanded(child: Container()),
+              Expanded(child: Text(context.l10n.brightness)),
               Switch(
                 value: isBright,
                 onChanged: (_) => themeState.toggleMode(),
@@ -326,41 +328,42 @@ class _ExpandedColorSeedAction extends StatelessWidget {
 }
 
 // Navigation destinations
-const List<NavigationDestination> appBarDestinations = [
+List<NavigationDestination> appBarDestinations(BuildContext context) => [
   NavigationDestination(
     icon: Icon(Icons.flight_outlined),
     selectedIcon: Icon(Icons.flight),
-    label: 'Proxy',
+    label: context.l10n.proxy,
   ),
   NavigationDestination(
     icon: Icon(Icons.terminal_outlined),
     selectedIcon: Icon(Icons.terminal),
-    label: 'Logs',
+    label: context.l10n.logs,
   ),
   NavigationDestination(
     icon: Icon(Icons.cloud_download_outlined),
     selectedIcon: Icon(Icons.cloud_download),
-    label: 'Subscription',
+    label: context.l10n.subscription,
   ),
   NavigationDestination(
     icon: Icon(Icons.dns_outlined),
     selectedIcon: Icon(Icons.dns),
-    label: 'Nodes',
+    label: context.l10n.nodes,
   ),
 ];
 
-final List<NavigationRailDestination> navRailDestinations = appBarDestinations
-    .map(
-      (destination) => NavigationRailDestination(
-        icon: Tooltip(message: destination.label, child: destination.icon),
-        selectedIcon: Tooltip(
-          message: destination.label,
-          child: destination.selectedIcon,
-        ),
-        label: Text(destination.label),
-      ),
-    )
-    .toList();
+List<NavigationRailDestination> navRailDestinations(BuildContext context) =>
+    appBarDestinations(context)
+        .map(
+          (destination) => NavigationRailDestination(
+            icon: Tooltip(message: destination.label, child: destination.icon),
+            selectedIcon: Tooltip(
+              message: destination.label,
+              child: destination.selectedIcon,
+            ),
+            label: Text(destination.label),
+          ),
+        )
+        .toList();
 
 class NavigationBars extends StatelessWidget {
   const NavigationBars({
@@ -381,7 +384,7 @@ class NavigationBars extends StatelessWidget {
           : null,
       selectedIndex: selectedIndex,
       onDestinationSelected: onSelectItem,
-      destinations: appBarDestinations,
+      destinations: appBarDestinations(context),
     );
   }
 }

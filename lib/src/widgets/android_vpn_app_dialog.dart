@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -60,7 +61,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
 
   Future<void> _save() async {
     if (_mode == AndroidVpnRoutingMode.include && _selected.isEmpty) {
-      ToastUtils.showWarning('Select at least one application');
+      ToastUtils.showWarning(context.l10n.selectAtLeastOneApplication);
       return;
     }
     setState(() => _saving = true);
@@ -73,11 +74,11 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
     setState(() => _saving = false);
     if (success) {
       Navigator.of(context).pop();
-      ToastUtils.showSuccess('VPN application policy applied');
+      ToastUtils.showSuccess(context.l10n.vpnApplicationPolicyApplied);
     } else {
       ToastUtils.showError(
         context.read<ProxyState>().lastError ??
-            'Failed to update VPN application policy',
+            context.l10n.failedToUpdateVpnApplicationPolicy,
       );
     }
   }
@@ -91,16 +92,16 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
           appBar: AppBar(
             leading: IconButton(
               onPressed: _saving ? null : () => Navigator.of(context).pop(),
-              tooltip: 'Close',
+              tooltip: context.l10n.close,
               icon: const Icon(Icons.close),
             ),
-            title: const Text('VPN applications'),
+            title: Text(context.l10n.vpnApplications2),
             actions: [
               IconButton(
                 onPressed: _loading
                     ? null
                     : () => _loadApplications(forceRefresh: true),
-                tooltip: 'Refresh applications',
+                tooltip: context.l10n.refreshApplications,
                 icon: const Icon(Icons.refresh),
               ),
             ],
@@ -126,12 +127,12 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
         children: [
           const Icon(Icons.apps_outlined),
           const SizedBox(width: 12),
-          const Expanded(child: Text('VPN applications')),
+          Expanded(child: Text(context.l10n.vpnApplications2)),
           IconButton(
             onPressed: _loading
                 ? null
                 : () => _loadApplications(forceRefresh: true),
-            tooltip: 'Refresh applications',
+            tooltip: context.l10n.refreshApplications,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -178,22 +179,22 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
                 ButtonSegment(
                   value: AndroidVpnRoutingMode.all,
                   icon: compact ? null : const Icon(Icons.public),
-                  label: const Text('All'),
-                  tooltip: 'All other applications use VPN',
+                  label: Text(context.l10n.all2),
+                  tooltip: context.l10n.allOtherApplicationsUseVpn,
                 ),
                 ButtonSegment(
                   value: AndroidVpnRoutingMode.exclude,
                   icon: compact
                       ? null
                       : const Icon(Icons.remove_circle_outline),
-                  label: const Text('Bypass'),
-                  tooltip: 'Selected applications bypass VPN',
+                  label: Text(context.l10n.bypass),
+                  tooltip: context.l10n.selectedApplicationsBypassVpn,
                 ),
                 ButtonSegment(
                   value: AndroidVpnRoutingMode.include,
                   icon: compact ? null : const Icon(Icons.filter_alt_outlined),
-                  label: const Text('Only'),
-                  tooltip: 'Only selected applications use VPN',
+                  label: Text(context.l10n.only),
+                  tooltip: context.l10n.onlySelectedApplicationsUseVpn,
                 ),
               ],
               selected: {_mode},
@@ -208,7 +209,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
             enabled: selectable,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              hintText: 'Search apps',
+              hintText: context.l10n.searchApps,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: query.isEmpty
                   ? null
@@ -217,7 +218,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
                         _searchController.clear();
                         setState(() {});
                       },
-                      tooltip: 'Clear search',
+                      tooltip: context.l10n.clearSearch,
                       icon: const Icon(Icons.close),
                     ),
               filled: true,
@@ -233,8 +234,8 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
             children: [
               Text(
                 _loading
-                    ? 'Loading applications...'
-                    : '${applications.length} apps',
+                    ? context.l10n.loadingApplications
+                    : context.l10n.apps((applications.length).toString()),
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
@@ -242,7 +243,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
               const Spacer(),
               if (selectable)
                 Text(
-                  '${_selected.length} selected',
+                  context.l10n.selected((_selected.length).toString()),
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: colors.primary,
                     fontWeight: FontWeight.w600,
@@ -265,7 +266,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'All other applications use VPN',
+                          context.l10n.allOtherApplicationsUseVpn,
                           style: theme.textTheme.titleMedium,
                         ),
                       ],
@@ -293,8 +294,8 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
                 ? Center(
                     child: Text(
                       query.isEmpty
-                          ? 'No applications found'
-                          : 'No matching applications',
+                          ? context.l10n.noApplicationsFound
+                          : context.l10n.noMatchingApplications,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
@@ -315,7 +316,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
     return [
       TextButton(
         onPressed: _saving ? null : () => Navigator.of(context).pop(),
-        child: const Text('Cancel'),
+        child: Text(context.l10n.cancel),
       ),
       const SizedBox(width: 8),
       FilledButton.icon(
@@ -326,7 +327,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.check),
-        label: const Text('Apply'),
+        label: Text(context.l10n.apply),
       ),
     ];
   }
@@ -380,8 +381,8 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
                 ),
               ),
               if (application.isSystem)
-                const Tooltip(
-                  message: 'System application',
+                Tooltip(
+                  message: context.l10n.systemApplication,
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Icon(Icons.android, size: 20),

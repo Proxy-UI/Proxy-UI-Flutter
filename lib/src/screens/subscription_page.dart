@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -26,8 +27,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Subscription Service',
+                  Text(
+                    context.l10n.subscriptionService,
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 32),
@@ -38,14 +39,14 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   if (state.subscriptionServiceRunning) ...[
                     _buildSubscriptionCard(
                       context,
-                      'Clash (Android)',
+                      context.l10n.clashAndroid,
                       state.clashUrl ?? '',
                       Icons.android,
                     ),
                     const SizedBox(height: 16),
                     _buildSubscriptionCard(
                       context,
-                      'Shadowrocket (iOS)',
+                      context.l10n.shadowrocketIos,
                       state.shadowrocketUrl ?? '',
                       Icons.apple,
                     ),
@@ -83,10 +84,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             ),
       label: Text(
         state.subscriptionServiceBusy
-            ? 'Processing...'
+            ? context.l10n.processing
             : state.subscriptionServiceRunning
-            ? 'Stop Service'
-            : 'Start Service',
+            ? context.l10n.stopService
+            : context.l10n.startService,
       ),
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 20),
@@ -96,26 +97,27 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   }
 
   Future<void> _showPortDialog(BuildContext context, ProxyState state) async {
+    final strings = context.l10n;
     final controller = TextEditingController(text: _selectedPort.toString());
     try {
       final result = await showDialog<int>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Configure Port'),
+          title: Text(context.l10n.configurePort),
           content: TextField(
             controller: controller,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              labelText: 'Port',
+            decoration: InputDecoration(
+              labelText: context.l10n.port3,
               hintText: '8080',
-              helperText: 'Port number (1024-65535)',
+              helperText: context.l10n.portNumber,
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(context.l10n.cancel),
             ),
             FilledButton(
               onPressed: () {
@@ -123,10 +125,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 if (port != null && port >= 1024 && port <= 65535) {
                   Navigator.pop(context, port);
                 } else {
-                  ToastUtils.showError('Invalid port number (1024-65535)');
+                  ToastUtils.showError(context.l10n.invalidPortNumber2);
                 }
               },
-              child: const Text('Start'),
+              child: Text(context.l10n.start),
             ),
           ],
         ),
@@ -138,7 +140,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           await state.startSubscriptionService(port: result);
         } catch (e) {
           if (mounted) {
-            ToastUtils.showError('Failed to start service: $e');
+            ToastUtils.showError(strings.failedToStartService((e).toString()));
           }
         }
       }
@@ -166,7 +168,11 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Status: ${state.subscriptionServiceRunning ? "Running" : "Stopped"}',
+                  context.l10n.status(
+                    state.subscriptionServiceRunning
+                        ? context.l10n.running
+                        : context.l10n.stopped,
+                  ),
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -177,7 +183,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             if (state.subscriptionServiceRunning) ...[
               const SizedBox(height: 8),
               Text(
-                'Port: ${state.subscriptionServicePort}',
+                context.l10n.port2((state.subscriptionServicePort).toString()),
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ],
@@ -228,10 +234,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             FilledButton.tonalIcon(
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: url));
-                ToastUtils.showInfo('URL copied to clipboard');
+                ToastUtils.showInfo(context.l10n.urlCopiedToClipboard);
               },
               icon: const Icon(Icons.copy, size: 18),
-              label: const Text('Copy URL'),
+              label: Text(context.l10n.copyUrl),
             ),
           ],
         ),
@@ -258,7 +264,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Important',
+                  context.l10n.important,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -269,11 +275,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             ),
             const SizedBox(height: 12),
             Text(
-              '1. Ensure the local proxy is running\n'
-              '2. Import the subscription URL to your client\n'
-              '3. Select the LocalProxy node\n'
-              '4. For same-device usage: Add subscription BEFORE starting VPN\n'
-              '5. For cross-device usage: Ensure devices are on the same network',
+              context.l10n.ensureTheLocalProxyIsRunningImportTheSubscription,
               style: TextStyle(
                 color: isDark ? colorScheme.onSurface : Colors.amber[900],
               ),

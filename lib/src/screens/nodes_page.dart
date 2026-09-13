@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -58,7 +59,7 @@ class _NodesPageState extends State<NodesPage> {
     final state = context.read<ProxyState>();
     final port = int.tryParse(_portController.text);
     if (port == null || port < 1 || port > 65535) {
-      ToastUtils.showError('Invalid port number (1-65535)');
+      ToastUtils.showError(context.l10n.invalidPortNumber);
       return;
     }
 
@@ -75,20 +76,22 @@ class _NodesPageState extends State<NodesPage> {
   }
 
   Future<void> _exportConfig(BuildContext context, NodeInfo node) async {
+    final strings = context.l10n;
     final state = context.read<ProxyState>();
     try {
       await state.exportNodeConfig(node);
       if (mounted) {
-        ToastUtils.showSuccess('Config exported to clipboard');
+        ToastUtils.showSuccess(strings.configExportedToClipboard);
       }
     } catch (e) {
       if (mounted) {
-        ToastUtils.showError('Failed to export: $e');
+        ToastUtils.showError(strings.failedToExport((e).toString()));
       }
     }
   }
 
   Future<void> _switchNode(BuildContext context, NodeInfo node) async {
+    final strings = context.l10n;
     final state = context.read<ProxyState>();
     setState(() => _switchLoading[node.nodeId] = true);
 
@@ -96,14 +99,16 @@ class _NodesPageState extends State<NodesPage> {
       final success = await state.switchToNode(node);
       if (mounted) {
         if (success) {
-          ToastUtils.showSuccess('Switched to ${node.displayName}');
+          ToastUtils.showSuccess(
+            strings.switchedTo((node.displayName).toString()),
+          );
         } else {
-          ToastUtils.showError(state.lastError ?? 'Failed to switch node');
+          ToastUtils.showError(state.lastError ?? strings.failedToSwitchNode);
         }
       }
     } catch (e) {
       if (mounted) {
-        ToastUtils.showError('Failed to switch: $e');
+        ToastUtils.showError(strings.failedToSwitch((e).toString()));
       }
     } finally {
       if (mounted) {
@@ -134,11 +139,16 @@ class _NodesPageState extends State<NodesPage> {
     if (!mounted) return;
     setState(() => _isTestingAll = false);
     if (failures == 0) {
-      ToastUtils.showSuccess('Tested ${nodes.length} nodes');
+      ToastUtils.showSuccess(
+        context.l10n.testedNodes((nodes.length).toString()),
+      );
     } else {
       ToastUtils.showError(
-        'Tested ${nodes.length}: ${nodes.length - failures} reachable, '
-        '$failures failed',
+        context.l10n.testedReachableFailed(
+          (nodes.length).toString(),
+          (nodes.length - failures).toString(),
+          (failures).toString(),
+        ),
       );
     }
   }
@@ -164,8 +174,8 @@ class _NodesPageState extends State<NodesPage> {
                       children: [
                         const Icon(Icons.dns, size: 20),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Control Server',
+                        Text(
+                          context.l10n.controlServer,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -190,9 +200,9 @@ class _NodesPageState extends State<NodesPage> {
                             child: TextField(
                               controller: _hostController,
                               onChanged: (_) => _persistControlFields(),
-                              decoration: const InputDecoration(
-                                labelText: 'Host',
-                                hintText: 'e.g. 192.168.1.100',
+                              decoration: InputDecoration(
+                                labelText: context.l10n.host,
+                                hintText: context.l10n.eG,
                                 isDense: true,
                                 border: OutlineInputBorder(),
                               ),
@@ -204,8 +214,8 @@ class _NodesPageState extends State<NodesPage> {
                             child: TextField(
                               controller: _portController,
                               onChanged: (_) => _persistControlFields(),
-                              decoration: const InputDecoration(
-                                labelText: 'Port',
+                              decoration: InputDecoration(
+                                labelText: context.l10n.port3,
                                 isDense: true,
                                 border: OutlineInputBorder(),
                               ),
@@ -218,8 +228,8 @@ class _NodesPageState extends State<NodesPage> {
                       TextField(
                         controller: _keyController,
                         onChanged: (_) => _persistControlFields(),
-                        decoration: const InputDecoration(
-                          labelText: 'Session Key (optional)',
+                        decoration: InputDecoration(
+                          labelText: context.l10n.sessionKeyOptional,
                           isDense: true,
                           border: OutlineInputBorder(),
                         ),
@@ -241,7 +251,7 @@ class _NodesPageState extends State<NodesPage> {
                                   ),
                                 )
                               : const Icon(Icons.refresh),
-                          label: const Text('Fetch Nodes'),
+                          label: Text(context.l10n.fetchNodes),
                         ),
                       ),
                     ],
@@ -278,11 +288,11 @@ class _NodesPageState extends State<NodesPage> {
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
-                Text('Error: ${state.nodesError}'),
+                Text(context.l10n.error((state.nodesError).toString())),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: _onRefresh,
-                  child: const Text('Retry'),
+                  child: Text(context.l10n.retry),
                 ),
               ],
             ),
@@ -302,10 +312,10 @@ class _NodesPageState extends State<NodesPage> {
               children: [
                 const Icon(Icons.dns_outlined, size: 64, color: Colors.grey),
                 const SizedBox(height: 16),
-                const Text('No nodes available'),
+                Text(context.l10n.noNodesAvailable),
                 const SizedBox(height: 8),
-                const Text(
-                  'Pull down to refresh',
+                Text(
+                  context.l10n.pullDownToRefresh,
                   style: TextStyle(color: Colors.grey),
                 ),
               ],
@@ -369,7 +379,7 @@ class _NodesPageState extends State<NodesPage> {
         runSpacing: 8,
         children: [
           FilterChip(
-            label: Text('All (${state.nodes.length})'),
+            label: Text(context.l10n.all((state.nodes.length).toString())),
             selected: _selectedCountry == null,
             onSelected: (_) => setState(() => _selectedCountry = null),
           ),
@@ -402,22 +412,22 @@ class _NodesPageState extends State<NodesPage> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.network_ping, size: 18),
-          label: const Text('Test all'),
+          label: Text(context.l10n.testAll),
         ),
         PopupMenuButton<bool>(
-          tooltip: 'Sort nodes',
+          tooltip: context.l10n.sortNodes,
           initialValue: state.sortNodesByLatency,
           onSelected: state.setSortNodesByLatency,
           itemBuilder: (context) => [
             CheckedPopupMenuItem(
               value: false,
               checked: !state.sortNodesByLatency,
-              child: const Text('Server order'),
+              child: Text(context.l10n.serverOrder),
             ),
             CheckedPopupMenuItem(
               value: true,
               checked: state.sortNodesByLatency,
-              child: const Text('Latency'),
+              child: Text(context.l10n.latency),
             ),
           ],
           child: Container(
@@ -432,7 +442,11 @@ class _NodesPageState extends State<NodesPage> {
               children: [
                 const Icon(Icons.sort, size: 18),
                 const SizedBox(width: 8),
-                Text(state.sortNodesByLatency ? 'Latency' : 'Server order'),
+                Text(
+                  state.sortNodesByLatency
+                      ? context.l10n.latency
+                      : context.l10n.serverOrder,
+                ),
                 const SizedBox(width: 4),
                 const Icon(Icons.arrow_drop_down, size: 18),
               ],
@@ -478,12 +492,12 @@ class _NodesPageState extends State<NodesPage> {
       onChanged: (value) => setState(() => _searchQuery = value),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Search nodes, regions, addresses, or groups',
+        hintText: context.l10n.searchNodesRegionsAddressesOrGroups,
         prefixIcon: const Icon(Icons.search),
         suffixIcon: _searchQuery.isEmpty
             ? null
             : IconButton(
-                tooltip: 'Clear search',
+                tooltip: context.l10n.clearSearch,
                 icon: const Icon(Icons.clear),
                 onPressed: () {
                   _searchController.clear();
@@ -506,8 +520,8 @@ class _NodesPageState extends State<NodesPage> {
               children: [
                 const Icon(Icons.group, size: 18),
                 const SizedBox(width: 8),
-                const Text(
-                  'Groups',
+                Text(
+                  context.l10n.groups,
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
                 if (state.groupsError != null) ...[
@@ -531,7 +545,7 @@ class _NodesPageState extends State<NodesPage> {
               runSpacing: 8,
               children: [
                 ChoiceChip(
-                  label: const Text('All'),
+                  label: Text(context.l10n.all2),
                   selected: _selectedGroupId == null,
                   onSelected: (_) => setState(() => _selectedGroupId = null),
                 ),
@@ -563,7 +577,7 @@ class _NodesPageState extends State<NodesPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'No nodes match "${_searchQuery.trim()}"',
+                  context.l10n.noNodesMatch((_searchQuery.trim()).toString()),
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -594,7 +608,7 @@ class _NodesPageState extends State<NodesPage> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'No nodes in group "${group.name}"',
+                context.l10n.noNodesInGroup((group.name).toString()),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -631,7 +645,7 @@ class _NodesPageState extends State<NodesPage> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      'CURRENT NODE',
+                      context.l10n.currentNode,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
@@ -667,7 +681,9 @@ class _NodesPageState extends State<NodesPage> {
 
             // Last seen
             Text(
-              'Last seen: ${_formatLastSeen(node.lastSeen)}',
+              context.l10n.lastSeen(
+                (_formatLastSeen(node.lastSeen)).toString(),
+              ),
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -678,7 +694,7 @@ class _NodesPageState extends State<NodesPage> {
             if (node.latencyMs != null) ...[
               const SizedBox(height: 4),
               Text(
-                'Latency: ${node.latencyMs}ms',
+                context.l10n.latencyMs((node.latencyMs).toString()),
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.primary,
@@ -703,7 +719,7 @@ class _NodesPageState extends State<NodesPage> {
                 ElevatedButton.icon(
                   onPressed: () => _exportConfig(context, node),
                   icon: const Icon(Icons.file_download, size: 18),
-                  label: const Text('Export'),
+                  label: Text(context.l10n.exportLabel),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -722,7 +738,7 @@ class _NodesPageState extends State<NodesPage> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.speed, size: 18),
-                  label: const Text('Test'),
+                  label: Text(context.l10n.testLabel),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -743,7 +759,7 @@ class _NodesPageState extends State<NodesPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.swap_horiz, size: 18),
-                    label: const Text('Switch'),
+                    label: Text(context.l10n.switchLabel),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -764,13 +780,13 @@ class _NodesPageState extends State<NodesPage> {
     final diff = now.difference(lastSeen);
 
     if (diff.inSeconds < 60) {
-      return '${diff.inSeconds}s ago';
+      return context.l10n.sAgo((diff.inSeconds).toString());
     } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
+      return context.l10n.mAgo((diff.inMinutes).toString());
     } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
+      return context.l10n.hAgo((diff.inHours).toString());
     } else {
-      return '${diff.inDays}d ago';
+      return context.l10n.dAgo((diff.inDays).toString());
     }
   }
 
@@ -798,7 +814,7 @@ class _NodesPageState extends State<NodesPage> {
     final verification = state.verificationFor(node);
     if (verification != null && !verification.isVerified) {
       return Tooltip(
-        message: verification.error ?? 'This node did not answer',
+        message: verification.error ?? context.l10n.thisNodeDidNotAnswer,
         child: SizedBox(
           width: 28,
           height: 20,
@@ -841,7 +857,9 @@ class _NodesPageState extends State<NodesPage> {
 
     if (!verification.isVerified) {
       return Text(
-        'Unreachable · ${verification.error ?? 'no answer'}',
+        context.l10n.unreachable(
+          (verification.error ?? context.l10n.noAnswer).toString(),
+        ),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodySmall?.copyWith(
@@ -852,13 +870,16 @@ class _NodesPageState extends State<NodesPage> {
 
     final drifted = verification.disagreesWith(node.country);
     final parts = <String>[
-      'Egress ${verification.countryCode}',
+      context.l10n.egress((verification.countryCode).toString()),
       if (verification.egressIp.isNotEmpty) verification.egressIp,
       if (verification.latencyMs != null) '${verification.latencyMs}ms',
     ];
     return Text(
       drifted
-          ? '${parts.join(' · ')} — catalogue says ${node.country}'
+          ? context.l10n.catalogueSays(
+              (parts.join(' · ')).toString(),
+              (node.country).toString(),
+            )
           : parts.join(' · '),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
@@ -871,17 +892,21 @@ class _NodesPageState extends State<NodesPage> {
   }
 
   Future<void> _verifyNode(BuildContext context, NodeInfo node) async {
+    final strings = context.l10n;
     final state = context.read<ProxyState>();
     final verification = await state.verifyNode(node);
     if (verification == null) return;
     if (verification.isVerified) {
       ToastUtils.showSuccess(
-        'Traffic leaves from ${verification.countryCode}'
-        '${verification.egressIp.isEmpty ? '' : ' (${verification.egressIp})'}',
+        strings.trafficLeavesFrom(
+          (verification.countryCode).toString(),
+          (verification.egressIp.isEmpty ? '' : ' (${verification.egressIp})')
+              .toString(),
+        ),
       );
     } else {
       ToastUtils.showError(
-        verification.error ?? 'Could not reach ${node.addr}',
+        verification.error ?? strings.couldNotReach((node.addr).toString()),
       );
     }
   }

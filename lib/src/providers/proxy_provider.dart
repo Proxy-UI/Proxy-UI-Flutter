@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -333,12 +334,12 @@ class ProxyState extends ChangeNotifier {
 
   Future<bool> start() async {
     if (_isProxyTransitioning) {
-      _lastError = 'Proxy operation is already in progress';
+      _lastError = appStrings.proxyOperationIsAlreadyInProgress;
       _safeNotifyListeners();
       return false;
     }
     if (_isTunBusy) {
-      _lastError = 'Wait for TUN setup to finish';
+      _lastError = appStrings.waitForTunSetupToFinish;
       _safeNotifyListeners();
       return false;
     }
@@ -356,15 +357,15 @@ class ProxyState extends ChangeNotifier {
 
     try {
       if (_config.serverHost.isEmpty) {
-        _lastError = 'Server host is required';
+        _lastError = appStrings.serverHostIsRequired;
         return false;
       }
       if (!_isValidPort(_config.serverPort)) {
-        _lastError = 'Server port must be between 1 and 65535';
+        _lastError = appStrings.serverPortMustBeBetweenAnd;
         return false;
       }
       if (!_isValidPort(_config.localPort)) {
-        _lastError = 'Local port must be between 1 and 65535';
+        _lastError = appStrings.localPortMustBeBetweenAnd;
         return false;
       }
 
@@ -395,7 +396,7 @@ class ProxyState extends ChangeNotifier {
       _lastError = ProxyResult.message(result);
       return false;
     } catch (error) {
-      _lastError = 'Failed to start proxy: $error';
+      _lastError = appStrings.failedToStartProxy((error).toString());
       return false;
     } finally {
       _isProxyTransitioning = false;
@@ -444,7 +445,7 @@ class ProxyState extends ChangeNotifier {
   ) async {
     if (!Platform.isAndroid) return false;
     if (mode == AndroidVpnRoutingMode.include && packages.isEmpty) {
-      _lastError = 'Select at least one application for VPN-only mode';
+      _lastError = appStrings.selectAtLeastOneApplicationForVpnOnlyMode;
       notifyListeners();
       return false;
     }
@@ -488,13 +489,16 @@ class ProxyState extends ChangeNotifier {
       final restoreResult = await _startConfiguredTun();
       if (restoreResult == ProxyResult.ok) {
         _isTunRunning = true;
-        _lastError = '$updateError Previous application policy was restored.';
+        _lastError = appStrings.previousApplicationPolicyWasRestored(
+          (updateError).toString(),
+        );
       } else {
         _isTunRunning = false;
         _config = previous.copyWith(tunEnabled: false);
-        _lastError =
-            '$updateError Previous application policy could not be restored: '
-            '${_service.lastError ?? ProxyResult.message(restoreResult)}';
+        _lastError = appStrings.previousApplicationPolicyCouldNotBeRestored(
+          (updateError).toString(),
+          (_service.lastError ?? ProxyResult.message(restoreResult)).toString(),
+        );
       }
       await _saveConfig();
       return false;
@@ -526,7 +530,7 @@ class ProxyState extends ChangeNotifier {
     if (_isTunBusy) return false;
     if (enabled == _isTunRunning) return true;
     if (enabled && !_isRunning) {
-      _lastError = 'Start the local proxy before enabling TUN mode';
+      _lastError = appStrings.startTheLocalProxyBeforeEnablingTunMode;
       notifyListeners();
       return false;
     }
@@ -545,7 +549,7 @@ class ProxyState extends ChangeNotifier {
         _config = _config.copyWith(tunEnabled: false);
         await _saveConfig();
         _lastError =
-            'Administrator permission was not granted. TUN mode was not changed.';
+            appStrings.administratorPermissionWasNotGrantedTunModeWasNot;
         return false;
       }
 
@@ -588,7 +592,7 @@ class ProxyState extends ChangeNotifier {
   /// DNS, so a caller that exits the process afterwards cannot cut that short.
   Future<bool> stop() async {
     if (_isProxyTransitioning) {
-      _lastError = 'Proxy operation is already in progress';
+      _lastError = appStrings.proxyOperationIsAlreadyInProgress;
       _safeNotifyListeners();
       return false;
     }
@@ -647,11 +651,7 @@ class ProxyState extends ChangeNotifier {
   Future<void> startSubscriptionService({int port = 8080}) async {
     if (_subscriptionServiceRunning || _subscriptionServiceBusy) return;
     if (!_isValidPort(port)) {
-      throw ArgumentError.value(
-        port,
-        'port',
-        'Port must be between 1 and 65535',
-      );
+      throw ArgumentError.value(port, 'port', appStrings.portMustBeBetweenAnd);
     }
 
     _subscriptionServiceBusy = true;
@@ -728,12 +728,12 @@ class ProxyState extends ChangeNotifier {
   // Fetch nodes from server
   Future<void> fetchNodes() async {
     if (nodesServerHost.isEmpty) {
-      _nodesError = 'Please enter server host';
+      _nodesError = appStrings.pleaseEnterServerHost;
       _safeNotifyListeners();
       return;
     }
     if (!_isValidPort(nodesServerPort)) {
-      _nodesError = 'Server port must be between 1 and 65535';
+      _nodesError = appStrings.serverPortMustBeBetweenAnd;
       _safeNotifyListeners();
       return;
     }
@@ -905,7 +905,7 @@ class ProxyState extends ChangeNotifier {
   // Switch to a different node
   Future<bool> switchToNode(NodeInfo node) async {
     if (_isProxyTransitioning) {
-      throw StateError('Proxy operation is already in progress');
+      throw StateError(appStrings.proxyOperationIsAlreadyInProgress);
     }
 
     // Captured before anything is applied so a failed start can put the
@@ -968,9 +968,9 @@ class ProxyState extends ChangeNotifier {
       );
       socket.destroy();
     } on SocketException catch (error) {
-      throw Exception('Node unreachable: ${error.message}');
+      throw Exception(appStrings.nodeUnreachable((error.message).toString()));
     } on TimeoutException {
-      throw Exception('Node unreachable: connection timeout');
+      throw Exception(appStrings.nodeUnreachableConnectionTimeout);
     }
   }
 
@@ -986,7 +986,7 @@ class ProxyState extends ChangeNotifier {
     ProxyConfigModel newConfig,
   ) async {
     if (_isTunBusy) {
-      _lastError = 'Wait for the current TUN operation to finish';
+      _lastError = appStrings.waitForTheCurrentTunOperationToFinish;
       notifyListeners();
       return false;
     }
@@ -1002,7 +1002,9 @@ class ProxyState extends ChangeNotifier {
           stopResult != ProxyResult.notRunning) {
         _lastError =
             _service.lastError ??
-            'Failed to pause TUN for node switch: ${ProxyResult.message(stopResult)}';
+            appStrings.failedToPauseTunForNodeSwitch(
+              (ProxyResult.message(stopResult)).toString(),
+            );
         _isTunRunning = _service.isTunRunning;
         if (!_isTunRunning) {
           _config = _config.copyWith(tunEnabled: false);
@@ -1019,7 +1021,10 @@ class ProxyState extends ChangeNotifier {
       } catch (error) {
         return await _restorePreviousTun(
           previousConfig,
-          'Cannot switch to ${node.displayName}: $error.',
+          appStrings.cannotSwitchTo(
+            (node.displayName).toString(),
+            (error).toString(),
+          ),
           endpointChanged: false,
         );
       }
@@ -1032,7 +1037,9 @@ class ProxyState extends ChangeNotifier {
         return await _restorePreviousTun(
           previousConfig,
           _service.lastError ??
-              'Failed to switch upstream: ${ProxyResult.message(switchResult)}.',
+              appStrings.failedToSwitchUpstream(
+                (ProxyResult.message(switchResult)).toString(),
+              ),
           endpointChanged: false,
         );
       }
@@ -1042,8 +1049,10 @@ class ProxyState extends ChangeNotifier {
       if (startResult != ProxyResult.ok) {
         final switchError =
             _service.lastError ??
-            'Failed to restart TUN for ${node.displayName}: '
-                '${ProxyResult.message(startResult)}.';
+            appStrings.failedToRestartTunFor(
+              (node.displayName).toString(),
+              (ProxyResult.message(startResult)).toString(),
+            );
         return await _restorePreviousTun(
           previousConfig,
           switchError,
@@ -1076,8 +1085,9 @@ class ProxyState extends ChangeNotifier {
       if (switchBackResult != ProxyResult.ok) {
         rollbackError =
             _service.lastError ??
-            'upstream rollback returned '
-                '${ProxyResult.message(switchBackResult)}';
+            appStrings.upstreamRollbackReturned(
+              (ProxyResult.message(switchBackResult)).toString(),
+            );
       }
     }
 
@@ -1093,13 +1103,16 @@ class ProxyState extends ChangeNotifier {
     if (rollbackError == null) {
       _config = previousConfig.copyWith(tunEnabled: true);
       _isTunRunning = true;
-      _lastError = '$failure Previous node and TUN routes were restored.';
+      _lastError = appStrings.previousNodeAndTunRoutesWereRestored(
+        (failure).toString(),
+      );
     } else {
       _config = previousConfig.copyWith(tunEnabled: false);
       _isTunRunning = false;
-      _lastError =
-          '$failure Rollback could not restore TUN mode: $rollbackError. '
-          'Traffic capture is now off.';
+      _lastError = appStrings.rollbackCouldNotRestoreTunModeTrafficCaptureIs(
+        (failure).toString(),
+        (rollbackError).toString(),
+      );
     }
     await _saveConfig();
     return false;

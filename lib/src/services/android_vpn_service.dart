@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:collection';
 
@@ -212,7 +213,7 @@ class AndroidVpnService {
     if (fd == null || fd < 0) {
       throw PlatformException(
         code: 'vpn_start_failed',
-        message: 'Android returned no VPN file descriptor',
+        message: appStrings.androidReturnedNoVpnFileDescriptor,
       );
     }
     return AndroidVpnInterface(

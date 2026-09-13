@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -70,15 +71,16 @@ class _ConfigDialogState extends State<ConfigDialog> {
   }
 
   Future<void> _save() async {
+    final strings = context.l10n;
     final state = context.read<ProxyState>();
     final serverPort = int.tryParse(_serverPortController.text);
     final localPort = int.tryParse(_localPortController.text);
     if (serverPort == null || serverPort < 1 || serverPort > 65535) {
-      ToastUtils.showError('Invalid server port (1-65535)');
+      ToastUtils.showError(context.l10n.invalidServerPort);
       return;
     }
     if (localPort == null || localPort < 1 || localPort > 65535) {
-      ToastUtils.showError('Invalid local port (1-65535)');
+      ToastUtils.showError(context.l10n.invalidLocalPort);
       return;
     }
 
@@ -120,7 +122,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
       ToastUtils.showError(startupError);
       return;
     }
-    ToastUtils.showSuccess('Configuration saved');
+    ToastUtils.showSuccess(strings.configurationSaved);
   }
 
   @override
@@ -128,7 +130,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
     final size = MediaQuery.of(context).size;
 
     return AlertDialog(
-      title: const Text('Proxy Configuration'),
+      title: Text(context.l10n.proxyConfiguration),
       content: SizedBox(
         height: size.height / 2,
         width: size.width / 1.5,
@@ -138,13 +140,16 @@ class _ConfigDialogState extends State<ConfigDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Server section
-              Text('Server', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                context.l10n.server,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _hostController,
-                decoration: const InputDecoration(
-                  labelText: 'Server Host',
-                  hintText: 'e.g., proxy.example.com',
+                decoration: InputDecoration(
+                  labelText: context.l10n.serverHost,
+                  hintText: context.l10n.eGProxyExampleCom,
                   prefixIcon: Icon(Icons.dns_outlined),
                 ),
               ),
@@ -154,8 +159,8 @@ class _ConfigDialogState extends State<ConfigDialog> {
                   Expanded(
                     child: TextField(
                       controller: _serverPortController,
-                      decoration: const InputDecoration(
-                        labelText: 'Server Port',
+                      decoration: InputDecoration(
+                        labelText: context.l10n.serverPort,
                         hintText: '1081',
                         prefixIcon: Icon(Icons.numbers),
                       ),
@@ -167,9 +172,9 @@ class _ConfigDialogState extends State<ConfigDialog> {
                   Expanded(
                     child: TextField(
                       controller: _sessionKeyController,
-                      decoration: const InputDecoration(
-                        labelText: 'Session Key',
-                        hintText: '32 characters',
+                      decoration: InputDecoration(
+                        labelText: context.l10n.sessionKey,
+                        hintText: context.l10n.characters,
                         prefixIcon: Icon(Icons.key_outlined),
                       ),
                       obscureText: true,
@@ -179,15 +184,18 @@ class _ConfigDialogState extends State<ConfigDialog> {
               ),
               const SizedBox(height: 24),
               // Local section
-              Text('Local', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                context.l10n.local,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _localPortController,
-                decoration: const InputDecoration(
-                  labelText: 'Local Port',
+                decoration: InputDecoration(
+                  labelText: context.l10n.localPort,
                   hintText: '1080',
                   prefixIcon: Icon(Icons.computer_outlined),
-                  helperText: 'Port for local proxy server',
+                  helperText: context.l10n.portForLocalProxyServer,
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -195,9 +203,9 @@ class _ConfigDialogState extends State<ConfigDialog> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: const Icon(Icons.lan_outlined),
-                title: const Text('Allow LAN'),
-                subtitle: const Text(
-                  'Listen on all interfaces. Use only on trusted networks.',
+                title: Text(context.l10n.allowLan),
+                subtitle: Text(
+                  context.l10n.listenOnAllInterfacesUseOnlyOnTrustedNetworks,
                 ),
                 value: _allowLan,
                 onChanged: (value) => setState(() => _allowLan = value),
@@ -210,51 +218,54 @@ class _ConfigDialogState extends State<ConfigDialog> {
               ],
               const SizedBox(height: 24),
               // Options section
-              Text('Options', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                context.l10n.options,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const SizedBox(height: 12),
               SwitchListTile(
-                title: const Text('Auto Proxy'),
-                subtitle: const Text('Route traffic based on geo-location'),
+                title: Text(context.l10n.autoProxy),
+                subtitle: Text(context.l10n.routeTrafficBasedOnGeoLocation),
                 value: _autoProxy,
                 onChanged: (v) => setState(() => _autoProxy = v),
               ),
               SwitchListTile(
-                title: const Text('SOCKS5 UDP'),
-                subtitle: const Text('Proxy UDP through the server'),
+                title: Text(context.l10n.socksUdp),
+                subtitle: Text(context.l10n.proxyUdpThroughTheServer),
                 value: _udpEnabled,
                 onChanged: (v) => setState(() => _udpEnabled = v),
               ),
               SwitchListTile(
-                title: const Text('Direct UDP fallback'),
-                subtitle: const Text(
-                  'When SOCKS5 UDP is off, send VPN/TUN UDP directly instead of blocking it',
-                ),
+                title: Text(context.l10n.directUdpFallback),
+                subtitle: Text(context.l10n.whenSocksUdpIsOffSendVpnTunUdp),
                 value: _udpDirectFallback,
                 onChanged: (v) => setState(() => _udpDirectFallback = v),
               ),
               SwitchListTile(
-                title: const Text('Reverse Geo'),
-                subtitle: const Text('Reverse geo-location routing logic'),
+                title: Text(context.l10n.reverseGeo),
+                subtitle: Text(context.l10n.reverseGeoLocationRoutingLogic),
                 value: _reverseGeo,
                 onChanged: (v) => setState(() => _reverseGeo = v),
               ),
               SwitchListTile(
-                title: const Text('Force Codec'),
-                subtitle: const Text('Force encryption for all connections'),
+                title: Text(context.l10n.forceCodec),
+                subtitle: Text(context.l10n.forceEncryptionForAllConnections),
                 value: _forceCodec,
                 onChanged: (v) => setState(() => _forceCodec = v),
               ),
               if (DesktopSettings.isSupported) ...[
                 const SizedBox(height: 24),
-                Text('Desktop', style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  context.l10n.desktop,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 12),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   secondary: const Icon(Icons.minimize_outlined),
-                  title: const Text('Minimize to tray'),
-                  subtitle: const Text(
-                    'Hide the taskbar button when minimized. The tray icon '
-                    'brings the window back.',
+                  title: Text(context.l10n.minimizeToTray),
+                  subtitle: Text(
+                    context.l10n.hideTheTaskbarButtonWhenMinimizedTheTrayIcon,
                   ),
                   value: _minimizeToTray,
                   onChanged: (v) => setState(() => _minimizeToTray = v),
@@ -263,10 +274,9 @@ class _ConfigDialogState extends State<ConfigDialog> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.power_settings_new_outlined),
-                    title: const Text('Start at sign-in'),
-                    subtitle: const Text(
-                      'Launch automatically when you sign in to Windows. The '
-                      'proxy still has to be started manually.',
+                    title: Text(context.l10n.startAtSignIn),
+                    subtitle: Text(
+                      context.l10n.launchAutomaticallyWhenYouSignInToWindowsThe,
                     ),
                     value: _launchAtStartup,
                     onChanged: (v) => setState(() => _launchAtStartup = v),
@@ -278,10 +288,10 @@ class _ConfigDialogState extends State<ConfigDialog> {
       ),
       actions: <Widget>[
         TextButton(
-          child: const Text('Dismiss'),
+          child: Text(context.l10n.dismiss),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
+        FilledButton(onPressed: _save, child: Text(context.l10n.save)),
       ],
     );
   }

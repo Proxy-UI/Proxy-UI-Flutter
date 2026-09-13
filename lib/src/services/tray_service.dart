@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -29,6 +30,7 @@ class TrayService with TrayListener {
   /// call and only restored after it succeeds, so a failed call can never leave
   /// the tray frozen on a stale icon or menu.
   _TrayStatus? _appliedIconStatus;
+  String? _appliedIconLanguage;
   int? _appliedMenuSignature;
 
   Future<void> _queue = Future<void>.value();
@@ -62,6 +64,7 @@ class TrayService with TrayListener {
     _proxyState = proxyState;
     trayManager.addListener(this);
     proxyState.addListener(_onProxyStateChanged);
+    AppLanguage.instance.addListener(_onLanguageChanged);
 
     await _enqueue(_applyTray);
     _startHealthCheck();
@@ -107,6 +110,12 @@ class TrayService with TrayListener {
   Future<void> rebuild() {
     _needsRebuild = true;
     return _enqueue(_applyTray);
+  }
+
+  void _onLanguageChanged() {
+    _appliedMenuSignature = null;
+    _appliedIconStatus = null;
+    _onProxyStateChanged();
   }
 
   void _onProxyStateChanged() {
@@ -194,12 +203,18 @@ class TrayService with TrayListener {
     final status = _statusFor(proxyState);
     // ProxyState also notifies for every log line. Avoid repeatedly replacing
     // the native tray icon when the connection state has not changed.
-    if (_appliedIconStatus == status) return;
+    final language = AppLanguage.instance.locale.languageCode;
+    if (_appliedIconStatus == status && _appliedIconLanguage == language) {
+      return;
+    }
 
     final (iconName, tooltipStatus) = switch (status) {
-      _TrayStatus.connected => ('tray_icon', 'Connected'),
-      _TrayStatus.disconnected => ('tray_icon_inactive', 'Disconnected'),
-      _TrayStatus.error => ('tray_icon_error', 'Connection error'),
+      _TrayStatus.connected => ('tray_icon', appStrings.connected),
+      _TrayStatus.disconnected => (
+        'tray_icon_inactive',
+        appStrings.disconnected,
+      ),
+      _TrayStatus.error => ('tray_icon_error', appStrings.connectionError),
     };
     // macOS gets its own set: a template image is black plus alpha, and the
     // system tints it to match the menu bar, inverting it while the item is
@@ -229,6 +244,7 @@ class TrayService with TrayListener {
       return;
     }
     _appliedIconStatus = status;
+    _appliedIconLanguage = language;
   }
 
   Future<void> _applyMenu() async {
@@ -243,6 +259,7 @@ class TrayService with TrayListener {
     final status = _statusFor(proxyState);
     final nodes = _menuNodes(proxyState);
     final menuSignature = Object.hash(
+      AppLanguage.instance.locale.languageCode,
       status,
       isBusy,
       isRunning,
@@ -256,12 +273,14 @@ class TrayService with TrayListener {
     if (_appliedMenuSignature == menuSignature) return;
 
     final statusLabel = isBusy
-        ? 'Updating…'
+        ? appStrings.updating
         : switch (status) {
             _TrayStatus.connected =>
-              isTunRunning ? 'Connected · TUN capturing' : 'Connected',
-            _TrayStatus.disconnected => 'Disconnected',
-            _TrayStatus.error => 'Connection error',
+              isTunRunning
+                  ? appStrings.connectedTunCapturing
+                  : appStrings.connected,
+            _TrayStatus.disconnected => appStrings.disconnected,
+            _TrayStatus.error => appStrings.connectionError,
           };
     final serverLabel = '${config.serverHost}:${config.serverPort}';
 
@@ -275,13 +294,13 @@ class TrayService with TrayListener {
         // always greyed out and told the user nothing about the current state.
         MenuItem.checkbox(
           key: 'proxy',
-          label: 'Proxy',
+          label: appStrings.proxy,
           checked: isRunning,
           disabled: isBusy || config.serverHost.isEmpty,
         ),
         MenuItem.checkbox(
           key: 'tun',
-          label: 'TUN mode',
+          label: appStrings.tunMode2,
           checked: isTunRunning,
           // TUN captures through the local listener, so it cannot outlive it.
           disabled: isBusy || !isRunning,
@@ -290,7 +309,7 @@ class TrayService with TrayListener {
           MenuItem.separator(),
           MenuItem.submenu(
             key: 'nodes',
-            label: 'Switch node',
+            label: appStrings.switchNode,
             disabled: isBusy,
             submenu: Menu(
               items: [
@@ -305,11 +324,11 @@ class TrayService with TrayListener {
           ),
         ],
         MenuItem.separator(),
-        MenuItem(key: 'show', label: 'Show window'),
+        MenuItem(key: 'show', label: appStrings.showWindow),
         if (proxyState.hasLocalLogStorage)
-          MenuItem(key: 'logs', label: 'Open log folder'),
+          MenuItem(key: 'logs', label: appStrings.openLogFolder),
         MenuItem.separator(),
-        MenuItem(key: 'quit', label: 'Quit'),
+        MenuItem(key: 'quit', label: appStrings.quit),
       ],
     );
 
@@ -420,7 +439,9 @@ class TrayService with TrayListener {
         } else {
           final started = await proxyState.start();
           if (!started) {
-            ToastUtils.showError(proxyState.lastError ?? 'Could not start');
+            ToastUtils.showError(
+              proxyState.lastError ?? appStrings.couldNotStart,
+            );
           }
         }
         break;
@@ -434,7 +455,9 @@ class TrayService with TrayListener {
         try {
           await proxyState.openLogDirectory();
         } catch (error) {
-          ToastUtils.showError('Could not open the log folder: $error');
+          ToastUtils.showError(
+            appStrings.couldNotOpenTheLogFolder((error).toString()),
+          );
         }
         break;
       case 'quit':
@@ -450,14 +473,18 @@ class TrayService with TrayListener {
     // replacement. This process has to release the port and go, exactly as the
     // proxy page does when the switch is used there.
     if (result == null) {
-      ToastUtils.showInfo('Restarting with administrator privileges for TUN');
+      ToastUtils.showInfo(
+        appStrings.restartingWithAdministratorPrivilegesForTun,
+      );
       proxyState.stopForElevationHandoff();
       await Future<void>.delayed(const Duration(milliseconds: 250));
       await proxyState.flushDesktopLogs();
       exit(0);
     }
     if (result == false) {
-      ToastUtils.showError(proxyState.lastError ?? 'Failed to change TUN mode');
+      ToastUtils.showError(
+        proxyState.lastError ?? appStrings.failedToChangeTunMode,
+      );
     }
   }
 
@@ -475,12 +502,16 @@ class TrayService with TrayListener {
     try {
       final switched = await proxyState.switchToNode(target);
       if (switched) {
-        ToastUtils.showSuccess('Switched to ${_nodeLabel(target)}');
+        ToastUtils.showSuccess(
+          appStrings.switchedTo((_nodeLabel(target)).toString()),
+        );
       } else {
-        ToastUtils.showError(proxyState.lastError ?? 'Could not switch node');
+        ToastUtils.showError(
+          proxyState.lastError ?? appStrings.couldNotSwitchNode,
+        );
       }
     } catch (error) {
-      ToastUtils.showError('Could not switch node: $error');
+      ToastUtils.showError(appStrings.couldNotSwitchNode2((error).toString()));
     }
   }
 
@@ -490,6 +521,7 @@ class TrayService with TrayListener {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
     proxyState?.removeListener(_onProxyStateChanged);
+    AppLanguage.instance.removeListener(_onLanguageChanged);
     // Stopping releases the native system-proxy guard and, on macOS, waits for
     // the privileged helper to put the system routes and DNS back. `exit` below
     // skips Dart and Rust teardown, so without awaiting this the machine can be
@@ -516,6 +548,7 @@ class TrayService with TrayListener {
     _healthCheckTimer = null;
     trayManager.removeListener(this);
     _proxyState?.removeListener(_onProxyStateChanged);
+    AppLanguage.instance.removeListener(_onLanguageChanged);
     _proxyState = null;
     _initialized = false;
   }

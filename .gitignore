@@ -58,3 +58,6 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+
+# Generated from the committed ARB localization resources.
+/lib/l10n/generated/

@@ -1,3 +1,4 @@
+import 'l10n/app_language.dart';
 import 'dart:async' show unawaited;
 import 'dart:io';
 
@@ -19,6 +20,7 @@ import 'src/services/window_state_service.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppLanguage.instance.load();
   final enableTunOnStartup = arguments.contains('--enable-tun');
   final desktopLogService = DesktopLogService();
 
@@ -134,6 +136,13 @@ class _ProxyAppState extends State<ProxyApp>
   }
 
   @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (locales != null && locales.isNotEmpty) {
+      AppLanguage.instance.systemLocaleChanged(locales.first);
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       return;
@@ -189,31 +198,37 @@ class _ProxyAppState extends State<ProxyApp>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeState>(
-      builder: (context, themeState, _) {
-        return MaterialApp(
-          title: 'Proxy With Flutter',
-          debugShowCheckedModeBanner: false,
-          themeMode: themeState.themeMode,
-          theme: ThemeData(
-            colorSchemeSeed: themeState.colorSeed.color,
-            useMaterial3: true,
-            brightness: Brightness.light,
-          ),
-          darkTheme: ThemeData(
-            colorSchemeSeed: themeState.colorSeed.color,
-            useMaterial3: true,
-            brightness: Brightness.dark,
-          ),
-          builder: (context, child) {
-            if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-              return VirtualWindowFrame(child: child!);
-            }
-            return child!;
-          },
-          home: const HomeScreen(),
-        );
-      },
+    return ListenableBuilder(
+      listenable: AppLanguage.instance,
+      builder: (context, _) => Consumer<ThemeState>(
+        builder: (context, themeState, _) {
+          return MaterialApp(
+            title: 'Proxy With Flutter',
+            debugShowCheckedModeBanner: false,
+            locale: AppLanguage.instance.locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            themeMode: themeState.themeMode,
+            theme: ThemeData(
+              colorSchemeSeed: themeState.colorSeed.color,
+              useMaterial3: true,
+              brightness: Brightness.light,
+            ),
+            darkTheme: ThemeData(
+              colorSchemeSeed: themeState.colorSeed.color,
+              useMaterial3: true,
+              brightness: Brightness.dark,
+            ),
+            builder: (context, child) {
+              if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+                return VirtualWindowFrame(child: child!);
+              }
+              return child!;
+            },
+            home: const HomeScreen(),
+          );
+        },
+      ),
     );
   }
 }

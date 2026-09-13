@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,6 +13,7 @@ import '../widgets/config_dialog.dart';
 import '../widgets/android_vpn_app_dialog.dart';
 import '../widgets/lan_proxy_link.dart';
 import '../widgets/tun_process_dialog.dart';
+import '../widgets/tun_diagnostics_dialog.dart';
 
 /// Whether this platform can pick processes to keep out of the tunnel.
 ///
@@ -57,18 +59,22 @@ class _ProxyPageState extends State<ProxyPage> {
       final success = await state.stop();
       if (mounted) {
         if (success) {
-          ToastUtils.showSuccess('Proxy stopped');
+          ToastUtils.showSuccess(context.l10n.proxyStopped);
         } else {
-          ToastUtils.showError(state.lastError ?? 'Failed to stop proxy');
+          ToastUtils.showError(
+            state.lastError ?? context.l10n.failedToStopProxy,
+          );
         }
       }
     } else {
       final success = await state.start();
       if (mounted) {
         if (success) {
-          ToastUtils.showSuccess('Proxy started');
+          ToastUtils.showSuccess(context.l10n.proxyStarted);
         } else {
-          ToastUtils.showError(state.lastError ?? 'Failed to start proxy');
+          ToastUtils.showError(
+            state.lastError ?? context.l10n.failedToStartProxy2,
+          );
         }
       }
     }
@@ -81,26 +87,24 @@ class _ProxyPageState extends State<ProxyPage> {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Change local proxy server port'),
+        title: Text(context.l10n.changeLocalProxyServerPort),
         content: TextField(
           controller: _portController,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(
-            labelText: 'Enter a port number (1-65535)',
-          ),
+          decoration: InputDecoration(labelText: context.l10n.enterAPortNumber),
         ),
         actions: <Widget>[
           TextButton(
-            child: const Text('Dismiss'),
+            child: Text(context.l10n.dismiss),
             onPressed: () => Navigator.of(context).pop(),
           ),
           FilledButton(
-            child: const Text('Okay'),
+            child: Text(context.l10n.okay),
             onPressed: () {
               final port = int.tryParse(_portController.text);
               if (port == null || port < 1 || port > 65535) {
-                ToastUtils.showError('Invalid port number (1-65535)');
+                ToastUtils.showError(context.l10n.invalidPortNumber);
                 return;
               }
               state.updateConfig(state.config.copyWith(localPort: port));
@@ -135,7 +139,9 @@ class _ProxyPageState extends State<ProxyPage> {
     final result = await state.setTunEnabled(enabled);
     if (!mounted) return;
     if (result == null) {
-      ToastUtils.showInfo('Restarting with administrator privileges for TUN');
+      ToastUtils.showInfo(
+        context.l10n.restartingWithAdministratorPrivilegesForTun,
+      );
       state.stopForElevationHandoff();
       await Future<void>.delayed(const Duration(milliseconds: 250));
       // The elevated replacement is the interesting one to debug when TUN setup
@@ -145,10 +151,41 @@ class _ProxyPageState extends State<ProxyPage> {
     }
     if (result) {
       ToastUtils.showSuccess(
-        enabled ? 'TUN mode enabled' : 'TUN mode disabled',
+        enabled ? context.l10n.tunModeEnabled : context.l10n.tunModeDisabled,
       );
     } else {
-      await _showTunErrorDialog(state.lastError ?? 'Failed to change TUN mode');
+      if (Platform.isMacOS) {
+        await _showTunDiagnostics(
+          state,
+          error: state.lastError ?? context.l10n.failedToChangeTunMode,
+          allowRetry: enabled,
+        );
+      } else {
+        await _showTunErrorDialog(
+          state.lastError ?? context.l10n.failedToChangeTunMode,
+        );
+      }
+    }
+  }
+
+  Future<void> _showTunDiagnostics(
+    ProxyState state, {
+    String? error,
+    bool allowRetry = true,
+  }) async {
+    final retry = await showDialog<bool>(
+      context: context,
+      builder: (_) => TunDiagnosticsDialog(
+        originalError: error,
+        canRetry: allowRetry && state.isRunning && !state.isTunRunning,
+      ),
+    );
+    if (mounted &&
+        retry == true &&
+        state.isRunning &&
+        !state.isTunRunning &&
+        !state.isTunBusy) {
+      await _toggleTun(state, true);
     }
   }
 
@@ -157,7 +194,7 @@ class _ProxyPageState extends State<ProxyPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.error_outline),
-        title: const Text('TUN setup failed'),
+        title: Text(context.l10n.tunSetupFailed),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620),
           child: SelectableText(message),
@@ -165,7 +202,7 @@ class _ProxyPageState extends State<ProxyPage> {
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
+            child: Text(context.l10n.close),
           ),
         ],
       ),
@@ -179,11 +216,11 @@ class _ProxyPageState extends State<ProxyPage> {
     try {
       await Clipboard.setData(ClipboardData(text: encoded));
       if (mounted) {
-        ToastUtils.showSuccess('Config exported to clipboard');
+        ToastUtils.showSuccess(context.l10n.configExportedToClipboard);
       }
     } catch (e) {
       if (mounted) {
-        ToastUtils.showError('Failed to copy: $e');
+        ToastUtils.showError(context.l10n.failedToCopy((e).toString()));
       }
     }
   }
@@ -193,7 +230,7 @@ class _ProxyPageState extends State<ProxyPage> {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data?.text == null || data!.text!.isEmpty) {
         if (mounted) {
-          ToastUtils.showWarning('Clipboard is empty');
+          ToastUtils.showWarning(context.l10n.clipboardIsEmpty);
         }
         return;
       }
@@ -201,11 +238,11 @@ class _ProxyPageState extends State<ProxyPage> {
       final config = ProxyConfigModel.fromJson(jsonDecode(json));
       if (mounted) {
         context.read<ProxyState>().updateConfig(config);
-        ToastUtils.showSuccess('Config imported successfully');
+        ToastUtils.showSuccess(context.l10n.configImportedSuccessfully);
       }
     } catch (e) {
       if (mounted) {
-        ToastUtils.showError('Invalid config format');
+        ToastUtils.showError(context.l10n.invalidConfigFormat);
       }
     }
   }
@@ -213,27 +250,33 @@ class _ProxyPageState extends State<ProxyPage> {
   String _connectionModeLabel(ProxyState state) {
     if (state.isTunRunning) {
       final capture = Platform.isAndroid ? 'VPN' : 'TUN';
-      if (state.config.udpEnabled) return '$capture / TCP + UDP proxy';
+      if (state.config.udpEnabled) {
+        return context.l10n.tcpUdpProxy((capture).toString());
+      }
       return state.config.udpDirectFallback
-          ? '$capture / TCP proxy + UDP direct'
-          : '$capture / TCP proxy + UDP blocked';
+          ? context.l10n.tcpProxyUdpDirect((capture).toString())
+          : context.l10n.tcpProxyUdpBlocked((capture).toString());
     }
-    return state.config.udpEnabled ? 'SOCKS5 TCP + UDP' : 'SOCKS5 TCP only';
+    return state.config.udpEnabled
+        ? context.l10n.socksTcpUdp
+        : context.l10n.socksTcpOnly;
   }
 
   String _captureStatusLabel(ProxyState state) {
     if (state.isTunBusy) {
-      return Platform.isAndroid ? 'Configuring VPN...' : 'Configuring TUN...';
+      return Platform.isAndroid
+          ? context.l10n.configuringVpn
+          : context.l10n.configuringTun;
     }
-    if (!state.isRunning) return 'Start the proxy to enable';
+    if (!state.isRunning) return context.l10n.startTheProxyToEnable;
     if (state.isTunRunning) {
       return Platform.isAndroid
-          ? 'Routing via 127.0.0.1:${state.config.localPort}'
-          : 'Capturing via 127.0.0.1:${state.config.localPort}';
+          ? context.l10n.routingVia((state.config.localPort).toString())
+          : context.l10n.capturingVia((state.config.localPort).toString());
     }
     return Platform.isAndroid
-        ? 'Device traffic is not captured'
-        : 'System traffic capture is off';
+        ? context.l10n.deviceTrafficIsNotCaptured
+        : context.l10n.systemTrafficCaptureIsOff;
   }
 
   Widget _buildCompactLayout(
@@ -246,7 +289,7 @@ class _ProxyPageState extends State<ProxyPage> {
     final canToggleProxy =
         state.config.serverHost.isNotEmpty && !state.isTunBusy;
     final endpoint = state.config.serverHost.isEmpty
-        ? 'Configure a server to get started'
+        ? context.l10n.configureAServerToGetStarted
         : '${state.config.serverHost}:${state.config.serverPort}';
 
     return SingleChildScrollView(
@@ -295,7 +338,9 @@ class _ProxyPageState extends State<ProxyPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            state.isRunning ? 'Connected' : 'Disconnected',
+                            state.isRunning
+                                ? context.l10n.connected
+                                : context.l10n.disconnected,
                             style: theme.textTheme.titleLarge,
                           ),
                           const SizedBox(height: 2),
@@ -359,7 +404,9 @@ class _ProxyPageState extends State<ProxyPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            Platform.isAndroid ? 'VPN Service' : 'TUN Mode',
+                            Platform.isAndroid
+                                ? context.l10n.vpnService
+                                : context.l10n.tunMode,
                             style: theme.textTheme.titleSmall,
                           ),
                           const SizedBox(height: 2),
@@ -380,8 +427,17 @@ class _ProxyPageState extends State<ProxyPage> {
                             ? null
                             : _showAndroidVpnAppDialog,
                         icon: const Icon(Icons.apps_outlined),
-                        tooltip:
-                            'VPN applications (${state.config.androidVpnPackages.length})',
+                        tooltip: context.l10n.vpnApplications(
+                          (state.config.androidVpnPackages.length).toString(),
+                        ),
+                      ),
+                    if (Platform.isMacOS)
+                      IconButton(
+                        onPressed: state.isTunBusy
+                            ? null
+                            : () => _showTunDiagnostics(state),
+                        icon: const Icon(Icons.help_outline),
+                        tooltip: context.l10n.tunDiagnosticsGuide,
                       ),
                     if (_supportsTunProcessBypass)
                       IconButton(
@@ -389,8 +445,9 @@ class _ProxyPageState extends State<ProxyPage> {
                             ? null
                             : _showTunProcessDialog,
                         icon: const Icon(Icons.security_outlined),
-                        tooltip:
-                            'TUN bypass processes (${state.config.tunBypassProcesses.length})',
+                        tooltip: context.l10n.tunBypassProcesses(
+                          (state.config.tunBypassProcesses.length).toString(),
+                        ),
                       ),
                     if (state.isTunBusy)
                       const Padding(
@@ -422,7 +479,7 @@ class _ProxyPageState extends State<ProxyPage> {
                     child: FilledButton.tonalIcon(
                       onPressed: state.isRunning ? null : _showConfigDialog,
                       icon: const Icon(Icons.settings_outlined),
-                      label: const Text('Config'),
+                      label: Text(context.l10n.config),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -432,8 +489,12 @@ class _ProxyPageState extends State<ProxyPage> {
                       icon: const Icon(Icons.lan_outlined),
                       label: Text(
                         state.config.allowLan
-                            ? 'LAN ${state.config.localPort}'
-                            : 'Port ${state.config.localPort}',
+                            ? context.l10n.lan(
+                                (state.config.localPort).toString(),
+                              )
+                            : context.l10n.port(
+                                (state.config.localPort).toString(),
+                              ),
                       ),
                     ),
                   ),
@@ -446,14 +507,14 @@ class _ProxyPageState extends State<ProxyPage> {
                     child: TextButton.icon(
                       onPressed: state.isRunning ? null : _importConfig,
                       icon: const Icon(Icons.file_download_outlined),
-                      label: const Text('Import'),
+                      label: Text(context.l10n.importLabel),
                     ),
                   ),
                   Expanded(
                     child: TextButton.icon(
                       onPressed: _exportConfig,
                       icon: const Icon(Icons.file_upload_outlined),
-                      label: const Text('Export'),
+                      label: Text(context.l10n.exportLabel),
                     ),
                   ),
                 ],
@@ -470,260 +531,277 @@ class _ProxyPageState extends State<ProxyPage> {
     return Consumer<ProxyState>(
       builder: (context, state, _) {
         if (MediaQuery.sizeOf(context).width < 600) {
-          return Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) =>
-                  _buildCompactLayout(context, state, constraints),
-            ),
+          return LayoutBuilder(
+            builder: (context, constraints) =>
+                _buildCompactLayout(context, state, constraints),
           );
         }
-        return Expanded(
-          child: Stack(
-            children: [
-              // Port FAB at bottom right
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      FloatingActionButton.extended(
-                        heroTag: 'port_fab',
-                        icon: const Icon(Icons.network_wifi),
-                        onPressed:
-                            state.isRunning || state.isProxyOperationInProgress
-                            ? null
-                            : _showPortDialog,
-                        label: Text(
-                          state.config.allowLan
-                              ? 'LAN: ${state.config.localPort}'
-                              : 'Port: ${state.config.localPort}',
-                        ),
+        return Stack(
+          children: [
+            // Port FAB at bottom right
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    FloatingActionButton.extended(
+                      heroTag: 'port_fab',
+                      icon: const Icon(Icons.network_wifi),
+                      onPressed:
+                          state.isRunning || state.isProxyOperationInProgress
+                          ? null
+                          : _showPortDialog,
+                      label: Text(
+                        state.config.allowLan
+                            ? context.l10n.lan2(
+                                (state.config.localPort).toString(),
+                              )
+                            : context.l10n.port2(
+                                (state.config.localPort).toString(),
+                              ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              // Config FAB at bottom left
-              Align(
-                alignment: Alignment.bottomLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FloatingActionButton.small(
-                            heroTag: 'import_fab',
-                            onPressed:
-                                state.isRunning ||
-                                    state.isProxyOperationInProgress
-                                ? null
-                                : _importConfig,
-                            tooltip: 'Import from clipboard',
-                            child: const Icon(Icons.file_download),
-                          ),
-                          const SizedBox(width: 8),
-                          FloatingActionButton.small(
-                            heroTag: 'export_fab',
-                            onPressed: _exportConfig,
-                            tooltip: 'Export to clipboard',
-                            child: const Icon(Icons.file_upload),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      FloatingActionButton.extended(
-                        heroTag: 'config_fab',
-                        icon: const Icon(Icons.settings),
-                        onPressed:
-                            state.isRunning || state.isProxyOperationInProgress
-                            ? null
-                            : _showConfigDialog,
-                        label: const Text('Config'),
-                      ),
-                    ],
-                  ),
+            ),
+            // Config FAB at bottom left
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FloatingActionButton.small(
+                          heroTag: 'import_fab',
+                          onPressed:
+                              state.isRunning ||
+                                  state.isProxyOperationInProgress
+                              ? null
+                              : _importConfig,
+                          tooltip: context.l10n.importFromClipboard,
+                          child: const Icon(Icons.file_download),
+                        ),
+                        const SizedBox(width: 8),
+                        FloatingActionButton.small(
+                          heroTag: 'export_fab',
+                          onPressed: _exportConfig,
+                          tooltip: context.l10n.exportToClipboard,
+                          child: const Icon(Icons.file_upload),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.extended(
+                      heroTag: 'config_fab',
+                      icon: const Icon(Icons.settings),
+                      onPressed:
+                          state.isRunning || state.isProxyOperationInProgress
+                          ? null
+                          : _showConfigDialog,
+                      label: Text(context.l10n.config),
+                    ),
+                  ],
                 ),
               ),
-              // Center switch
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 96),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Status text
-                      Text(
-                        state.isRunning ? 'Connected' : 'Disconnected',
-                        style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            // Center switch
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 96),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Status text
+                    Text(
+                      state.isRunning
+                          ? context.l10n.connected
+                          : context.l10n.disconnected,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      state.config.serverHost.isEmpty
+                          ? context.l10n.configureServerFirst
+                          : '${state.config.serverHost}:${state.config.serverPort}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        state.config.serverHost.isEmpty
-                            ? 'Configure server first'
-                            : '${state.config.serverHost}:${state.config.serverPort}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _connectionModeLabel(state),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: state.config.udpEnabled
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Large switch
+                    Transform.scale(
+                      scale: 1.8,
+                      child: Switch(
+                        thumbIcon: thumbIcon,
+                        value: state.isRunning,
+                        onChanged:
+                            state.config.serverHost.isEmpty ||
+                                state.isTunBusy ||
+                                state.isProxyOperationInProgress
+                            ? null
+                            : (_) => _toggleProxy(state),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: 420,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _connectionModeLabel(state),
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: state.config.udpEnabled
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainer,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: state.isTunRunning
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              state.isTunRunning
+                                  ? Icons.shield
+                                  : Icons.shield_outlined,
+                              color: state.isTunRunning
                                   ? Theme.of(context).colorScheme.primary
                                   : Theme.of(
                                       context,
                                     ).colorScheme.onSurfaceVariant,
                             ),
-                      ),
-                      const SizedBox(height: 32),
-                      // Large switch
-                      Transform.scale(
-                        scale: 1.8,
-                        child: Switch(
-                          thumbIcon: thumbIcon,
-                          value: state.isRunning,
-                          onChanged:
-                              state.config.serverHost.isEmpty ||
-                                  state.isTunBusy ||
-                                  state.isProxyOperationInProgress
-                              ? null
-                              : (_) => _toggleProxy(state),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    Platform.isAndroid
+                                        ? context.l10n.vpnService
+                                        : context.l10n.tunMode,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    state.isTunBusy
+                                        ? Platform.isAndroid
+                                              ? context
+                                                    .l10n
+                                                    .configuringAndroidVpn
+                                              : context
+                                                    .l10n
+                                                    .configuringAdapterAndRoutes
+                                        : !state.isRunning
+                                        ? context.l10n.startTheLocalProxyFirst
+                                        : state.isTunRunning
+                                        ? Platform.isAndroid
+                                              ? context.l10n.vpnTraffic(
+                                                  (state.config.localPort)
+                                                      .toString(),
+                                                )
+                                              : context.l10n.allTraffic(
+                                                  (state.config.localPort)
+                                                      .toString(),
+                                                )
+                                        : Platform.isAndroid
+                                        ? context.l10n.androidVpnIsOff
+                                        : context
+                                              .l10n
+                                              .deviceTrafficCaptureIsOff,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            if (Platform.isMacOS)
+                              IconButton(
+                                onPressed: state.isTunBusy
+                                    ? null
+                                    : () => _showTunDiagnostics(state),
+                                icon: const Icon(Icons.help_outline),
+                                tooltip: context.l10n.tunDiagnosticsGuide,
+                              ),
+                            if (_supportsTunProcessBypass)
+                              IconButton(
+                                onPressed: state.isTunBusy
+                                    ? null
+                                    : _showTunProcessDialog,
+                                icon: const Icon(Icons.security_outlined),
+                                tooltip: context.l10n.tunBypassProcesses(
+                                  (state.config.tunBypassProcesses.length)
+                                      .toString(),
+                                ),
+                              ),
+                            if (Platform.isAndroid)
+                              IconButton(
+                                onPressed: state.isTunBusy
+                                    ? null
+                                    : _showAndroidVpnAppDialog,
+                                icon: const Icon(Icons.apps_outlined),
+                                tooltip: context.l10n.vpnApplications(
+                                  (state.config.androidVpnPackages.length)
+                                      .toString(),
+                                ),
+                              ),
+                            if (state.isTunBusy)
+                              const SizedBox.square(
+                                dimension: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            else
+                              Switch(
+                                value: state.isTunRunning,
+                                onChanged: state.isRunning
+                                    ? (enabled) => _toggleTun(state, enabled)
+                                    : null,
+                              ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 32),
+                    ),
+                    if (state.config.allowLan) ...[
+                      const SizedBox(height: 12),
                       SizedBox(
                         width: 420,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainer,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: state.isTunRunning
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.outlineVariant,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                state.isTunRunning
-                                    ? Icons.shield
-                                    : Icons.shield_outlined,
-                                color: state.isTunRunning
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      Platform.isAndroid
-                                          ? 'VPN Service'
-                                          : 'TUN Mode',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      state.isTunBusy
-                                          ? Platform.isAndroid
-                                                ? 'Configuring Android VPN...'
-                                                : 'Configuring adapter and routes...'
-                                          : !state.isRunning
-                                          ? 'Start the local proxy first'
-                                          : state.isTunRunning
-                                          ? Platform.isAndroid
-                                                ? 'VPN traffic -> 127.0.0.1:${state.config.localPort}'
-                                                : 'All traffic -> 127.0.0.1:${state.config.localPort}'
-                                          : Platform.isAndroid
-                                          ? 'Android VPN is off'
-                                          : 'Device traffic capture is off',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              if (_supportsTunProcessBypass)
-                                IconButton(
-                                  onPressed: state.isTunBusy
-                                      ? null
-                                      : _showTunProcessDialog,
-                                  icon: const Icon(Icons.security_outlined),
-                                  tooltip:
-                                      'TUN bypass processes (${state.config.tunBypassProcesses.length})',
-                                ),
-                              if (Platform.isAndroid)
-                                IconButton(
-                                  onPressed: state.isTunBusy
-                                      ? null
-                                      : _showAndroidVpnAppDialog,
-                                  icon: const Icon(Icons.apps_outlined),
-                                  tooltip:
-                                      'VPN applications (${state.config.androidVpnPackages.length})',
-                                ),
-                              if (state.isTunBusy)
-                                const SizedBox.square(
-                                  dimension: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              else
-                                Switch(
-                                  value: state.isTunRunning,
-                                  onChanged: state.isRunning
-                                      ? (enabled) => _toggleTun(state, enabled)
-                                      : null,
-                                ),
-                            ],
-                          ),
-                        ),
+                        child: LanProxyLink(port: state.config.localPort),
                       ),
-                      if (state.config.allowLan) ...[
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: 420,
-                          child: LanProxyLink(port: state.config.localPort),
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );

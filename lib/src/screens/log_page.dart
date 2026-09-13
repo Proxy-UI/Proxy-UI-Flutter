@@ -1,3 +1,4 @@
+import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -81,7 +82,11 @@ class _LogPageState extends State<LogPage> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open the log folder: $error')),
+        SnackBar(
+          content: Text(
+            context.l10n.couldNotOpenTheLogFolder((error).toString()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isOpeningLogDirectory = false);
@@ -112,40 +117,38 @@ class _LogPageState extends State<LogPage> {
     }
     _lastKnownLogCount = currentLogCount;
 
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // 工具栏
-            _buildToolbar(context, state, logs.length),
-            const SizedBox(height: 16),
-            // 日志卡片
-            Expanded(
-              child: Stack(
-                children: [
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12.0),
-                      child: _buildLogList(context, logs),
-                    ),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          // 工具栏
+          _buildToolbar(context, state, logs.length),
+          const SizedBox(height: 16),
+          // 日志卡片
+          Expanded(
+            child: Stack(
+              children: [
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.0),
                   ),
-                  // 新日志提示按钮
-                  if (_newLogsCount > 0 && !_isAtBottom)
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: _buildNewLogsButton(),
-                    ),
-                ],
-              ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12.0),
+                    child: _buildLogList(context, logs),
+                  ),
+                ),
+                // 新日志提示按钮
+                if (_newLogsCount > 0 && !_isAtBottom)
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: _buildNewLogsButton(),
+                  ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -161,7 +164,7 @@ class _LogPageState extends State<LogPage> {
             controller: _searchController,
             onChanged: _onSearchChanged,
             decoration: InputDecoration(
-              hintText: 'Search logs (grep)...',
+              hintText: context.l10n.searchLogsGrep,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchQuery.isNotEmpty
                   ? Row(
@@ -205,13 +208,13 @@ class _LogPageState extends State<LogPage> {
                 ? null
                 : () => _openLogDirectory(state),
             icon: const Icon(Icons.folder_open_outlined),
-            tooltip: 'Open log folder',
+            tooltip: context.l10n.openLogFolder,
           ),
         // 清除按钮
         IconButton(
           onPressed: state.clearLogs,
           icon: const Icon(Icons.delete_outline),
-          tooltip: 'Clear logs',
+          tooltip: context.l10n.clearLogs,
         ),
       ],
     );
@@ -254,7 +257,7 @@ class _LogPageState extends State<LogPage> {
     return FilledButton.icon(
       onPressed: _scrollToBottom,
       icon: const Icon(Icons.arrow_downward, size: 16),
-      label: Text('$_newLogsCount new'),
+      label: Text(context.l10n.newLogs((_newLogsCount).toString())),
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
@@ -278,7 +281,9 @@ class _LogPageState extends State<LogPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              _searchQuery.isNotEmpty ? 'No matching logs' : 'No logs yet',
+              _searchQuery.isNotEmpty
+                  ? context.l10n.noMatchingLogs
+                  : context.l10n.noLogsYet,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Theme.of(
                   context,
@@ -288,8 +293,8 @@ class _LogPageState extends State<LogPage> {
             const SizedBox(height: 8),
             Text(
               _searchQuery.isNotEmpty
-                  ? 'Try a different search term'
-                  : 'Start the proxy to see activity',
+                  ? context.l10n.tryADifferentSearchTerm
+                  : context.l10n.startTheProxyToSeeActivity,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(
                   context,
