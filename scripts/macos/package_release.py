@@ -11,6 +11,7 @@ from pathlib import Path
 import plistlib
 import re
 import secrets
+import shlex
 import subprocess
 import tempfile
 
@@ -40,6 +41,7 @@ def credentials(work):
         p12.chmod(0o600)
         keychain = work / "signing.keychain-db"
         keychain_password = secrets.token_urlsafe(32)
+        search_list = shlex.split(run("security", "list-keychains", "-d", "user"))
         run("security", "create-keychain", "-p", keychain_password, keychain)
         try:
             run("security", "set-keychain-settings", "-lut", "21600", keychain)
@@ -48,6 +50,12 @@ def credentials(work):
                 "-T", "/usr/bin/codesign")
             run("security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:",
                 "-s", "-k", keychain_password, keychain)
+            # --keychain limits private-key lookup, but certificate-chain lookup
+            # still needs the intermediate in the user's keychain search list.
+            run("security", "list-keychains", "-d", "user", "-s", *search_list, keychain)
+            identities = run("security", "find-identity", "-v", "-p", "codesigning", keychain)
+            if required("MACOS_SIGNING_IDENTITY") not in identities:
+                raise RuntimeError("The configured Developer ID identity is not valid in the imported keychain")
             p12.unlink()
             key = work / "AuthKey.p8"
             key.write_text(required("APPLE_NOTARY_PRIVATE_KEY"))
@@ -59,7 +67,10 @@ def credentials(work):
             key.unlink()
             yield ["--keychain", str(keychain)], ["--keychain-profile", profile, "--keychain", str(keychain)]
         finally:
-            run("security", "delete-keychain", keychain)
+            try:
+                run("security", "list-keychains", "-d", "user", "-s", *search_list)
+            finally:
+                run("security", "delete-keychain", keychain)
     else:
         profile = required("APPLE_NOTARY_PROFILE")
         keychain = os.environ.get("MACOS_SIGNING_KEYCHAIN")
