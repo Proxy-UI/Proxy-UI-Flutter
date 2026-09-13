@@ -29,6 +29,10 @@
 
 ## 构建
 
+macOS 发布包通过 Developer ID 签名和 Apple 公证，验证通过后才上传 DMG。
+维护者需要先按照 [macOS 签名配置](docs/macos-signing.md) 设置仓库的
+Actions Secrets 和变量。公证同时覆盖应用、原生库及 TUN helper。
+
 ### 前置条件
 
 - [FVM](https://fvm.app/) 4.x

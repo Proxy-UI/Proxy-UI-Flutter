@@ -75,6 +75,11 @@ fvm flutter run -d windows
 
 #### macOS
 
+Public DMGs are Developer ID signed and Apple notarized. Maintainers must
+configure [macOS signing credentials](docs/macos-signing.md) before running the
+release workflow. The packaging script verifies every bundled binary and
+Gatekeeper acceptance before uploading the DMG.
+
 Stage the native artifacts from the parent repository:
 
 ```bash
