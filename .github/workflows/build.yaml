@@ -98,8 +98,32 @@ jobs:
   build-macos:
     needs: download-native-libs
     runs-on: macos-latest
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check signing failure handling
+        run: python3 -B -m unittest discover -s scripts/macos -p 'test_*.py' -v
+
+      - name: Require macOS release credentials
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ vars.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ vars.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          python3 - <<'PY'
+          import os
+          required = ('MACOS_CERTIFICATE_P12_BASE64', 'MACOS_CERTIFICATE_PASSWORD',
+                      'MACOS_SIGNING_IDENTITY', 'APPLE_TEAM_ID', 'APPLE_NOTARY_PRIVATE_KEY',
+                      'APPLE_NOTARY_KEY_ID', 'APPLE_NOTARY_ISSUER_ID')
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit('Missing macOS release credentials: ' + ', '.join(missing))
+          PY
 
       - uses: actions/download-artifact@v4
         with:
@@ -204,27 +228,54 @@ jobs:
             echo "::error::http-proxy-tun-helper is missing; macOS TUN mode would not work"
             exit 1
           fi
-          # Sign the dylib and app
-          codesign --force --sign - "$DYLIB_PATH"
-          codesign --force --sign - "$APP_DIR/Contents/MacOS/http-proxy-tun-helper"
-          codesign --force --deep --sign - "$APP_DIR"
-
-      - name: Create DMG
+      - name: Sign, notarize and verify macOS release
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_NOTARY_PRIVATE_KEY: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ vars.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ vars.APPLE_NOTARY_ISSUER_ID }}
         run: |
-          cd build/macos/Build/Products/Release
-          hdiutil create -volname "Proxy UI" -srcfolder proxy_ui.app -ov -format UDZO proxy-ui-macos.dmg
+          python3 scripts/macos/package_release.py \
+            --app build/macos/Build/Products/Release/proxy_ui.app \
+            --output build/packages/proxy-ui-macos.dmg
+
+      - name: Clean up temporary signing credentials
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, shutil, subprocess
+          for directory in pathlib.Path(os.environ['RUNNER_TEMP']).glob('proxy-ui-signing-*'):
+              keychain = directory / 'signing.keychain-db'
+              if keychain.exists():
+                  subprocess.run(['security', 'delete-keychain', str(keychain)], check=True)
+              shutil.rmtree(directory)
+          PY
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: build/macos/Build/Products/Release/proxy-ui-macos.dmg
+          path: build/packages/proxy-ui-macos.dmg
+          if-no-files-found: error
+
+      - name: Upload macOS verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-verification
+          path: build/packages/proxy-ui-macos-verification/
+          if-no-files-found: ignore
 
       - name: Generate download summary
         run: |
-          echo "## 🍎 macOS DMG Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🍎 macOS DMG Build Complete"
+            echo ""
+            echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build-windows:
     needs: download-native-libs
@@ -268,9 +319,11 @@ jobs:
       - name: Generate download summary
         shell: bash
         run: |
-          echo "## 🪟 Windows Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🪟 Windows Build Complete"
+            echo ""
+            echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build-linux:
     needs: download-native-libs
@@ -301,7 +354,7 @@ jobs:
       - name: Create archive
         run: |
           cd build/linux/x64/release/bundle
-          tar -czvf proxy-ui-linux-x64.tar.gz *
+          tar -czvf proxy-ui-linux-x64.tar.gz -- ./*
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -311,9 +364,11 @@ jobs:
 
       - name: Generate download summary
         run: |
-          echo "## 🐧 Linux Build Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🐧 Linux Build Complete"
+            echo ""
+            echo "🔗 [Download Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   release:
     needs: [build-macos, build-windows, build-linux]
@@ -336,7 +391,7 @@ jobs:
           ls -la release/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           target_commitish: ${{ github.sha }}
@@ -350,7 +405,7 @@ jobs:
             Native library version: ${{ github.event.inputs.lib_version }}
 
             ## Downloads
-            - **macOS**: DMG installer
+            - **macOS**: Developer ID signed and Apple notarized universal DMG (Intel / Apple Silicon)
             - **Windows**: Installer (fastforge) or portable package
             - **Linux**: tar.gz archive
             - **Android / iOS**: uploaded separately, built locally against a
