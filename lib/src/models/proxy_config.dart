@@ -1,3 +1,4 @@
+import '../services/build_capabilities.dart';
 import 'dart:io';
 
 enum AndroidVpnRoutingMode {
@@ -46,7 +47,7 @@ class ProxyConfigModel {
     this.localPort = 10801,
     this.allowLan = false,
     this.sessionKey,
-    this.autoProxy = true,
+    bool? autoProxy,
     this.udpEnabled = false,
     this.udpDirectFallback = true,
     this.tunEnabled = false,
@@ -57,10 +58,14 @@ class ProxyConfigModel {
     this.needCodecIps,
     this.forceCodec = false,
     bool? setSystemProxy,
-  }) : tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
+  }) : autoProxy = autoProxy ?? !BuildCapabilities.isMacAppStore,
+       tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
        androidVpnPackages = _normalizePackageNames(androidVpnPackages),
        setSystemProxy =
-           setSystemProxy ?? isDesktop; // default true only for desktop
+           setSystemProxy ??
+           (isDesktop &&
+               !BuildCapabilities
+                   .isMacAppStore); // default true only for desktop
 
   Map<String, dynamic> toJson() => {
     'serverHost': serverHost,

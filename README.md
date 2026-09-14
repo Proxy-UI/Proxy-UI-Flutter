@@ -1,6 +1,20 @@
-# Proxy UI
+# CipherRelay
 
 A cross-platform Flutter GUI for encrypted proxy client.
+
+## macOS editions
+
+CipherRelay (formerly Proxy UI) keeps a direct-download edition and a separate
+Mac App Store target. The direct edition produces `CipherRelay.app` and keeps
+its privileged helper, system proxy, LAN access and process bypass. The
+`appstore` scheme produces sandboxed `CipherRelay Store.app` with its own bundle
+ID and Packet Tunnel extension. See [the store build guide](docs/macos-app-store.md).
+Version 1.2.16 (42) was submitted on 14 September 2026; it has not passed App Review.
+
+App IDs, Dart package imports, Windows/Linux executable names and persisted
+settings keys remain unchanged for upgrade compatibility. Repository URLs also
+remain unchanged. Replace the old direct-download app with `CipherRelay.app`
+when installing an update; the Store app has a separate settings container.
 
 ## Interface language
 
@@ -117,22 +131,20 @@ bundled app looks for the dylib at its absolute build path and fails to load it.
 Then keep CocoaPods for plugin integration and build:
 
 ```bash
-fvm flutter config --no-enable-swift-package-manager
 fvm flutter build macos --release
 ```
 
-Without that flag the build fails with `Unable to load contents of file list:
-'/Target Support Files/Pods-Runner/…'`. `macos/Runner.xcodeproj` is committed
-carrying CocoaPods build phases and no Podfile is tracked, so Flutter has to
-generate one; from 3.44.9 it wires plugins through Swift Package Manager and
-never runs `pod install`, leaving `PODS_ROOT` empty. Note the flag is a global
-Flutter setting, not a per-project one.
+CocoaPods is selected in `pubspec.yaml` for the pinned Flutter SDK. The tracked
+`macos/Podfile` defines both `Runner` and `RunnerStore`, so plugin integration is
+reproducible without changing the global Flutter configuration.
+
+For the separate sandboxed VPN target, see [Mac App Store development](docs/macos-app-store.md).
 
 The native files are only embedded by the Xcode phase, so re-stage and re-sign
 them after each build, matching what CI does:
 
 ```bash
-APP=build/macos/Build/Products/Release/proxy_ui.app
+APP=build/macos/Build/Products/Release/CipherRelay.app
 cp native/macos/libhttp_proxy.dylib "$APP/Contents/Frameworks/"
 cp native/macos/http-proxy-tun-helper "$APP/Contents/MacOS/"
 codesign --force --sign - "$APP/Contents/Frameworks/libhttp_proxy.dylib"
@@ -168,7 +180,7 @@ On macOS, the question-mark button next to TUN opens a read-only diagnostic
 guide; TUN setup failures open the same guide automatically. It checks the
 selected Internet/fake-IP routes, maps each utun socket to its current owning
 PID, and displays the executable path without collecting process arguments.
-Interface names are reusable, so an active Proxy UI helper is identified as
+Interface names are reusable, so an active CipherRelay helper is identified as
 this app rather than attributed to a previously running VPN.
 
 The guide provides localized step-by-step instructions, copyable route checks,

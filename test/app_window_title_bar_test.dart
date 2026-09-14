@@ -27,7 +27,7 @@ void main() {
         const MaterialApp(
           home: Scaffold(
             appBar: AppWindowTitleBar(
-              title: 'Proxy With Flutter',
+              title: 'CipherRelay',
               useNativeMacControls: false,
               actions: [Icon(Icons.settings, key: Key('title-action'))],
             ),
@@ -36,7 +36,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Proxy With Flutter'), findsOneWidget);
+      expect(find.text('CipherRelay'), findsOneWidget);
       expect(find.byKey(const Key('title-action')), findsOneWidget);
       expect(find.byKey(const Key('window-minimize')), findsOneWidget);
       expect(find.byKey(const Key('window-maximize')), findsOneWidget);
@@ -62,7 +62,7 @@ void main() {
         const MaterialApp(
           home: Scaffold(
             appBar: AppWindowTitleBar(
-              title: 'Proxy With Flutter',
+              title: 'CipherRelay',
               useNativeMacControls: true,
             ),
           ),
@@ -70,7 +70,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Proxy With Flutter'), findsOneWidget);
+      expect(find.text('CipherRelay'), findsOneWidget);
       expect(find.byKey(const Key('window-minimize')), findsNothing);
       expect(find.byKey(const Key('window-maximize')), findsNothing);
       expect(find.byKey(const Key('window-close')), findsNothing);

@@ -49,7 +49,7 @@ class TunInterfaceOwner {
   ).firstMatch(executablePath ?? '')?.group(1);
 
   String get displayName {
-    if (isCurrentApp) return 'Proxy UI';
+    if (isCurrentApp) return 'CipherRelay';
     if (isSmartVpn) return 'iOA · SmartVPN';
     final path = executablePath;
     if (path == null) return 'Unknown process';

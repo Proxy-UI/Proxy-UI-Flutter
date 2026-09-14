@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign, notarize, staple and verify a universal Proxy UI release (macOS only)."""
+"""Sign, notarize, staple and verify a universal CipherRelay release (macOS only)."""
 
 import argparse
 import base64
@@ -98,7 +98,8 @@ def macho_files(app):
 def audit_bundle(app):
     info_path = app / "Contents/Info.plist"
     info = plistlib.loads(info_path.read_bytes())
-    for name in ("Contents/MacOS/proxy_ui", "Contents/MacOS/http-proxy-tun-helper",
+    executable = "Contents/MacOS/" + info["CFBundleExecutable"]
+    for name in (executable, "Contents/MacOS/http-proxy-tun-helper",
                  "Contents/Frameworks/libhttp_proxy.dylib"):
         if not (app / name).is_file():
             raise RuntimeError(f"Missing release component: {name}")
@@ -119,7 +120,7 @@ def audit_bundle(app):
                 version = re.search(r"^\s*(?:minos|version) (\d+(?:\.\d+)+)$", command, re.MULTILINE)
                 if version:
                     minimum = max(minimum, tuple(map(int, version[1].split("."))))
-    if "@rpath/libhttp_proxy.dylib" not in run("otool", "-L", app / "Contents/MacOS/proxy_ui"):
+    if "@rpath/libhttp_proxy.dylib" not in run("otool", "-L", app / executable):
         raise RuntimeError("Main executable does not load the bundled proxy library via @rpath")
     # Flutter plugins may raise the supported OS above the Runner's deployment
     # target. Report the actual requirement instead of shipping a misleading plist.
@@ -162,7 +163,7 @@ def package(args):
         work = Path(temporary)
         stage = work / "image"
         stage.mkdir()
-        app = stage / "proxy_ui.app"
+        app = stage / "CipherRelay.app"
         run("ditto", args.app.resolve(), app)
         files, info = audit_bundle(app)
         entitlements = plistlib.loads(args.entitlements.read_bytes())
@@ -175,7 +176,7 @@ def package(args):
                     *signing, *options, path)
 
             for path in files:
-                if path != app / "Contents/MacOS/proxy_ui":
+                if path != app / "Contents/MacOS" / info["CFBundleExecutable"]:
                     sign(path)
             bundles = [p for p in app.rglob("*") if p.is_dir() and not p.is_symlink()
                        and p.suffix in {".framework", ".app", ".xpc", ".appex"}]
@@ -189,7 +190,7 @@ def package(args):
                         or "Authority=Developer ID Application:" not in details
                         or "Timestamp=" not in details or "(runtime)" not in details):
                     raise RuntimeError(f"Not a timestamped Developer ID signature for team {team}: {path.name}")
-            archive = work / "proxy-ui-app.zip"
+            archive = work / "cipherrelay-app.zip"
             run("ditto", "-c", "-k", "--keepParent", app, archive)
             notarize(archive, auth, logs)
             run("xcrun", "stapler", "staple", app)
@@ -197,7 +198,7 @@ def package(args):
             run("spctl", "--assess", "--type", "execute", "--verbose=2", app)
             (stage / "Applications").symlink_to("/Applications")
             candidate = work / output.name
-            run("hdiutil", "create", "-volname", "Proxy UI", "-srcfolder", stage,
+            run("hdiutil", "create", "-volname", "CipherRelay", "-srcfolder", stage,
                 "-format", "UDZO", candidate)
             run("codesign", "--sign", identity, "--timestamp", *signing, candidate)
             notarize(candidate, auth, logs)

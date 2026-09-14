@@ -45,4 +45,3 @@ Developer: JIANBO LIU. Policy updated: 14 September 2026. Support: https://githu
 阅读本说明不会启动隧道。连接由你主动发起，并由你授予 macOS VPN 权限。断开连接即可停止本应用的隧道。你可以在应用中修改或清空保存的服务器设置，并在 macOS 设置中移除 VPN 配置。本地文件可通过应用日志目录和沙盒容器管理。请勿在公开支持反馈中包含连接密钥或未经脱敏的日志。
 
 开发者：JIANBO LIU。更新日期：2026 年 9 月 14 日。支持：https://github.com/Proxy-UI/Proxy-UI-Flutter/issues（你主动提交给 GitHub 的信息受其隐私政策约束）。
-

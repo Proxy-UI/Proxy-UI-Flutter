@@ -1,3 +1,4 @@
+import '../services/build_capabilities.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -21,7 +22,9 @@ import '../widgets/tun_diagnostics_dialog.dart';
 /// and can relay it directly through the physical interface. Android and iOS
 /// leave per-application routing to the platform VPN API, which has its own
 /// picker, and Linux has no process enumeration wired up.
-final bool _supportsTunProcessBypass = Platform.isWindows || Platform.isMacOS;
+final bool _supportsTunProcessBypass =
+    !BuildCapabilities.isMacAppStore &&
+    (Platform.isWindows || Platform.isMacOS);
 
 /// Proxy control page with simple switch and config FAB
 class ProxyPage extends StatefulWidget {
@@ -154,7 +157,7 @@ class _ProxyPageState extends State<ProxyPage> {
         enabled ? context.l10n.tunModeEnabled : context.l10n.tunModeDisabled,
       );
     } else {
-      if (Platform.isMacOS) {
+      if (Platform.isMacOS && !BuildCapabilities.isMacAppStore) {
         await _showTunDiagnostics(
           state,
           error: state.lastError ?? context.l10n.failedToChangeTunMode,
@@ -249,7 +252,9 @@ class _ProxyPageState extends State<ProxyPage> {
 
   String _connectionModeLabel(ProxyState state) {
     if (state.isTunRunning) {
-      final capture = Platform.isAndroid ? 'VPN' : 'TUN';
+      final capture = (Platform.isAndroid || BuildCapabilities.isMacAppStore)
+          ? 'VPN'
+          : 'TUN';
       if (state.config.udpEnabled) {
         return context.l10n.tcpUdpProxy((capture).toString());
       }
@@ -264,17 +269,17 @@ class _ProxyPageState extends State<ProxyPage> {
 
   String _captureStatusLabel(ProxyState state) {
     if (state.isTunBusy) {
-      return Platform.isAndroid
+      return (Platform.isAndroid || BuildCapabilities.isMacAppStore)
           ? context.l10n.configuringVpn
           : context.l10n.configuringTun;
     }
     if (!state.isRunning) return context.l10n.startTheProxyToEnable;
     if (state.isTunRunning) {
-      return Platform.isAndroid
+      return (Platform.isAndroid || BuildCapabilities.isMacAppStore)
           ? context.l10n.routingVia((state.config.localPort).toString())
           : context.l10n.capturingVia((state.config.localPort).toString());
     }
-    return Platform.isAndroid
+    return (Platform.isAndroid || BuildCapabilities.isMacAppStore)
         ? context.l10n.deviceTrafficIsNotCaptured
         : context.l10n.systemTrafficCaptureIsOff;
   }
@@ -404,7 +409,8 @@ class _ProxyPageState extends State<ProxyPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            Platform.isAndroid
+                            (Platform.isAndroid ||
+                                    BuildCapabilities.isMacAppStore)
                                 ? context.l10n.vpnService
                                 : context.l10n.tunMode,
                             style: theme.textTheme.titleSmall,
@@ -431,7 +437,7 @@ class _ProxyPageState extends State<ProxyPage> {
                           (state.config.androidVpnPackages.length).toString(),
                         ),
                       ),
-                    if (Platform.isMacOS)
+                    if (Platform.isMacOS && !BuildCapabilities.isMacAppStore)
                       IconButton(
                         onPressed: state.isTunBusy
                             ? null
@@ -457,7 +463,7 @@ class _ProxyPageState extends State<ProxyPage> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
-                    else
+                    else if (!BuildCapabilities.isMacAppStore)
                       Switch(
                         value: state.isTunRunning,
                         onChanged: state.isRunning
@@ -697,7 +703,8 @@ class _ProxyPageState extends State<ProxyPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    Platform.isAndroid
+                                    (Platform.isAndroid ||
+                                            BuildCapabilities.isMacAppStore)
                                         ? context.l10n.vpnService
                                         : context.l10n.tunMode,
                                     style: Theme.of(
@@ -707,7 +714,9 @@ class _ProxyPageState extends State<ProxyPage> {
                                   const SizedBox(height: 2),
                                   Text(
                                     state.isTunBusy
-                                        ? Platform.isAndroid
+                                        ? (Platform.isAndroid ||
+                                                  BuildCapabilities
+                                                      .isMacAppStore)
                                               ? context
                                                     .l10n
                                                     .configuringAndroidVpn
@@ -717,7 +726,9 @@ class _ProxyPageState extends State<ProxyPage> {
                                         : !state.isRunning
                                         ? context.l10n.startTheLocalProxyFirst
                                         : state.isTunRunning
-                                        ? Platform.isAndroid
+                                        ? (Platform.isAndroid ||
+                                                  BuildCapabilities
+                                                      .isMacAppStore)
                                               ? context.l10n.vpnTraffic(
                                                   (state.config.localPort)
                                                       .toString(),
@@ -742,7 +753,8 @@ class _ProxyPageState extends State<ProxyPage> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            if (Platform.isMacOS)
+                            if (Platform.isMacOS &&
+                                !BuildCapabilities.isMacAppStore)
                               IconButton(
                                 onPressed: state.isTunBusy
                                     ? null
@@ -779,7 +791,7 @@ class _ProxyPageState extends State<ProxyPage> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            else
+                            else if (!BuildCapabilities.isMacAppStore)
                               Switch(
                                 value: state.isTunRunning,
                                 onChanged: state.isRunning

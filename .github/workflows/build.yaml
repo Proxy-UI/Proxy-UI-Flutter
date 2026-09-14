@@ -1,5 +1,5 @@
 name: Build Flutter App
-run-name: Proxy UI ${{ inputs.release_tag }} · native ${{ inputs.lib_version }}
+run-name: CipherRelay ${{ inputs.release_tag }} · native ${{ inputs.lib_version }}
 
 on:
   workflow_dispatch:
@@ -193,7 +193,7 @@ jobs:
 
       - name: Copy dylib and verify install name
         run: |
-          APP_DIR="build/macos/Build/Products/Release/proxy_ui.app"
+          APP_DIR="build/macos/Build/Products/Release/CipherRelay.app"
           DYLIB_PATH="$APP_DIR/Contents/Frameworks/libhttp_proxy.dylib"
           mkdir -p "$APP_DIR/Contents/Frameworks"
           cp native/macos/libhttp_proxy.dylib "$DYLIB_PATH"
@@ -201,7 +201,7 @@ jobs:
           # copy inherits it. Check the executable rather than trusting that:
           # a bad install name never breaks this build, it only surfaces when
           # someone launches the release, which is how it shipped before.
-          EXE="$APP_DIR/Contents/MacOS/proxy_ui"
+          EXE="$APP_DIR/Contents/MacOS/CipherRelay"
           if [ ! -f "$EXE" ]; then
             echo "::error::$EXE is missing; the Flutter build did not produce an app"
             exit 1
@@ -239,8 +239,8 @@ jobs:
           APPLE_NOTARY_ISSUER_ID: ${{ vars.APPLE_NOTARY_ISSUER_ID }}
         run: |
           python3 scripts/macos/package_release.py \
-            --app build/macos/Build/Products/Release/proxy_ui.app \
-            --output build/packages/proxy-ui-macos.dmg
+            --app build/macos/Build/Products/Release/CipherRelay.app \
+            --output build/packages/cipherrelay-macos.dmg
 
       - name: Clean up temporary signing credentials
         if: always()
@@ -258,7 +258,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: build/packages/proxy-ui-macos.dmg
+          path: build/packages/cipherrelay-macos.dmg
           if-no-files-found: error
 
       - name: Upload macOS verification report
@@ -266,7 +266,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-verification
-          path: build/packages/proxy-ui-macos-verification/
+          path: build/packages/cipherrelay-macos-verification/
           if-no-files-found: ignore
 
       - name: Generate download summary
@@ -354,13 +354,13 @@ jobs:
       - name: Create archive
         run: |
           cd build/linux/x64/release/bundle
-          tar -czvf proxy-ui-linux-x64.tar.gz -- ./*
+          tar -czvf cipherrelay-linux-x64.tar.gz -- ./*
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-tar
-          path: build/linux/x64/release/bundle/proxy-ui-linux-x64.tar.gz
+          path: build/linux/x64/release/bundle/cipherrelay-linux-x64.tar.gz
 
       - name: Generate download summary
         run: |
@@ -395,10 +395,10 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.release_tag }}
           target_commitish: ${{ github.sha }}
-          name: "Proxy UI ${{ github.event.inputs.release_tag }}"
+          name: "CipherRelay ${{ github.event.inputs.release_tag }}"
           draft: false
           body: |
-            # Proxy UI Release ${{ github.event.inputs.release_tag }}
+            # CipherRelay Release ${{ github.event.inputs.release_tag }}
 
             Cross-platform graphical interface for proxy-everything.
 

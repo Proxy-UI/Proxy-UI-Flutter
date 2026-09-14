@@ -1,3 +1,4 @@
+import '../services/build_capabilities.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -48,11 +49,11 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _sessionKeyController = TextEditingController(
       text: config.sessionKey ?? '',
     );
-    _allowLan = config.allowLan;
-    _autoProxy = config.autoProxy;
+    _allowLan = !BuildCapabilities.isMacAppStore && config.allowLan;
+    _autoProxy = !BuildCapabilities.isMacAppStore && config.autoProxy;
     _udpEnabled = config.udpEnabled;
     _udpDirectFallback = config.udpDirectFallback;
-    _reverseGeo = config.reverseGeo;
+    _reverseGeo = !BuildCapabilities.isMacAppStore && config.reverseGeo;
     _forceCodec = config.forceCodec;
   }
 
@@ -200,16 +201,17 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                secondary: const Icon(Icons.lan_outlined),
-                title: Text(context.l10n.allowLan),
-                subtitle: Text(
-                  context.l10n.listenOnAllInterfacesUseOnlyOnTrustedNetworks,
+              if (!BuildCapabilities.isMacAppStore)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.lan_outlined),
+                  title: Text(context.l10n.allowLan),
+                  subtitle: Text(
+                    context.l10n.listenOnAllInterfacesUseOnlyOnTrustedNetworks,
+                  ),
+                  value: _allowLan,
+                  onChanged: (value) => setState(() => _allowLan = value),
                 ),
-                value: _allowLan,
-                onChanged: (value) => setState(() => _allowLan = value),
-              ),
               if (_allowLan) ...[
                 const SizedBox(height: 8),
                 LanProxyLink(
@@ -223,12 +225,13 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 12),
-              SwitchListTile(
-                title: Text(context.l10n.autoProxy),
-                subtitle: Text(context.l10n.routeTrafficBasedOnGeoLocation),
-                value: _autoProxy,
-                onChanged: (v) => setState(() => _autoProxy = v),
-              ),
+              if (!BuildCapabilities.isMacAppStore)
+                SwitchListTile(
+                  title: Text(context.l10n.autoProxy),
+                  subtitle: Text(context.l10n.routeTrafficBasedOnGeoLocation),
+                  value: _autoProxy,
+                  onChanged: (v) => setState(() => _autoProxy = v),
+                ),
               SwitchListTile(
                 title: Text(context.l10n.socksUdp),
                 subtitle: Text(context.l10n.proxyUdpThroughTheServer),
@@ -241,12 +244,13 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 value: _udpDirectFallback,
                 onChanged: (v) => setState(() => _udpDirectFallback = v),
               ),
-              SwitchListTile(
-                title: Text(context.l10n.reverseGeo),
-                subtitle: Text(context.l10n.reverseGeoLocationRoutingLogic),
-                value: _reverseGeo,
-                onChanged: (v) => setState(() => _reverseGeo = v),
-              ),
+              if (!BuildCapabilities.isMacAppStore)
+                SwitchListTile(
+                  title: Text(context.l10n.reverseGeo),
+                  subtitle: Text(context.l10n.reverseGeoLocationRoutingLogic),
+                  value: _reverseGeo,
+                  onChanged: (v) => setState(() => _reverseGeo = v),
+                ),
               SwitchListTile(
                 title: Text(context.l10n.forceCodec),
                 subtitle: Text(context.l10n.forceEncryptionForAllConnections),

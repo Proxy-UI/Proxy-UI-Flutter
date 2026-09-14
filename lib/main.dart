@@ -1,3 +1,6 @@
+import 'src/services/app_brand.dart';
+import 'src/screens/store_privacy_screen.dart';
+import 'src/services/build_capabilities.dart';
 import 'l10n/app_language.dart';
 import 'dart:async' show unawaited;
 import 'dart:io';
@@ -21,14 +24,15 @@ import 'src/services/window_state_service.dart';
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppLanguage.instance.load();
-  final enableTunOnStartup = arguments.contains('--enable-tun');
+  final enableTunOnStartup =
+      arguments.contains('--enable-tun') && !BuildCapabilities.isMacAppStore;
   final desktopLogService = DesktopLogService();
 
   // Initialize window manager for desktop platforms
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
     // Install the native close guard before the window can first be shown.
-    await windowManager.setPreventClose(true);
+    await windowManager.setPreventClose(!BuildCapabilities.isMacAppStore);
 
     try {
       await desktopLogService.initialize();
@@ -42,7 +46,7 @@ void main(List<String> arguments) async {
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
-      title: 'Proxy With Flutter',
+      title: AppBrand.name,
       titleBarStyle: TitleBarStyle.hidden,
       // macOS retains the native traffic lights inside the unified surface.
       // Windows and Linux render matching controls in Flutter.
@@ -58,22 +62,25 @@ void main(List<String> arguments) async {
     });
   }
 
-  runApp(
-    ToastificationWrapper(
-      child: MultiProvider(
-        providers: [
-          ChangeNotifierProvider(
-            create: (_) => ProxyState(
-              enableTunOnStartup: enableTunOnStartup,
-              desktopLogService: desktopLogService,
-            ),
+  Widget buildApplication() => ToastificationWrapper(
+    child: MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => ProxyState(
+            enableTunOnStartup: enableTunOnStartup,
+            desktopLogService: desktopLogService,
           ),
-          ChangeNotifierProvider(create: (_) => ThemeState()),
-          ChangeNotifierProvider(create: (_) => DesktopSettings()..load()),
-        ],
-        child: const ProxyApp(),
-      ),
+        ),
+        ChangeNotifierProvider(create: (_) => ThemeState()),
+        ChangeNotifierProvider(create: (_) => DesktopSettings()..load()),
+      ],
+      child: const ProxyApp(),
     ),
+  );
+  runApp(
+    BuildCapabilities.isMacAppStore
+        ? StorePrivacyGate(applicationBuilder: buildApplication)
+        : buildApplication(),
   );
 }
 
@@ -95,6 +102,7 @@ class _ProxyAppState extends State<ProxyApp>
 
     // Initialize tray and window listener for desktop platforms
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      unawaited(windowManager.setPreventClose(true));
       final exitService = DesktopExitService(
         platform: defaultTargetPlatform,
         hideToTray: () async {
@@ -203,7 +211,7 @@ class _ProxyAppState extends State<ProxyApp>
       builder: (context, _) => Consumer<ThemeState>(
         builder: (context, themeState, _) {
           return MaterialApp(
-            title: 'Proxy With Flutter',
+            title: AppBrand.name,
             debugShowCheckedModeBanner: false,
             locale: AppLanguage.instance.locale,
             localizationsDelegates: AppLocalizations.localizationsDelegates,

@@ -148,7 +148,7 @@ class ProxyVpnService : VpnService() {
         try {
             closeInterface()
             val builder = Builder()
-                .setSession("Proxy Everything")
+                .setSession("CipherRelay")
                 .setMtu(configuration.mtu)
                 .addAddress(IPV4_ADDRESS, 30)
                 .addRoute("0.0.0.0", 0)
@@ -188,7 +188,7 @@ class ProxyVpnService : VpnService() {
         if (configuration.mode == "include") {
             val allowed = configuration.packages.filterNot { it == packageName }
             require(allowed.isNotEmpty()) {
-                "VPN-only mode must include an application other than Proxy Everything"
+                "VPN-only mode must include an application other than CipherRelay"
             }
             allowed.forEach { selected ->
                 addAllowedApplication(builder, selected)
@@ -254,7 +254,7 @@ class ProxyVpnService : VpnService() {
         }
         val notification = notificationBuilder
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Proxy Everything VPN")
+            .setContentTitle("CipherRelay VPN")
             .setContentText("Device traffic capture is active")
             .setContentIntent(openIntent)
             .setOngoing(true)

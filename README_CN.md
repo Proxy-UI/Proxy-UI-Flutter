@@ -1,6 +1,18 @@
-# Proxy UI
+# CipherRelay
 
 跨平台加密代理客户端的 Flutter 图形界面。
+
+## macOS 两个版本
+
+CipherRelay（密流）是 Proxy UI 的新名称。直装版继续生成 `CipherRelay.app`，
+保留系统代理、管理员 TUN helper、LAN 访问和进程旁路功能。独立的 `appstore`
+构建目标生成 `CipherRelay Store.app`，通过沙盒内的 Packet Tunnel 扩展转发流量，
+使用独立的应用 ID 和数据容器。详见 [商店版构建说明](docs/macos-app-store.md)。
+商店版 1.2.16（42）已于 2026 年 9 月 14 日提交审核，尚未通过 App Review。
+
+为保持升级兼容，原有应用 ID、Dart 包名、Windows/Linux 可执行文件名及设置键不变，
+仓库 URL 也不变。macOS 更新直装版时，用 `CipherRelay.app` 替换旧应用；
+商店版不会自动读取直装版的数据。
 
 ## 功能特性
 
@@ -39,7 +51,7 @@ Actions Secrets 和变量。公证同时覆盖应用、原生库及 TUN helper�
 - Visual Studio 2022，并安装“使用 C++ 的桌面开发”工作负载（Windows）
 - 父级 `proxy-everything` 仓库指定的 Rust 工具链
 
-项目通过 `.fvmrc` 固定使用 Flutter 3.38.6。请勿直接调用全局安装的
+项目通过 `.fvmrc` 固定使用 Flutter 3.44.9。请勿直接调用全局安装的
 `flutter` 或 `dart`，统一使用 `fvm flutter` 和 `fvm dart`，确保本地与
 CI 使用同一 SDK。
 

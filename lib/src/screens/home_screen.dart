@@ -1,3 +1,7 @@
+import '../services/app_brand.dart';
+import '../services/build_capabilities.dart';
+import 'store_privacy_screen.dart';
+import 'store_demo_screen.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:io';
 
@@ -93,7 +97,10 @@ class _HomeScreenState extends State<HomeScreen>
     return switch (index) {
       0 => ProxyPage(scaffoldKey: scaffoldKey),
       1 => const LogPage(),
-      2 => const SubscriptionPage(),
+      2 =>
+        BuildCapabilities.isMacAppStore
+            ? const NodesPage()
+            : const SubscriptionPage(),
       3 => const NodesPage(),
       _ => ProxyPage(scaffoldKey: scaffoldKey),
     };
@@ -104,8 +111,11 @@ class _HomeScreenState extends State<HomeScreen>
         Platform.isWindows || Platform.isLinux || Platform.isMacOS;
     if (isDesktop) {
       return AppWindowTitleBar(
-        title: 'Proxy With Flutter',
+        title: AppBrand.name,
         actions: [
+          if (BuildCapabilities.isMacAppStore)
+            const StoreDemoButton(compact: true),
+          if (BuildCapabilities.isMacAppStore) const StorePrivacyButton(),
           const LanguageMenuButton(),
           if (curLayoutStatus.index <= LayoutStatus.small.index) ...[
             _BrightnessButton(themeState: themeState, compact: true),
@@ -115,9 +125,7 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
     return AppBar(
-      title: Text(
-        Platform.isAndroid ? 'Proxy Everything' : 'Proxy With Flutter',
-      ),
+      title: Text(AppBrand.name),
       elevation: 0,
       scrolledUnderElevation: 0,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -339,11 +347,12 @@ List<NavigationDestination> appBarDestinations(BuildContext context) => [
     selectedIcon: Icon(Icons.terminal),
     label: context.l10n.logs,
   ),
-  NavigationDestination(
-    icon: Icon(Icons.cloud_download_outlined),
-    selectedIcon: Icon(Icons.cloud_download),
-    label: context.l10n.subscription,
-  ),
+  if (!BuildCapabilities.isMacAppStore)
+    NavigationDestination(
+      icon: Icon(Icons.cloud_download_outlined),
+      selectedIcon: Icon(Icons.cloud_download),
+      label: context.l10n.subscription,
+    ),
   NavigationDestination(
     icon: Icon(Icons.dns_outlined),
     selectedIcon: Icon(Icons.dns),

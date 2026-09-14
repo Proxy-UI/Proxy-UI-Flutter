@@ -1,0 +1,6 @@
+#include "../../Flutter/ephemeral/Flutter-Generated.xcconfig"
+#include? "../../Pods/Target Support Files/Pods-RunnerStore/Pods-RunnerStore.profile-appstore.xcconfig"
+#include "Warnings.xcconfig"
+#include "Store.xcconfig"
+PROXY_RUST_PROFILE = release
+CODE_SIGN_ENTITLEMENTS = Runner/Store.entitlements

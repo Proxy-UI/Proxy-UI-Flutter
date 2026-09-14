@@ -1,11 +1,11 @@
 {
-    "name": "proxy_ui",
-    "short_name": "proxy_ui",
+    "name": "CipherRelay",
+    "short_name": "CipherRelay",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Encrypted proxy client for self-hosted servers.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

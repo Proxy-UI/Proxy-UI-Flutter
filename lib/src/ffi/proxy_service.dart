@@ -138,6 +138,8 @@ Uint8List? _decodeProcessIcon(Object? encoded) {
 
 /// High-level proxy service wrapping FFI calls.
 class ProxyService {
+  Stream<void> get connectionChanges => const Stream<void>.empty();
+  Future<void> initializePlatform() async {}
   static const int defaultLogLevel = 2;
 
   final ProxyFFI _ffi = ProxyFFI();

@@ -1,0 +1,12 @@
+// Dedicated store target: the default Runner remains the Developer ID build.
+PRODUCT_NAME = CipherRelay Store
+PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store
+PRODUCT_MODULE_NAME = Runner
+MACOSX_DEPLOYMENT_TARGET = 13.0
+INFOPLIST_FILE = Runner/Store-Info.plist
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) MAC_APP_STORE
+DART_DEFINES = TUFDX0FQUF9TVE9SRT10cnVl
+ENABLE_APP_SANDBOX = YES
+ENABLE_HARDENED_RUNTIME = YES
+CODE_SIGN_STYLE = Automatic
+OTHER_LDFLAGS = $(inherited) -L"$(PROJECT_DIR)/../native/macos-app-store/$(PROXY_RUST_PROFILE)" -lhttp_proxy

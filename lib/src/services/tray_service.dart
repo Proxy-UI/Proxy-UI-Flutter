@@ -1,3 +1,5 @@
+import 'app_brand.dart';
+import 'build_capabilities.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:io';
@@ -238,7 +240,7 @@ class TrayService with TrayListener {
       return;
     }
     if (!await _call(
-      () => trayManager.setToolTip('Proxy Everything - $tooltipStatus'),
+      () => trayManager.setToolTip('${AppBrand.name} - $tooltipStatus'),
       'setToolTip',
     )) {
       return;
@@ -298,13 +300,14 @@ class TrayService with TrayListener {
           checked: isRunning,
           disabled: isBusy || config.serverHost.isEmpty,
         ),
-        MenuItem.checkbox(
-          key: 'tun',
-          label: appStrings.tunMode2,
-          checked: isTunRunning,
-          // TUN captures through the local listener, so it cannot outlive it.
-          disabled: isBusy || !isRunning,
-        ),
+        if (!BuildCapabilities.isMacAppStore)
+          MenuItem.checkbox(
+            key: 'tun',
+            label: appStrings.tunMode2,
+            checked: isTunRunning,
+            // TUN captures through the local listener, so it cannot outlive it.
+            disabled: isBusy || !isRunning,
+          ),
         if (nodes.isNotEmpty) ...[
           MenuItem.separator(),
           MenuItem.submenu(

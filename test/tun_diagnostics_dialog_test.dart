@@ -258,7 +258,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('当前流量由 Proxy UI 自己的 TUN 接管'), findsOneWidget);
+    expect(find.text('当前流量由 CipherRelay 自己的 TUN 接管'), findsOneWidget);
     expect(find.textContaining('sudo'), findsNothing);
     expect(find.text('先在对应客户端断开连接'), findsNothing);
   });

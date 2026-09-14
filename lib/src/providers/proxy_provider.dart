@@ -12,6 +12,8 @@ import '../constants.dart';
 
 import '../ffi/proxy_ffi.dart';
 import '../ffi/proxy_service.dart';
+import '../ffi/macos_store_proxy_service.dart';
+import '../services/build_capabilities.dart';
 import '../models/node_catalog_preferences.dart';
 import '../models/node_group_model.dart';
 import '../models/node_model.dart';
@@ -33,6 +35,7 @@ class ProxyState extends ChangeNotifier {
   final ListQueue<LogEntry> _logs = ListQueue<LogEntry>();
   List<LogEntry>? _filteredLogs;
   StreamSubscription<LogEntry>? _logSubscription;
+  StreamSubscription<void>? _connectionSubscription;
   Timer? _logNotificationTimer;
 
   /// Bumped when the log buffer changes.
@@ -83,7 +86,11 @@ class ProxyState extends ChangeNotifier {
     ProxyService? service,
     DesktopLogService? desktopLogService,
   }) : _enableTunOnStartup = enableTunOnStartup,
-       _service = service ?? ProxyService(),
+       _service =
+           service ??
+           (BuildCapabilities.isMacAppStore
+               ? MacosStoreProxyService()
+               : ProxyService()),
        _desktopLogService = desktopLogService ?? DesktopLogService() {
     _init();
   }
@@ -146,6 +153,18 @@ class ProxyState extends ChangeNotifier {
     _service.restoreOrphanedSystemProxy();
     try {
       await _loadConfig();
+      _connectionSubscription = _service.connectionChanges.listen((_) {
+        if (_isProxyTransitioning) return;
+        _isRunning = _service.isRunning;
+        _isTunRunning = _service.isTunRunning;
+        _lastError = _service.lastError;
+        _safeNotifyListeners();
+      });
+      await _service.initializePlatform();
+      if (BuildCapabilities.isMacAppStore) {
+        _isRunning = _service.isRunning;
+        _isTunRunning = _service.isTunRunning;
+      }
     } catch (error, stackTrace) {
       debugPrint('ProxyState init failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -216,7 +235,9 @@ class ProxyState extends ChangeNotifier {
     final configJson = prefs.getString(_configKey);
     if (configJson != null) {
       try {
-        _config = ProxyConfigModel.fromJson(jsonDecode(configJson));
+        _config = _supportedConfig(
+          ProxyConfigModel.fromJson(jsonDecode(configJson)),
+        );
         if (!_enableTunOnStartup && _config.tunEnabled) {
           // TUN changes system routes and is intentionally not restored after a
           // normal app launch. It must be enabled explicitly for each session.
@@ -325,12 +346,23 @@ class ProxyState extends ChangeNotifier {
   }
 
   void updateConfig(ProxyConfigModel config) {
-    _config = config;
+    _config = _supportedConfig(config);
     unawaited(_saveConfig());
     _safeNotifyListeners();
   }
 
   bool _isValidPort(int port) => port >= 1 && port <= 65535;
+
+  ProxyConfigModel _supportedConfig(ProxyConfigModel config) =>
+      BuildCapabilities.isMacAppStore
+      ? config.copyWith(
+          setSystemProxy: false,
+          allowLan: false,
+          autoProxy: false,
+          reverseGeo: false,
+          tunBypassProcesses: const [],
+        )
+      : config;
 
   Future<bool> start() async {
     if (_isProxyTransitioning) {
@@ -356,6 +388,7 @@ class ProxyState extends ChangeNotifier {
     _safeNotifyListeners();
 
     try {
+      _config = _supportedConfig(_config);
       if (_config.serverHost.isEmpty) {
         _lastError = appStrings.serverHostIsRequired;
         return false;
@@ -369,31 +402,17 @@ class ProxyState extends ChangeNotifier {
         return false;
       }
 
-      final result = await _service.start(
-        serverHost: _config.serverHost,
-        serverPort: _config.serverPort,
-        localPort: _config.localPort,
-        allowLan: _config.allowLan,
-        sessionKey: _config.sessionKey,
-        autoProxy: _config.autoProxy,
-        udpEnabled: _config.udpEnabled,
-        udpDirectFallback: _config.udpDirectFallback,
-        // UI TUN has an independent lifecycle and starts only after this call
-        // proves that the local HTTP/SOCKS5 port is listening.
-        tunEnabled: false,
-        tunBypassProcesses: _config.tunBypassProcesses,
-        reverseGeo: _config.reverseGeo,
-        needCodecIps: _config.needCodecIps,
-        forceCodec: _config.forceCodec,
-        setSystemProxy: _config.setSystemProxy,
-      );
+      final result = await _startService(_config);
 
       if (result == ProxyResult.ok) {
         _isRunning = true;
+        if (BuildCapabilities.isMacAppStore) {
+          _isTunRunning = _service.isTunRunning;
+        }
         return true;
       }
 
-      _lastError = ProxyResult.message(result);
+      _lastError = _service.lastError ?? ProxyResult.message(result);
       return false;
     } catch (error) {
       _lastError = appStrings.failedToStartProxy((error).toString());
@@ -402,6 +421,25 @@ class ProxyState extends ChangeNotifier {
       _isProxyTransitioning = false;
       _safeNotifyListeners();
     }
+  }
+
+  Future<int> _startService(ProxyConfigModel config) {
+    return _service.start(
+      serverHost: config.serverHost,
+      serverPort: config.serverPort,
+      localPort: config.localPort,
+      allowLan: config.allowLan,
+      sessionKey: config.sessionKey,
+      autoProxy: config.autoProxy,
+      udpEnabled: config.udpEnabled,
+      udpDirectFallback: config.udpDirectFallback,
+      tunEnabled: false,
+      tunBypassProcesses: config.tunBypassProcesses,
+      reverseGeo: config.reverseGeo,
+      needCodecIps: config.needCodecIps,
+      forceCodec: config.forceCodec,
+      setSystemProxy: config.setSystemProxy,
+    );
   }
 
   /// Retrieve process candidates and the executable that native code protects
@@ -527,6 +565,7 @@ class ProxyState extends ChangeNotifier {
   /// Returns `null` when an unelevated Windows instance successfully launched
   /// its elevated replacement. The caller should then close the old window.
   Future<bool?> setTunEnabled(bool enabled) async {
+    if (BuildCapabilities.isMacAppStore) return enabled ? start() : stop();
     if (_isTunBusy) return false;
     if (enabled == _isTunRunning) return true;
     if (enabled && !_isRunning) {
@@ -622,7 +661,7 @@ class ProxyState extends ChangeNotifier {
         unawaited(_saveConfig());
         return true;
       } else {
-        _lastError = ProxyResult.message(result);
+        _lastError = _service.lastError ?? ProxyResult.message(result);
         return false;
       }
     } finally {
@@ -649,6 +688,11 @@ class ProxyState extends ChangeNotifier {
   }
 
   Future<void> startSubscriptionService({int port = 8080}) async {
+    if (BuildCapabilities.isMacAppStore) {
+      throw UnsupportedError(
+        'LAN configuration sharing is unavailable in the Store edition.',
+      );
+    }
     if (_subscriptionServiceRunning || _subscriptionServiceBusy) return;
     if (!_isValidPort(port)) {
       throw ArgumentError.value(port, 'port', appStrings.portMustBeBetweenAnd);
@@ -931,8 +975,12 @@ class ProxyState extends ChangeNotifier {
       setSystemProxy: _config.setSystemProxy,
     );
 
-    if (_isRunning && _isTunRunning) {
+    if (_isRunning && _isTunRunning && !BuildCapabilities.isMacAppStore) {
       return _hotSwitchTunNode(node, newConfig);
+    }
+
+    if (BuildCapabilities.isMacAppStore) {
+      return _switchStoreNode(node, _supportedConfig(newConfig));
     }
 
     await _ensureNodeReachable(node);
@@ -957,6 +1005,74 @@ class ProxyState extends ChangeNotifier {
       _safeNotifyListeners();
     }
     return started;
+  }
+
+  /// A provider owns both capture and the listener, so a node change replaces
+  /// the whole VPN session. Probe after disconnecting to avoid routing the new
+  /// endpoint through the old node. Keep the operation locked through rollback.
+  Future<bool> _switchStoreNode(
+    NodeInfo node,
+    ProxyConfigModel newConfig,
+  ) async {
+    if (_isTunBusy) return false;
+    final previous = _config;
+    final previousNode = _currentNodeId;
+    final wasRunning = _service.isRunning;
+    _isProxyTransitioning = true;
+    _lastError = null;
+    _safeNotifyListeners();
+    try {
+      if (wasRunning) {
+        final stopped = await _service.stop();
+        if (stopped != ProxyResult.ok && stopped != ProxyResult.notRunning) {
+          _lastError = _service.lastError ?? ProxyResult.message(stopped);
+          return false;
+        }
+      }
+      String? failure;
+      try {
+        await _ensureNodeReachable(node);
+        final started = await _startService(newConfig);
+        if (started != ProxyResult.ok || !_service.isRunning) {
+          failure =
+              _service.lastError ??
+              ProxyResult.message(ProxyResult.runtimeError);
+        }
+      } catch (error) {
+        failure = error.toString();
+      }
+      if (failure == null) {
+        _config = newConfig;
+        _currentNodeId = node.nodeId;
+        await _saveConfig();
+        return true;
+      }
+      _config = previous;
+      _currentNodeId = previousNode;
+      _lastError = failure;
+      if (wasRunning) {
+        // A timed-out start can still be disconnecting in the system. Await
+        // cleanup before starting the prior session with its original config.
+        final cleaned = await _service.stop();
+        final restored =
+            cleaned == ProxyResult.ok || cleaned == ProxyResult.notRunning
+            ? await _startService(previous)
+            : ProxyResult.runtimeError;
+        _lastError = restored == ProxyResult.ok && _service.isRunning
+            ? appStrings.previousNodeAndTunRoutesWereRestored(failure)
+            : appStrings.rollbackCouldNotRestoreTunModeTrafficCaptureIs(
+                failure,
+                _service.lastError ?? ProxyResult.message(restored),
+              );
+      }
+      await _saveConfig();
+      return false;
+    } finally {
+      _isRunning = _service.isRunning;
+      _isTunRunning = _service.isTunRunning;
+      _isProxyTransitioning = false;
+      _safeNotifyListeners();
+    }
   }
 
   Future<void> _ensureNodeReachable(NodeInfo node) async {
@@ -1125,6 +1241,7 @@ class ProxyState extends ChangeNotifier {
     _logNotificationTimer?.cancel();
     unawaited(_saveNodeCatalogPreferences());
     _logSubscription?.cancel();
+    _connectionSubscription?.cancel();
     unawaited(_desktopLogService.dispose());
     _service.dispose();
     unawaited(_subscriptionService?.stop() ?? Future<void>.value());

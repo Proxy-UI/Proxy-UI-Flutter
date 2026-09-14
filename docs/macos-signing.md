@@ -41,7 +41,7 @@ also covers failed/cancelled jobs. Only the DMG and verification logs are upload
 
 ## Local signing or re-signing an existing release
 
-Keep the original DMG as a backup. Mount it read-only, copy `proxy_ui.app` out
+Keep the original DMG as a backup. Mount it read-only, copy `CipherRelay.app` out
 using `ditto`, and unmount it. Use the same script as CI, with an existing local
 Developer ID identity and a `notarytool` keychain profile:
 
@@ -53,8 +53,8 @@ export APPLE_NOTARY_PROFILE='proxy-ui-notary'
 # export MACOS_SIGNING_KEYCHAIN='/path/to/signing.keychain-db'
 # export APPLE_NOTARY_KEYCHAIN='/path/to/notary.keychain-db'
 python3 scripts/macos/package_release.py \
-  --app /path/to/proxy_ui.app \
-  --output /path/to/new/proxy-ui-macos.dmg
+  --app /path/to/CipherRelay.app \
+  --output /path/to/new/cipherrelay-macos.dmg
 ```
 
 The input app is copied before signing. An existing output file is never
