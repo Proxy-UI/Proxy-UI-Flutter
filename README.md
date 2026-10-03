@@ -32,6 +32,7 @@ ignored; normal FVM builds regenerate them.
 
 ## Features
 
+- **Connection recovery (1.2.17+43)**: Paired with native 0.4.31, Windows refreshes physical egress for new sessions after network changes. Native handle operations are serialized, cleanup runs off the UI thread, logs are bounded, and connection status is checked independently of logs. See the parent repository's `docs/network-resilience.md` for limits and validation.
 - **Proxy Control**: One-tap start/stop proxy with visual status indicator
 - **Configuration**: Server host, port, session key, and local port settings
 - **Optional LAN Access**: Expose the local proxy to trusted LAN devices with a copyable Wi-Fi HTTP proxy link

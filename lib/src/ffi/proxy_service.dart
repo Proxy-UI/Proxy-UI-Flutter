@@ -13,6 +13,7 @@ import '../models/node_group_model.dart';
 import '../models/node_model.dart';
 import '../services/android_vpn_service.dart';
 import 'proxy_ffi.dart';
+import 'native_operation_queue.dart';
 
 /// Log entry from native library.
 class LogEntry {
@@ -145,6 +146,26 @@ class ProxyService {
   final ProxyFFI _ffi = ProxyFFI();
   Pointer<Void>? _handle;
   bool _loggingInitialized = false;
+  final NativeOperationQueue _operations = NativeOperationQueue();
+  bool _runningSnapshot = false;
+  bool _tunSnapshot = false;
+  String? _errorSnapshot;
+
+  Future<T> _withHandle<T>(Future<T> Function() operation) {
+    return _operations.run(() async {
+      try {
+        return await operation();
+      } finally {
+        final handle = _handle;
+        if (handle != null && handle != nullptr) {
+          _runningSnapshot = _ffi.proxyIsRunning(handle) == 1;
+          _tunSnapshot = _ffi.proxyIsTunRunning(handle) == 1;
+          _errorSnapshot = _readLastError();
+        }
+      }
+    });
+  }
+
   String? _platformLastError;
   StreamSubscription<AndroidVpnStateEvent>? _androidVpnSubscription;
 
@@ -153,11 +174,12 @@ class ProxyService {
       _androidVpnSubscription = AndroidVpnService.instance.states.listen((
         event,
       ) {
+        if (_operations.isClosed) return;
         final handle = _handle;
         if (!event.running && handle != null && handle != nullptr) {
           _platformLastError = event.error;
-          if (_ffi.proxyIsTunRunning(handle) == 1) {
-            _ffi.proxyStopTun(handle);
+          if (isTunRunning) {
+            unawaited(stopTun());
           }
         }
       });
@@ -180,7 +202,10 @@ class ProxyService {
     if (_loggingInitialized) return;
 
     // Use NativeCallable.listener for thread-safe callbacks from native threads
-    _nativeCallable = NativeCallable<LogCallbackNative>.listener(_logCallback);
+    // Native callbacks can already be queued when a service is disposed. Keep
+    // one callback alive for the UI isolate's lifetime, including queued frees.
+    _nativeCallable ??= NativeCallable<LogCallbackNative>.listener(_logCallback)
+      ..keepIsolateAlive = false;
     _ffi.proxySetLogCallback(_nativeCallable!.nativeFunction);
     _ffi.proxySetLogLevel(defaultLogLevel);
     _ffi.proxyInitLogging();
@@ -208,7 +233,8 @@ class ProxyService {
 
   /// Create proxy handle.
   bool create() {
-    if (_handle != null) return true;
+    if (_operations.isClosed) return false;
+    if (_handle != null && _handle != nullptr) return true;
     _handle = _ffi.proxyCreate();
     return _handle != null && _handle != nullptr;
   }
@@ -229,12 +255,12 @@ class ProxyService {
     bool forceCodec = false,
     bool setSystemProxy = false,
     bool allowLan = false,
-  }) async {
+  }) => _withHandle(() async {
     if (Platform.isAndroid) {
       await stopAndroidVpnInterface();
     }
     // Always recreate handle to apply new config
-    destroy();
+    await _destroyHandle();
     if (!create()) return ProxyResult.runtimeError;
 
     final config = calloc<ProxyConfigV5>();
@@ -304,7 +330,7 @@ class ProxyService {
       }
       calloc.free(config);
     }
-  }
+  });
 
   /// List normalized running executable names available for TUN bypass.
   List<String> listTunProcesses() {
@@ -351,7 +377,10 @@ class ProxyService {
   ///
   /// The numeric ABI result is intentionally coarse and stable. This string
   /// carries actionable TUN stage, adapter, route, and Windows error context.
-  String? get lastError {
+  String? get lastError =>
+      _operations.isBusy ? _errorSnapshot : _readLastError();
+
+  String? _readLastError() {
     if (_platformLastError case final error? when error.trim().isNotEmpty) {
       return error.trim();
     }
@@ -369,6 +398,9 @@ class ProxyService {
 
   /// Apply a new TUN process policy without recreating the TUN device.
   int setTunBypassProcesses(List<String> processes) {
+    if (_operations.isBusy || _operations.isClosed) {
+      return ProxyResult.runtimeError;
+    }
     if (_handle == null) return ProxyResult.notRunning;
     final pointer = processes.isEmpty
         ? nullptr
@@ -386,6 +418,9 @@ class ProxyService {
   /// provider therefore stops only TUN, switches this endpoint, and starts TUN
   /// again so its mandatory remote route bypass follows the new node.
   int switchUpstream({required String serverHost, required int serverPort}) {
+    if (_operations.isBusy || _operations.isClosed) {
+      return ProxyResult.runtimeError;
+    }
     if (_handle == null) return ProxyResult.notRunning;
     final serverHostPtr = serverHost.toNativeUtf8();
     try {
@@ -411,13 +446,13 @@ class ProxyService {
 
   /// Enable TUN only after the local proxy listener has started. Native setup
   /// can wait for adapter and route readiness, so it runs outside the UI isolate.
-  Future<int> startTun(List<String> processes) async {
+  Future<int> startTun(List<String> processes) => _withHandle(() async {
     if (_handle == null) return ProxyResult.notRunning;
     return compute(_startTunIsolate, {
       'handleAddress': _handle!.address,
       'processes': processes,
     });
-  }
+  });
 
   static int _startAndroidTunIsolate(Map<String, int> params) {
     final ffi = ProxyFFI();
@@ -433,7 +468,7 @@ class ProxyService {
   Future<int> startAndroidTun({
     required String mode,
     required List<String> packages,
-  }) async {
+  }) => _withHandle(() async {
     final handle = _handle;
     if (!Platform.isAndroid || handle == null || handle == nullptr) {
       return ProxyResult.notRunning;
@@ -476,7 +511,7 @@ class ProxyService {
       _platformLastError = error.message ?? error.code;
       return ProxyResult.runtimeError;
     }
-  }
+  });
 
   static int _stopTunIsolate(int handleAddress) {
     final ffi = ProxyFFI();
@@ -485,10 +520,10 @@ class ProxyService {
 
   /// Stop TUN capture without stopping the local HTTP/SOCKS5 listener. Route
   /// cleanup can briefly block, so it also stays outside the UI isolate.
-  Future<int> stopTun() async {
+  Future<int> stopTun() => _withHandle(() async {
     if (_handle == null) return ProxyResult.notRunning;
     return compute(_stopTunIsolate, _handle!.address);
-  }
+  });
 
   Future<int> stopAndroidTun() async {
     if (!Platform.isAndroid) return ProxyResult.invalidParam;
@@ -522,6 +557,7 @@ class ProxyService {
   }
 
   bool get isTunRunning {
+    if (_operations.isBusy) return _tunSnapshot;
     if (_handle == null) return false;
     return _ffi.proxyIsTunRunning(_handle!) == 1;
   }
@@ -560,36 +596,56 @@ class ProxyService {
   /// Native code waits for TUN teardown to restore the system routes and DNS
   /// before returning, so this stays off the UI isolate for the same reason
   /// [stopTun] does.
-  Future<int> stop() async {
+  Future<int> stop() => _withHandle(() async {
     if (_handle == null) return ProxyResult.invalidParam;
-    if (Platform.isAndroid) {
-      unawaited(AndroidVpnService.instance.stopInterface());
-    }
+    await stopAndroidVpnInterface();
     return compute(_stopIsolate, _handle!.address);
+  });
+
+  /// Destroy the handle after pending native operations have finished.
+  Future<void> destroy() => _withHandle(_destroyHandle);
+
+  static void _destroyIsolate(int address) {
+    ProxyFFI().proxyDestroy(Pointer<Void>.fromAddress(address));
   }
 
-  /// Destroy proxy handle and free resources.
-  void destroy() {
-    if (_handle != null) {
-      _ffi.proxyDestroy(_handle!);
-      _handle = null;
+  Future<void> _destroyHandle() async {
+    final handle = _handle;
+    _handle = null;
+    _runningSnapshot = false;
+    _tunSnapshot = false;
+    if (handle != null && handle != nullptr) {
+      await compute(_destroyIsolate, handle.address);
     }
   }
 
   /// Check if proxy is running.
   bool get isRunning {
+    if (_operations.isBusy) return _runningSnapshot;
     if (_handle == null) return false;
     return _ffi.proxyIsRunning(_handle!) == 1;
   }
 
   /// Dispose resources.
   void dispose() {
-    if (_handle != null) {
-      stop();
-    }
-    destroy();
     _androidVpnSubscription?.cancel();
-    _nativeCallable?.close();
+    unawaited(
+      _operations
+          .close(() async {
+            final handle = _handle;
+            if (handle == null || handle == nullptr) return;
+            // The queue retains the pointer until every isolate has returned.
+            try {
+              await stopAndroidVpnInterface();
+              await compute(_stopIsolate, handle.address);
+            } finally {
+              await _destroyHandle();
+            }
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            debugPrint('Native proxy cleanup failed: $error\n$stackTrace');
+          }),
+    );
   }
 
   // Isolate entry point for ping test
@@ -628,21 +684,22 @@ class ProxyService {
 
   /// Test proxy latency (only works when proxy is running).
   /// Tests real-world latency by sending HTTPS request through local proxy.
-  Future<int?> testLatency({String? testUrl, int timeoutMs = 10000}) async {
-    if (_handle == null) throw StateError(appStrings.proxyNotInitialized);
+  Future<int?> testLatency({String? testUrl, int timeoutMs = 10000}) =>
+      _withHandle(() async {
+        if (_handle == null) throw StateError(appStrings.proxyNotInitialized);
 
-    final result = await compute(_testLatencyIsolate, {
-      'handleAddress': _handle!.address,
-      'testUrl': testUrl,
-      'timeoutMs': timeoutMs,
-    });
+        final result = await compute(_testLatencyIsolate, {
+          'handleAddress': _handle!.address,
+          'testUrl': testUrl,
+          'timeoutMs': timeoutMs,
+        });
 
-    if (result['success'] == true) {
-      return result['latencyMs'] as int;
-    } else {
-      throw Exception(result['error'] ?? appStrings.latencyTestFailed);
-    }
-  }
+        if (result['success'] == true) {
+          return result['latencyMs'] as int;
+        } else {
+          throw Exception(result['error'] ?? appStrings.latencyTestFailed);
+        }
+      });
 
   // Isolate entry point for node listing
   static Future<Map<String, dynamic>> _getServerNodesIsolate(

@@ -37,6 +37,7 @@ class ProxyState extends ChangeNotifier {
   StreamSubscription<LogEntry>? _logSubscription;
   StreamSubscription<void>? _connectionSubscription;
   Timer? _logNotificationTimer;
+  Timer? _connectionTimer;
 
   /// Bumped when the log buffer changes.
   ///
@@ -161,6 +162,11 @@ class ProxyState extends ChangeNotifier {
         _safeNotifyListeners();
       });
       await _service.initializePlatform();
+      if (_isDisposed) return;
+      _connectionTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _reconcileConnection(),
+      );
       if (BuildCapabilities.isMacAppStore) {
         _isRunning = _service.isRunning;
         _isTunRunning = _service.isTunRunning;
@@ -182,13 +188,23 @@ class ProxyState extends ChangeNotifier {
     if (_logs.length > maxLogs) {
       _logs.removeFirst();
     }
-    // Native TUN setup failures cancel the shared listener token. Reconcile
-    // the provider on the following native log instead of leaving the switch
-    // in a connected state after the worker has stopped.
+    _reconcileConnection();
+
+    // A new log line is neither. Native traffic can produce hundreds per
+    // second, so announce it on a separate channel at a human-visible cadence;
+    // only the log view is listening.
+    _logNotificationTimer ??= Timer(const Duration(milliseconds: 100), () {
+      _logNotificationTimer = null;
+      if (!_isDisposed) logRevision.value++;
+    });
+  }
+
+  void _reconcileConnection() {
+    if (_isDisposed || _isProxyTransitioning || _isTunBusy) return;
     var connectionChanged = false;
     if (_isRunning && !_service.isRunning) {
       _isRunning = false;
-      _isTunRunning = false;
+      _isTunRunning = _service.isTunRunning;
       connectionChanged = true;
     } else if (_isTunRunning && !_isTunBusy && !_service.isTunRunning) {
       _isTunRunning = false;
@@ -200,15 +216,10 @@ class ProxyState extends ChangeNotifier {
       connectionChanged = true;
     }
     // A dropped connection is rare and every screen wants to know at once.
-    if (connectionChanged) _safeNotifyListeners();
-
-    // A new log line is neither. Native traffic can produce hundreds per
-    // second, so announce it on a separate channel at a human-visible cadence;
-    // only the log view is listening.
-    _logNotificationTimer ??= Timer(const Duration(milliseconds: 100), () {
-      _logNotificationTimer = null;
-      if (!_isDisposed) logRevision.value++;
-    });
+    if (connectionChanged) {
+      _lastError = _service.lastError ?? _lastError;
+      _safeNotifyListeners();
+    }
   }
 
   Future<void> _persistLog(LogEntry entry) async {
@@ -1239,6 +1250,7 @@ class ProxyState extends ChangeNotifier {
     _isDisposed = true;
     _nodeCatalogSaveTimer?.cancel();
     _logNotificationTimer?.cancel();
+    _connectionTimer?.cancel();
     unawaited(_saveNodeCatalogPreferences());
     _logSubscription?.cancel();
     _connectionSubscription?.cancel();
