@@ -189,6 +189,7 @@ class LanguageTestProxyService extends ProxyService {
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
+    bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
   }) async {

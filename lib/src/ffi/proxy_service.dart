@@ -253,6 +253,7 @@ class ProxyService {
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
+    bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
   }) => _withHandle(() async {
@@ -263,7 +264,7 @@ class ProxyService {
     await _destroyHandle();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfigV5>();
+    final config = calloc<ProxyConfigV6>();
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
@@ -272,41 +273,41 @@ class ProxyService {
 
     try {
       serverHostPtr = serverHost.toNativeUtf8();
-      config.ref.serverHost = serverHostPtr;
-      config.ref.serverPort = serverPort;
-      config.ref.localPort = localPort;
+      config.ref.base.serverHost = serverHostPtr;
+      config.ref.base.serverPort = serverPort;
+      config.ref.base.localPort = localPort;
 
       if (sessionKey != null && sessionKey.length == 32) {
         sessionKeyPtr = sessionKey.toNativeUtf8();
-        config.ref.sessionKey = sessionKeyPtr;
+        config.ref.base.sessionKey = sessionKeyPtr;
       } else {
-        config.ref.sessionKey = nullptr;
+        config.ref.base.sessionKey = nullptr;
       }
 
-      config.ref.autoProxy = autoProxy ? 1 : 0;
-      config.ref.enableUdp = udpEnabled ? 1 : 0;
-      config.ref.tunUdpDirectFallback = udpDirectFallback ? 1 : 0;
-      config.ref.enableTun = tunEnabled ? 1 : 0;
-      config.ref.reverseGeo = reverseGeo ? 1 : 0;
-      config.ref.allowLan = allowLan ? 1 : 0;
+      config.ref.base.autoProxy = autoProxy ? 1 : 0;
+      config.ref.base.enableUdp = udpEnabled ? 1 : 0;
+      config.ref.base.tunUdpDirectFallback = udpDirectFallback ? 1 : 0;
+      config.ref.base.enableTun = tunEnabled ? 1 : 0;
+      config.ref.base.reverseGeo = reverseGeo ? 1 : 0;
+      config.ref.base.allowLan = allowLan ? 1 : 0;
 
       // A stable private support directory keeps auto-proxy and virtual-DNS
       // state across process restarts and in-place upgrades on every platform.
       final supportDir = await getApplicationSupportDirectory();
       cacheDirPtr = supportDir.path.toNativeUtf8();
-      config.ref.cacheDir = cacheDirPtr;
+      config.ref.base.cacheDir = cacheDirPtr;
 
       if (needCodecIps != null && needCodecIps.isNotEmpty) {
         needCodecIpsPtr = needCodecIps.toNativeUtf8();
-        config.ref.needCodecIps = needCodecIpsPtr;
+        config.ref.base.needCodecIps = needCodecIpsPtr;
       } else {
-        config.ref.needCodecIps = nullptr;
+        config.ref.base.needCodecIps = nullptr;
       }
 
-      config.ref.forceCodec = forceCodec ? 1 : 0;
+      config.ref.base.forceCodec = forceCodec ? 1 : 0;
 
       // Desktop platforms: set system proxy
-      config.ref.setSystemProxy =
+      config.ref.base.setSystemProxy =
           (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
               setSystemProxy
           ? 1
@@ -314,12 +315,13 @@ class ProxyService {
 
       if (tunBypassProcesses.isNotEmpty) {
         tunBypassProcessesPtr = jsonEncode(tunBypassProcesses).toNativeUtf8();
-        config.ref.tunBypassProcesses = tunBypassProcessesPtr;
+        config.ref.base.tunBypassProcesses = tunBypassProcessesPtr;
       } else {
-        config.ref.tunBypassProcesses = nullptr;
+        config.ref.base.tunBypassProcesses = nullptr;
       }
 
-      return _ffi.proxyStartV5(_handle!, config);
+      config.ref.secureTransport = secureTransport ? 1 : 0;
+      return _ffi.proxyStartV6(_handle!, config);
     } finally {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);
@@ -770,11 +772,12 @@ class ProxyService {
     final hostPtr = (params['serverHost'] as String).toNativeUtf8();
 
     try {
-      final result = ffi.proxyProbeNode(
+      final result = ffi.proxyProbeNodeV2(
         hostPtr,
         params['serverPort'] as int,
         (params['forceCodec'] as bool) ? 1 : 0,
         params['timeoutMs'] as int,
+        (params['secureTransport'] as bool) ? 1 : 0,
       );
 
       try {
@@ -816,12 +819,14 @@ class ProxyService {
     required String serverHost,
     required int serverPort,
     bool forceCodec = false,
+    bool secureTransport = false,
     int timeoutMs = 10000,
   }) async {
     final result = await compute(_probeNodeIsolate, {
       'serverHost': serverHost,
       'serverPort': serverPort,
       'forceCodec': forceCodec,
+      'secureTransport': secureTransport,
       'timeoutMs': timeoutMs,
     });
 

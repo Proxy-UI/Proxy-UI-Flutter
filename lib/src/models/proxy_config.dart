@@ -35,6 +35,7 @@ class ProxyConfigModel {
   bool reverseGeo;
   String? needCodecIps;
   bool forceCodec;
+  bool secureTransport;
   bool setSystemProxy; // desktop only
 
   /// Check if current platform is desktop
@@ -57,6 +58,7 @@ class ProxyConfigModel {
     this.reverseGeo = false,
     this.needCodecIps,
     this.forceCodec = false,
+    this.secureTransport = false,
     bool? setSystemProxy,
   }) : autoProxy = autoProxy ?? !BuildCapabilities.isMacAppStore,
        tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
@@ -83,6 +85,7 @@ class ProxyConfigModel {
     'reverseGeo': reverseGeo,
     'needCodecIps': needCodecIps,
     'forceCodec': forceCodec,
+    'secureTransport': secureTransport,
     'setSystemProxy': setSystemProxy,
   };
 
@@ -141,6 +144,7 @@ class ProxyConfigModel {
         reverseGeo: _parseBool(json['reverseGeo'], false),
         needCodecIps: json['needCodecIps']?.toString(),
         forceCodec: _parseBool(json['forceCodec'], false),
+        secureTransport: _parseBool(json['secureTransport'], false),
         setSystemProxy: _parseBool(json['setSystemProxy'], isDesktop),
       );
 
@@ -160,6 +164,7 @@ class ProxyConfigModel {
     bool? reverseGeo,
     String? needCodecIps,
     bool? forceCodec,
+    bool? secureTransport,
     bool? setSystemProxy,
   }) => ProxyConfigModel(
     serverHost: serverHost ?? this.serverHost,
@@ -177,6 +182,7 @@ class ProxyConfigModel {
     reverseGeo: reverseGeo ?? this.reverseGeo,
     needCodecIps: needCodecIps ?? this.needCodecIps,
     forceCodec: forceCodec ?? this.forceCodec,
+    secureTransport: secureTransport ?? this.secureTransport,
     setSystemProxy: setSystemProxy ?? this.setSystemProxy,
   );
 }

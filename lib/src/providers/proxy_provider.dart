@@ -449,6 +449,7 @@ class ProxyState extends ChangeNotifier {
       reverseGeo: config.reverseGeo,
       needCodecIps: config.needCodecIps,
       forceCodec: config.forceCodec,
+      secureTransport: config.secureTransport,
       setSystemProxy: config.setSystemProxy,
     );
   }
@@ -888,6 +889,7 @@ class ProxyState extends ChangeNotifier {
         serverHost: node.host,
         serverPort: node.port,
         forceCodec: _config.forceCodec,
+        secureTransport: _config.secureTransport,
       );
       final verification = NodeVerification(
         status: probe.success
@@ -949,6 +951,7 @@ class ProxyState extends ChangeNotifier {
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,
+      secureTransport: _config.secureTransport,
       setSystemProxy: _config.setSystemProxy,
     );
 
@@ -983,6 +986,7 @@ class ProxyState extends ChangeNotifier {
       reverseGeo: _config.reverseGeo,
       needCodecIps: _config.needCodecIps,
       forceCodec: _config.forceCodec,
+      secureTransport: _config.secureTransport,
       setSystemProxy: _config.setSystemProxy,
     );
 

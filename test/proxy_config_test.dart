@@ -3,6 +3,18 @@ import 'package:proxy_ui/src/models/proxy_config.dart';
 
 void main() {
   group('ProxyConfigModel', () {
+    test('protocol migration preserves legacy and explicit v2 selections', () {
+      expect(ProxyConfigModel.fromJson({}).secureTransport, isFalse);
+      final secure = ProxyConfigModel(secureTransport: true);
+      expect(
+        ProxyConfigModel.fromJson(secure.toJson()).secureTransport,
+        isTrue,
+      );
+      expect(
+        secure.copyWith(serverHost: 'new.example').secureTransport,
+        isTrue,
+      );
+    });
     // New installs moved off 1080, which too many other proxy tools claim.
     // Imported configurations still fall back to 1080, covered below.
     test('uses 10801 as default local port', () {

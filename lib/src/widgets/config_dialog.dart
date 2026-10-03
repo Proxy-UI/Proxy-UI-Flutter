@@ -28,6 +28,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late bool _udpDirectFallback;
   late bool _reverseGeo;
   late bool _forceCodec;
+  late bool _secureTransport;
   late bool _minimizeToTray;
   late bool _launchAtStartup;
 
@@ -55,6 +56,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _udpDirectFallback = config.udpDirectFallback;
     _reverseGeo = !BuildCapabilities.isMacAppStore && config.reverseGeo;
     _forceCodec = config.forceCodec;
+    _secureTransport = config.secureTransport;
   }
 
   @override
@@ -107,6 +109,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
         reverseGeo: _reverseGeo,
         needCodecIps: state.config.needCodecIps,
         forceCodec: _forceCodec,
+        secureTransport: _secureTransport,
         setSystemProxy: state.config.setSystemProxy,
       ),
     );
@@ -252,10 +255,18 @@ class _ConfigDialogState extends State<ConfigDialog> {
                   onChanged: (v) => setState(() => _reverseGeo = v),
                 ),
               SwitchListTile(
+                title: Text(context.l10n.secureTransport),
+                subtitle: Text(context.l10n.secureTransportDescription),
+                value: _secureTransport,
+                onChanged: (v) => setState(() => _secureTransport = v),
+              ),
+              SwitchListTile(
                 title: Text(context.l10n.forceCodec),
                 subtitle: Text(context.l10n.forceEncryptionForAllConnections),
                 value: _forceCodec,
-                onChanged: (v) => setState(() => _forceCodec = v),
+                onChanged: _secureTransport
+                    ? null
+                    : (v) => setState(() => _forceCodec = v),
               ),
               if (DesktopSettings.isSupported) ...[
                 const SizedBox(height: 24),

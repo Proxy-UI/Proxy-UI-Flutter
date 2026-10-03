@@ -224,6 +224,13 @@ final class ProxyConfigV5 extends Struct {
   external int allowLan;
 }
 
+/// Version 6 embeds the complete V5 ABI then adds protocol selection.
+final class ProxyConfigV6 extends Struct {
+  external ProxyConfigV5 base;
+  @Int32()
+  external int secureTransport;
+}
+
 // FFI function signatures
 typedef _ProxySetLogCallbackNative =
     Void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
@@ -259,6 +266,10 @@ typedef _ProxyStartV4Native =
 typedef _ProxyStartV4Dart =
     int Function(Pointer<Void> handle, Pointer<ProxyConfigV4> config);
 
+typedef _ProxyStartV6Native =
+    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV6> config);
+typedef _ProxyStartV6Dart =
+    int Function(Pointer<Void> handle, Pointer<ProxyConfigV6> config);
 typedef _ProxyStartV5Native =
     Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV5> config);
 typedef _ProxyStartV5Dart =
@@ -387,6 +398,23 @@ typedef _ProxyProbeNodeDart =
       int timeoutMs,
     );
 
+typedef _ProxyProbeNodeV2Native =
+    NodeProbeResult Function(
+      Pointer<Utf8> serverHost,
+      Uint16 serverPort,
+      Int32 forceCodec,
+      Uint32 timeoutMs,
+      Int32 secureTransport,
+    );
+typedef _ProxyProbeNodeV2Dart =
+    NodeProbeResult Function(
+      Pointer<Utf8> serverHost,
+      int serverPort,
+      int forceCodec,
+      int timeoutMs,
+      int secureTransport,
+    );
+
 typedef _ProxyFreeNodeProbeResultNative =
     Void Function(Pointer<NodeProbeResult> result);
 typedef _ProxyFreeNodeProbeResultDart =
@@ -475,6 +503,8 @@ class ProxyFFI {
 
   late final proxyStartV5 = lib
       .lookupFunction<_ProxyStartV5Native, _ProxyStartV5Dart>('proxy_start_v5');
+  late final proxyStartV6 = lib
+      .lookupFunction<_ProxyStartV6Native, _ProxyStartV6Dart>('proxy_start_v6');
 
   late final proxySwitchUpstream = lib
       .lookupFunction<_ProxySwitchUpstreamNative, _ProxySwitchUpstreamDart>(
@@ -586,6 +616,11 @@ class ProxyFFI {
   late final proxyProbeNode = lib
       .lookupFunction<_ProxyProbeNodeNative, _ProxyProbeNodeDart>(
         'proxy_probe_node',
+      );
+
+  late final proxyProbeNodeV2 = lib
+      .lookupFunction<_ProxyProbeNodeV2Native, _ProxyProbeNodeV2Dart>(
+        'proxy_probe_node_v2',
       );
 
   late final proxyFreeNodeProbeResult = lib
