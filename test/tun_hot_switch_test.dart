@@ -17,6 +17,31 @@ void main() {
   });
 
   test(
+    'a silent native failure updates status without waiting for logs',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+      );
+      expect(await state.start(), isTrue);
+      expect(await state.setTunEnabled(true), isTrue);
+      service.simulateListenerLoss();
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(state.isRunning, isFalse);
+      expect(
+        state.isTunRunning,
+        isTrue,
+        reason: 'surviving capture must remain visible and stoppable',
+      );
+      expect(await state.stop(), isTrue);
+      expect(state.isTunRunning, isFalse);
+    },
+  );
+
+  test(
     'applying bypass repeatedly preserves the running TUN and listener',
     () async {
       final service = _FakeProxyService();
@@ -237,6 +262,7 @@ class _FakeProxyService extends ProxyService {
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
+    bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
   }) async {

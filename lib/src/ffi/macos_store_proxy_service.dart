@@ -42,10 +42,15 @@ class MacosStoreProxyService extends ProxyService {
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
+    bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
   }) async {
     _error = null;
+    if (secureTransport) {
+      _error = 'V3 transport is not supported by this packet-tunnel build';
+      return ProxyResult.invalidParam;
+    }
     try {
       await _vpn.start({
         'serverHost': serverHost,

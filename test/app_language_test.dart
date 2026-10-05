@@ -73,7 +73,6 @@ void main() {
       final proxy = ProxyState(service: service);
       final theme = ThemeState();
       final desktop = DesktopSettings();
-      addTearDown(proxy.dispose);
       addTearDown(theme.dispose);
       addTearDown(desktop.dispose);
       await tester.pumpWidget(languageTestApp(proxy, theme, desktop));
@@ -150,7 +149,7 @@ Widget languageTestApp(
   DesktopSettings desktop,
 ) => MultiProvider(
   providers: [
-    ChangeNotifierProvider.value(value: proxy),
+    ChangeNotifierProvider(create: (_) => proxy),
     ChangeNotifierProvider.value(value: theme),
     ChangeNotifierProvider.value(value: desktop),
   ],
@@ -190,6 +189,7 @@ class LanguageTestProxyService extends ProxyService {
     bool reverseGeo = false,
     String? needCodecIps,
     bool forceCodec = false,
+    bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
   }) async {
