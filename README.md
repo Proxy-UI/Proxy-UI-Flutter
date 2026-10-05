@@ -32,6 +32,8 @@ ignored; normal FVM builds regenerate them.
 
 ## Features
 
+- **TUN ping (1.2.20+46)**: With native 0.4.34 and an updated native proxy exit, TUN forwards IPv4/IPv6 Echo to the real target. The exit needs OS permission for ICMP sockets. Existing TCP/UDP and default legacy protocol stay compatible with old nodes. External HTTP/SOCKS exits and arbitrary IP protocols are not supported by this Echo extension.
+
 - **Low-latency encrypted transport v3 (1.2.19+45)**: Requires native 0.4.33 on the client and every relay/server. The switch encrypts TCP, UDP and control without an extra handshake round trip. Fresh sender salts separate connections/directions; whole-connection replay protection is not promised. Default off retains legacy compatibility. Failures never silently downgrade. Mac App Store Packet Tunnel remains legacy-only.
 - **Connection recovery (1.2.17+43)**: Paired with native 0.4.31, Windows refreshes physical egress for new sessions after network changes. Native handle operations are serialized, cleanup runs off the UI thread, logs are bounded, and connection status is checked independently of logs. See the parent repository's `docs/network-resilience.md` for limits and validation.
 - **Proxy Control**: One-tap start/stop proxy with visual status indicator
@@ -39,7 +41,7 @@ ignored; normal FVM builds regenerate them.
 - **Optional LAN Access**: Expose the local proxy to trusted LAN devices with a copyable Wi-Fi HTTP proxy link
 - **Auto Proxy**: Geo-based routing (CN direct, others proxy)
 - **SOCKS5 UDP**: Toggle RFC 1928 UDP relay on the same local proxy port
-- **Windows TUN**: Capture device TCP/UDP with runtime process exclusions
+- **Windows TUN**: Capture device TCP/UDP with runtime process exclusions; ICMP Echo uses the native proxy exit
 - **Subscriptions**: Export UDP-aware Clash and Shadowrocket configurations
 - **Real-time Logs**: Colored log viewer with level filtering (TRACE/DEBUG/INFO/WARN/ERROR)
 - **Desktop Log Files**: Hourly log files with three-day retention and one-click folder access
