@@ -4,6 +4,7 @@ import 'package:proxy_ui/src/models/proxy_config.dart';
 void main() {
   group('ProxyConfigModel', () {
     test('protocol migration preserves legacy and explicit v2 selections', () {
+      expect(ProxyConfigModel().secureTransport, isFalse);
       expect(ProxyConfigModel.fromJson({}).secureTransport, isFalse);
       final secure = ProxyConfigModel(secureTransport: true);
       expect(

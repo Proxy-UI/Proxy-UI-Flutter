@@ -48,7 +48,7 @@ class MacosStoreProxyService extends ProxyService {
   }) async {
     _error = null;
     if (secureTransport) {
-      _error = 'V2 transport is not supported by this packet-tunnel build';
+      _error = 'V3 transport is not supported by this packet-tunnel build';
       return ProxyResult.invalidParam;
     }
     try {

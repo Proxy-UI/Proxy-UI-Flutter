@@ -264,7 +264,7 @@ class ProxyService {
     await _destroyHandle();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfigV6>();
+    final config = calloc<ProxyConfigV7>();
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
@@ -320,8 +320,8 @@ class ProxyService {
         config.ref.base.tunBypassProcesses = nullptr;
       }
 
-      config.ref.secureTransport = secureTransport ? 1 : 0;
-      return _ffi.proxyStartV6(_handle!, config);
+      config.ref.wireProtocol = secureTransport ? 3 : 0;
+      return _ffi.proxyStartV7(_handle!, config);
     } finally {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);
@@ -772,12 +772,12 @@ class ProxyService {
     final hostPtr = (params['serverHost'] as String).toNativeUtf8();
 
     try {
-      final result = ffi.proxyProbeNodeV2(
+      final result = ffi.proxyProbeNodeV3(
         hostPtr,
         params['serverPort'] as int,
         (params['forceCodec'] as bool) ? 1 : 0,
         params['timeoutMs'] as int,
-        (params['secureTransport'] as bool) ? 1 : 0,
+        (params['secureTransport'] as bool) ? 3 : 0,
       );
 
       try {

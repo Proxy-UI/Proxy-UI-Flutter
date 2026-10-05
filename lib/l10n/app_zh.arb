@@ -360,6 +360,6 @@
   "storeDemoNodeRemoved": "演示：已删除示例节点",
   "storeDemoEmptyLog": "你的演示操作会显示在此处。记录仅在当前演示页面打开期间保留。",
   "storeDemoFooter": "真实连接请退出演示，配置你控制的兼容服务器。CipherRelay 不提供服务器接入服务。",
-  "secureTransport": "安全传输 v2",
-  "secureTransportDescription": "使用独立的连接与收发密钥加密全部流量。请先升级所有中继和服务端；失败不会自动降级。关闭时使用旧协议。"
+  "secureTransport": "低延迟加密传输（v3）",
+  "secureTransportDescription": "加密全部流量，不增加握手往返。请先升级所有中继和服务端；失败不会自动降级。默认关闭，使用兼容旧版的协议。"
 }

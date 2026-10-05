@@ -868,6 +868,6 @@
   "storeDemoNodeRemoved": "DEMO: sample node removed",
   "storeDemoEmptyLog": "Your demo actions will appear here. Entries exist only while this screen is open.",
   "storeDemoFooter": "For an actual connection, leave the demo and configure a compatible server you control. CipherRelay does not supply server access.",
-  "secureTransport": "Secure transport v2",
-  "secureTransportDescription": "Encrypts all traffic with unique connection and direction keys. Upgrade every relay/server first; no automatic fallback. Off uses the legacy protocol."
+  "secureTransport": "Low-latency encrypted transport (v3)",
+  "secureTransportDescription": "Encrypts all traffic without an extra handshake round trip. Upgrade every relay/server first; no automatic fallback. Off uses the legacy protocol for compatibility."
 }

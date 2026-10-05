@@ -32,7 +32,7 @@ ignored; normal FVM builds regenerate them.
 
 ## Features
 
-- **Secure transport v2 (1.2.18+44)**: Requires native 0.4.32 on the client and every relay/server. The configuration switch encrypts TCP, UDP and control with independent connection/direction keys, without automatic legacy fallback. Existing profiles retain legacy mode until deliberately migrated. Mac App Store Packet Tunnel does not yet support v2.
+- **Low-latency encrypted transport v3 (1.2.19+45)**: Requires native 0.4.33 on the client and every relay/server. The switch encrypts TCP, UDP and control without an extra handshake round trip. Fresh sender salts separate connections/directions; whole-connection replay protection is not promised. Default off retains legacy compatibility. Failures never silently downgrade. Mac App Store Packet Tunnel remains legacy-only.
 - **Connection recovery (1.2.17+43)**: Paired with native 0.4.31, Windows refreshes physical egress for new sessions after network changes. Native handle operations are serialized, cleanup runs off the UI thread, logs are bounded, and connection status is checked independently of logs. See the parent repository's `docs/network-resilience.md` for limits and validation.
 - **Proxy Control**: One-tap start/stop proxy with visual status indicator
 - **Configuration**: Server host, port, session key, and local port settings
