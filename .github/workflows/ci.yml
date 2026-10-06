@@ -9,7 +9,7 @@ on:
 env:
   PRIVATE_REPO: acking-you/proxy-everything
   # Update this version when new native library releases are available
-  LIB_VERSION: '0.4.25'
+  LIB_VERSION: '0.4.35'
 
 jobs:
   analyze-and-build:
