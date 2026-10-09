@@ -147,8 +147,8 @@ jobs:
             libhttp_proxy-aarch64-apple-darwin.dylib -output libhttp_proxy.dylib
           lipo -create http-proxy-tun-helper-x86_64-apple-darwin \
             http-proxy-tun-helper-aarch64-apple-darwin -output http-proxy-tun-helper
-          lipo -verify_arch arm64 x86_64 libhttp_proxy.dylib
-          lipo -verify_arch arm64 x86_64 http-proxy-tun-helper
+          lipo libhttp_proxy.dylib -verify_arch arm64 x86_64
+          lipo http-proxy-tun-helper -verify_arch arm64 x86_64
           # The Runner links -lhttp_proxy (see macos/Runner/Configs/Release.xcconfig),
           # and the linker copies whatever install name the dylib carries at that
           # moment into the executable's load command. Rust publishes it with the
