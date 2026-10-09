@@ -1,0 +1,110 @@
+name: Verify Windows installer
+run-name: Verify CipherRelay installer from build ${{ inputs.build_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'Completed Build Flutter App run containing windows-packages'
+        required: true
+      source_commit:
+        description: 'Expected full source SHA of that build'
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify build provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if ($env:BUILD_RUN_ID -notmatch '^\d+$' -or $env:SOURCE_COMMIT -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid build identity'
+          }
+          $build = gh api "repos/$env:REPOSITORY/actions/runs/$env:BUILD_RUN_ID" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $build.head_sha -ne $env:SOURCE_COMMIT -or $build.status -ne 'completed') {
+            throw 'Build source does not match'
+          }
+          $jobs = gh api "repos/$env:REPOSITORY/actions/runs/$env:BUILD_RUN_ID/jobs?per_page=100" | ConvertFrom-Json
+          $windows = @($jobs.jobs | Where-Object name -eq 'build-windows')
+          if ($LASTEXITCODE -ne 0 -or $windows.Count -ne 1 -or $windows[0].conclusion -ne 'success') {
+            throw 'Windows build did not succeed'
+          }
+
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: windows-packages
+          path: artifacts
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Install and compare the complete application
+        shell: pwsh
+        env:
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          $installers = @(Get-ChildItem artifacts -Recurse -Filter '*-setup.exe')
+          $portable = @(Get-ChildItem artifacts -Recurse -Filter 'cipherrelay-*-windows-x64.zip')
+          if ($installers.Count -ne 1 -or $portable.Count -ne 1) {
+            throw 'Expected one installer and one complete portable archive'
+          }
+          $destination = Join-Path $env:RUNNER_TEMP 'CipherRelay-verify'
+          $expanded = Join-Path $env:RUNNER_TEMP 'CipherRelay-portable'
+          New-Item -ItemType Directory verification | Out-Null
+          $log = Join-Path $PWD 'verification/install.log'
+          $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS',
+            '/TASKS=', "/DIR=`"$destination`"", "/LOG=`"$log`"")
+          $process = Start-Process -FilePath $installers[0].FullName -ArgumentList $arguments -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer failed with exit code $($process.ExitCode)" }
+          Expand-Archive -LiteralPath $portable[0].FullName -DestinationPath $expanded
+          $reference = Join-Path $expanded 'CipherRelay'
+          foreach ($required in @('CipherRelay.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $destination $required))) {
+              throw "Installed application is missing $required"
+            }
+          }
+          $verified = @()
+          foreach ($file in Get-ChildItem $reference -Recurse -File) {
+            $relative = [IO.Path]::GetRelativePath($reference, $file.FullName)
+            $installed = Join-Path $destination $relative
+            if (-not (Test-Path -LiteralPath $installed)) { throw "Missing installed file: $relative" }
+            $expected = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+            if ((Get-FileHash -LiteralPath $installed -Algorithm SHA256).Hash -ne $expected) {
+              throw "Installed file differs from portable build: $relative"
+            }
+            $verified += @{path = $relative; sha256 = $expected.ToLowerInvariant()}
+          }
+          $version = (Get-Item (Join-Path $destination 'CipherRelay.exe')).VersionInfo
+          $match = [regex]::Match($portable[0].Name, '^cipherrelay-v(.+)-(\d+)-windows-x64\.zip$')
+          if (-not $match.Success -or $version.ProductVersion -ne "$($match.Groups[1].Value)+$($match.Groups[2].Value)") {
+            throw 'Installed product version does not match the portable filename'
+          }
+          if ($version.ProductName -ne 'CipherRelay') { throw 'Installed product name is incorrect' }
+          $report = @{
+            status = 'verified'; build_run_id = $env:BUILD_RUN_ID; source_commit = $env:SOURCE_COMMIT
+            installer_sha256 = (Get-FileHash $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            portable_sha256 = (Get-FileHash $portable[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            product_name = $version.ProductName; product_version = $version.ProductVersion
+            installed_file_count = $verified.Count; files = $verified; real_device_tun_test = $false
+          }
+          $report | ConvertTo-Json -Depth 5 | Set-Content verification/installer-verification.json
+          Write-Host "Installed $($version.ProductName) $($version.ProductVersion); $($verified.Count) files match the portable bundle"
+
+      - name: Upload verification result
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: windows-installer-verification
+          path: verification/
+          if-no-files-found: error
