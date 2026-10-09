@@ -2,6 +2,7 @@ import 'src/services/app_brand.dart';
 import 'src/screens/store_privacy_screen.dart';
 import 'src/services/build_capabilities.dart';
 import 'l10n/app_language.dart';
+
 import 'dart:async' show unawaited;
 import 'dart:io';
 

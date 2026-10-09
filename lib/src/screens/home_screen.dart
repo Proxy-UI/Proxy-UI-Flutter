@@ -2,7 +2,9 @@ import '../services/app_brand.dart';
 import '../services/build_capabilities.dart';
 import 'store_privacy_screen.dart';
 import 'store_demo_screen.dart';
+
 import 'package:proxy_ui/l10n/app_language.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';

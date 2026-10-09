@@ -9,9 +9,8 @@ class StoreDemoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    void open() => Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const StoreDemoScreen()));
+    void open() => Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const StoreDemoScreen()));
     if (compact) {
       return IconButton(
         onPressed: open,

@@ -77,9 +77,8 @@ class NodeCatalogPreferences {
       sortByLatency: json['sortByLatency'] == true,
       latencies: Map.unmodifiable(latencies),
       nodes: List.unmodifiable(nodes),
-      fetchedAt: DateTime.tryParse(
-        json['fetchedAt']?.toString() ?? '',
-      )?.toLocal(),
+      fetchedAt: DateTime.tryParse(json['fetchedAt']?.toString() ?? '')
+          ?.toLocal(),
       verifications: Map.unmodifiable(verifications),
     );
   }

@@ -1,5 +1,7 @@
 import '../services/build_capabilities.dart';
+
 import 'package:proxy_ui/l10n/app_language.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -639,9 +641,8 @@ class _ProxyPageState extends State<ProxyPage> {
                           ? context.l10n.configureServerFirst
                           : '${state.config.serverHost}:${state.config.serverPort}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: 0.6),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -693,9 +694,9 @@ class _ProxyPageState extends State<ProxyPage> {
                                   : Icons.shield_outlined,
                               color: state.isTunRunning
                                   ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -707,9 +708,9 @@ class _ProxyPageState extends State<ProxyPage> {
                                             BuildCapabilities.isMacAppStore)
                                         ? context.l10n.vpnService
                                         : context.l10n.tunMode,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleSmall,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall,
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
@@ -744,9 +745,9 @@ class _ProxyPageState extends State<ProxyPage> {
                                               .deviceTrafficCaptureIsOff,
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
                                         ),
                                   ),
                                 ],

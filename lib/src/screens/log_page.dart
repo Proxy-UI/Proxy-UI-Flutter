@@ -275,9 +275,8 @@ class _LogPageState extends State<LogPage> {
             Icon(
               Icons.terminal,
               size: 64,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.2),
+              color: Theme.of(context).colorScheme.onSurface
+                  .withValues(alpha: 0.2),
             ),
             const SizedBox(height: 16),
             Text(
@@ -285,9 +284,8 @@ class _LogPageState extends State<LogPage> {
                   ? context.l10n.noMatchingLogs
                   : context.l10n.noLogsYet,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.5),
+                color: Theme.of(context).colorScheme.onSurface
+                    .withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 8),
@@ -296,9 +294,8 @@ class _LogPageState extends State<LogPage> {
                   ? context.l10n.tryADifferentSearchTerm
                   : context.l10n.startTheProxyToSeeActivity,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.4),
+                color: Theme.of(context).colorScheme.onSurface
+                    .withValues(alpha: 0.4),
               ),
             ),
           ],
@@ -348,9 +345,8 @@ class _LogEntry extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 11,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.5),
+                color: Theme.of(context).colorScheme.onSurface
+                    .withValues(alpha: 0.5),
               ),
             ),
           ),
@@ -413,9 +409,8 @@ class _LogEntry extends StatelessWidget {
         TextSpan(
           text: text.substring(index, index + query.length),
           style: TextStyle(
-            backgroundColor: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.3),
+            backgroundColor: Theme.of(context).colorScheme.primary
+                .withValues(alpha: 0.3),
             fontWeight: FontWeight.bold,
           ),
         ),

@@ -50,9 +50,8 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: TextScaler.linear(largeText ? 1.6 : 1)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(largeText ? 1.6 : 1)),
             child: child!,
           ),
           home: Scaffold(
@@ -250,8 +249,7 @@ void main() {
           TunInterfaceOwner(
             interfaceName: 'utun4',
             pid: 91459,
-            executablePath:
-                '/Applications/proxy_ui.app/Contents/MacOS/http-proxy-tun-helper',
+            executablePath: '/Applications/proxy_ui.app/Contents/MacOS/http-proxy-tun-helper',
             isCurrentApp: true,
           ),
         ],

@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-typedef TunCommandRunner =
-    Future<String> Function(String executable, List<String> arguments);
+typedef TunCommandRunner = Future<String> Function(
+  String executable,
+  List<String> arguments,
+);
 
 class TunRouteProbe {
   final String destination;
@@ -44,9 +46,10 @@ class TunInterfaceOwner {
       '/Applications/iOA/iOA.app/Contents/SmartVPN/SmartVPN';
 
   bool get isSmartVpn => executablePath == smartVpnPath;
-  String? get appPath => RegExp(
-    r'^(/.+?\.app)/Contents/',
-  ).firstMatch(executablePath ?? '')?.group(1);
+  String? get appPath =>
+      RegExp(r'^(/.+?\.app)/Contents/')
+          .firstMatch(executablePath ?? '')
+          ?.group(1);
 
   String get displayName {
     if (isCurrentApp) return 'CipherRelay';

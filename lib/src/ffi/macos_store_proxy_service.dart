@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/services.dart';
+
 import '../services/macos_vpn_service.dart';
 import 'proxy_ffi.dart';
 import 'proxy_service.dart';

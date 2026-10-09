@@ -1,4 +1,5 @@
 import 'package:proxy_ui/l10n/app_language.dart';
+
 import 'dart:ffi';
 import 'dart:io';
 
@@ -232,10 +233,12 @@ final class ProxyConfigV7 extends Struct {
 }
 
 // FFI function signatures
-typedef _ProxySetLogCallbackNative =
-    Void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
-typedef _ProxySetLogCallbackDart =
-    void Function(Pointer<NativeFunction<LogCallbackNative>> callback);
+typedef _ProxySetLogCallbackNative = Void Function(
+  Pointer<NativeFunction<LogCallbackNative>> callback,
+);
+typedef _ProxySetLogCallbackDart = void Function(
+  Pointer<NativeFunction<LogCallbackNative>> callback,
+);
 
 typedef _ProxyInitLoggingNative = Void Function();
 typedef _ProxyInitLoggingDart = void Function();
@@ -246,71 +249,109 @@ typedef _ProxySetLogLevelDart = void Function(int level);
 typedef _ProxyCreateNative = Pointer<Void> Function();
 typedef _ProxyCreateDart = Pointer<Void> Function();
 
-typedef _ProxyStartNative =
-    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfig> config);
-typedef _ProxyStartDart =
-    int Function(Pointer<Void> handle, Pointer<ProxyConfig> config);
+typedef _ProxyStartNative = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfig> config,
+);
+typedef _ProxyStartDart = int Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfig> config,
+);
 
-typedef _ProxyStartV2Native =
-    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV2> config);
-typedef _ProxyStartV2Dart =
-    int Function(Pointer<Void> handle, Pointer<ProxyConfigV2> config);
+typedef _ProxyStartV2Native = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV2> config,
+);
+typedef _ProxyStartV2Dart = int Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV2> config,
+);
 
-typedef _ProxyStartV3Native =
-    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV3> config);
-typedef _ProxyStartV3Dart =
-    int Function(Pointer<Void> handle, Pointer<ProxyConfigV3> config);
+typedef _ProxyStartV3Native = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV3> config,
+);
+typedef _ProxyStartV3Dart = int Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV3> config,
+);
 
-typedef _ProxyStartV4Native =
-    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV4> config);
-typedef _ProxyStartV4Dart =
-    int Function(Pointer<Void> handle, Pointer<ProxyConfigV4> config);
+typedef _ProxyStartV4Native = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV4> config,
+);
+typedef _ProxyStartV4Dart = int Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV4> config,
+);
 
-typedef _ProxyStartV7Native =
-    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV7> config);
-typedef _ProxyStartV7Dart =
-    int Function(Pointer<Void> handle, Pointer<ProxyConfigV7> config);
+typedef _ProxyStartV7Native = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV7> config,
+);
+typedef _ProxyStartV7Dart = int Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV7> config,
+);
 
-typedef _ProxyStartV5Native =
-    Int32 Function(Pointer<Void> handle, Pointer<ProxyConfigV5> config);
-typedef _ProxyStartV5Dart =
-    int Function(Pointer<Void> handle, Pointer<ProxyConfigV5> config);
+typedef _ProxyStartV5Native = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV5> config,
+);
+typedef _ProxyStartV5Dart = int Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV5> config,
+);
 
-typedef _ProxySwitchUpstreamNative =
-    Int32 Function(
-      Pointer<Void> handle,
-      Pointer<Utf8> serverHost,
-      Uint16 serverPort,
-    );
-typedef _ProxySwitchUpstreamDart =
-    int Function(
-      Pointer<Void> handle,
-      Pointer<Utf8> serverHost,
-      int serverPort,
-    );
+typedef _ProxySwitchUpstreamNative = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> serverHost,
+  Uint16 serverPort,
+);
+typedef _ProxySwitchUpstreamDart = int Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> serverHost,
+  int serverPort,
+);
 
-typedef _ProxySetTunBypassProcessesNative =
-    Int32 Function(Pointer<Void> handle, Pointer<Utf8> processes);
-typedef _ProxySetTunBypassProcessesDart =
-    int Function(Pointer<Void> handle, Pointer<Utf8> processes);
+typedef _ProxySetTunBypassProcessesNative = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> processes,
+);
+typedef _ProxySetTunBypassProcessesDart = int Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> processes,
+);
 
-typedef _ProxyStartTunNative =
-    Int32 Function(Pointer<Void> handle, Pointer<Utf8> processes);
-typedef _ProxyStartTunDart =
-    int Function(Pointer<Void> handle, Pointer<Utf8> processes);
+typedef _ProxyStartTunNative = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> processes,
+);
+typedef _ProxyStartTunDart = int Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> processes,
+);
 
-typedef _ProxyStartAndroidTunNative =
-    Int32 Function(Pointer<Void> handle, Int32 tunFd, Uint16 mtu);
-typedef _ProxyStartAndroidTunDart =
-    int Function(Pointer<Void> handle, int tunFd, int mtu);
+typedef _ProxyStartAndroidTunNative = Int32 Function(
+  Pointer<Void> handle,
+  Int32 tunFd,
+  Uint16 mtu,
+);
+typedef _ProxyStartAndroidTunDart = int Function(
+  Pointer<Void> handle,
+  int tunFd,
+  int mtu,
+);
 
 typedef _ProxyGetStringNative = Pointer<Utf8> Function();
 typedef _ProxyGetStringDart = Pointer<Utf8> Function();
 
-typedef _ProxyGetHandleStringNative =
-    Pointer<Utf8> Function(Pointer<Void> handle);
-typedef _ProxyGetHandleStringDart =
-    Pointer<Utf8> Function(Pointer<Void> handle);
+typedef _ProxyGetHandleStringNative = Pointer<Utf8> Function(
+  Pointer<Void> handle,
+);
+typedef _ProxyGetHandleStringDart = Pointer<Utf8> Function(
+  Pointer<Void> handle,
+);
 
 typedef _ProxyStopNative = Int32 Function(Pointer<Void> handle);
 typedef _ProxyStopDart = int Function(Pointer<Void> handle);
@@ -328,104 +369,101 @@ typedef _ProxyFreeStringNative = Void Function(Pointer<Utf8> s);
 typedef _ProxyFreeStringDart = void Function(Pointer<Utf8> s);
 
 // proxy_test_latency
-typedef _ProxyTestLatencyNative =
-    LatencyResult Function(
-      Pointer<Void> handle,
-      Pointer<Utf8> testUrl,
-      Uint32 timeoutMs,
-    );
-typedef _ProxyTestLatencyDart =
-    LatencyResult Function(
-      Pointer<Void> handle,
-      Pointer<Utf8> testUrl,
-      int timeoutMs,
-    );
+typedef _ProxyTestLatencyNative = LatencyResult Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> testUrl,
+  Uint32 timeoutMs,
+);
+typedef _ProxyTestLatencyDart = LatencyResult Function(
+  Pointer<Void> handle,
+  Pointer<Utf8> testUrl,
+  int timeoutMs,
+);
 
 // proxy_get_server_nodes
-typedef _ProxyGetServerNodesNative =
-    NodesResult Function(
-      Pointer<Utf8> serverHost,
-      Uint16 serverPort,
-      Pointer<Utf8> sessionKey,
-      Uint32 timeoutMs,
-    );
-typedef _ProxyGetServerNodesDart =
-    NodesResult Function(
-      Pointer<Utf8> serverHost,
-      int serverPort,
-      Pointer<Utf8> sessionKey,
-      int timeoutMs,
-    );
+typedef _ProxyGetServerNodesNative = NodesResult Function(
+  Pointer<Utf8> serverHost,
+  Uint16 serverPort,
+  Pointer<Utf8> sessionKey,
+  Uint32 timeoutMs,
+);
+typedef _ProxyGetServerNodesDart = NodesResult Function(
+  Pointer<Utf8> serverHost,
+  int serverPort,
+  Pointer<Utf8> sessionKey,
+  int timeoutMs,
+);
 
 // proxy_get_server_groups
-typedef _ProxyGetServerGroupsNative =
-    GroupsResult Function(
-      Pointer<Utf8> serverHost,
-      Uint16 serverPort,
-      Pointer<Utf8> sessionKey,
-      Uint32 timeoutMs,
-    );
-typedef _ProxyGetServerGroupsDart =
-    GroupsResult Function(
-      Pointer<Utf8> serverHost,
-      int serverPort,
-      Pointer<Utf8> sessionKey,
-      int timeoutMs,
-    );
+typedef _ProxyGetServerGroupsNative = GroupsResult Function(
+  Pointer<Utf8> serverHost,
+  Uint16 serverPort,
+  Pointer<Utf8> sessionKey,
+  Uint32 timeoutMs,
+);
+typedef _ProxyGetServerGroupsDart = GroupsResult Function(
+  Pointer<Utf8> serverHost,
+  int serverPort,
+  Pointer<Utf8> sessionKey,
+  int timeoutMs,
+);
 
 // proxy_free_latency_result
-typedef _ProxyFreeLatencyResultNative =
-    Void Function(Pointer<LatencyResult> result);
-typedef _ProxyFreeLatencyResultDart =
-    void Function(Pointer<LatencyResult> result);
+typedef _ProxyFreeLatencyResultNative = Void Function(
+  Pointer<LatencyResult> result,
+);
+typedef _ProxyFreeLatencyResultDart = void Function(
+  Pointer<LatencyResult> result,
+);
 
 // proxy_free_nodes_result
-typedef _ProxyFreeNodesResultNative =
-    Void Function(Pointer<NodesResult> result);
+typedef _ProxyFreeNodesResultNative = Void Function(
+  Pointer<NodesResult> result,
+);
 typedef _ProxyFreeNodesResultDart = void Function(Pointer<NodesResult> result);
 
-typedef _ProxyProbeNodeNative =
-    NodeProbeResult Function(
-      Pointer<Utf8> serverHost,
-      Uint16 serverPort,
-      Int32 forceCodec,
-      Uint32 timeoutMs,
-    );
-typedef _ProxyProbeNodeDart =
-    NodeProbeResult Function(
-      Pointer<Utf8> serverHost,
-      int serverPort,
-      int forceCodec,
-      int timeoutMs,
-    );
+typedef _ProxyProbeNodeNative = NodeProbeResult Function(
+  Pointer<Utf8> serverHost,
+  Uint16 serverPort,
+  Int32 forceCodec,
+  Uint32 timeoutMs,
+);
+typedef _ProxyProbeNodeDart = NodeProbeResult Function(
+  Pointer<Utf8> serverHost,
+  int serverPort,
+  int forceCodec,
+  int timeoutMs,
+);
 
-typedef _ProxyProbeNodeV3Native =
-    NodeProbeResult Function(
-      Pointer<Utf8> serverHost,
-      Uint16 serverPort,
-      Int32 forceCodec,
-      Uint32 timeoutMs,
-      Int32 wireProtocol,
-    );
-typedef _ProxyProbeNodeV3Dart =
-    NodeProbeResult Function(
-      Pointer<Utf8> serverHost,
-      int serverPort,
-      int forceCodec,
-      int timeoutMs,
-      int wireProtocol,
-    );
+typedef _ProxyProbeNodeV3Native = NodeProbeResult Function(
+  Pointer<Utf8> serverHost,
+  Uint16 serverPort,
+  Int32 forceCodec,
+  Uint32 timeoutMs,
+  Int32 wireProtocol,
+);
+typedef _ProxyProbeNodeV3Dart = NodeProbeResult Function(
+  Pointer<Utf8> serverHost,
+  int serverPort,
+  int forceCodec,
+  int timeoutMs,
+  int wireProtocol,
+);
 
-typedef _ProxyFreeNodeProbeResultNative =
-    Void Function(Pointer<NodeProbeResult> result);
-typedef _ProxyFreeNodeProbeResultDart =
-    void Function(Pointer<NodeProbeResult> result);
+typedef _ProxyFreeNodeProbeResultNative = Void Function(
+  Pointer<NodeProbeResult> result,
+);
+typedef _ProxyFreeNodeProbeResultDart = void Function(
+  Pointer<NodeProbeResult> result,
+);
 
 // proxy_free_groups_result
-typedef _ProxyFreeGroupsResultNative =
-    Void Function(Pointer<GroupsResult> result);
-typedef _ProxyFreeGroupsResultDart =
-    void Function(Pointer<GroupsResult> result);
+typedef _ProxyFreeGroupsResultNative = Void Function(
+  Pointer<GroupsResult> result,
+);
+typedef _ProxyFreeGroupsResultDart = void Function(
+  Pointer<GroupsResult> result,
+);
 
 /// FFI bindings for proxy library.
 class ProxyFFI {

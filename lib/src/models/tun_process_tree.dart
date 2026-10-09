@@ -59,9 +59,8 @@ bool tunProcessMatchesQuery(TunProcessInfo process, String query) {
     return true;
   }
 
-  final words = RegExp(
-    r'[a-z0-9]+',
-  ).allMatches(process.displayName.toLowerCase());
+  final words = RegExp(r'[a-z0-9]+')
+      .allMatches(process.displayName.toLowerCase());
   final initialism = words.map((match) => match.group(0)![0]).join();
   return initialism.length > 1 && initialism.contains(normalized);
 }

@@ -1,4 +1,5 @@
 import 'package:proxy_ui/l10n/app_language.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -420,9 +421,8 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
 
     return Material(
       color: selected
-          ? Theme.of(
-              context,
-            ).colorScheme.secondaryContainer.withValues(alpha: .38)
+          ? Theme.of(context).colorScheme.secondaryContainer
+                .withValues(alpha: .38)
           : Colors.transparent,
       child: InkWell(
         onTap: isSelf || inherited ? null : () => _setSelected(node, !selected),

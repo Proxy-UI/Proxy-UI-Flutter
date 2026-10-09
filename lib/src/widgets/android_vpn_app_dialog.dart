@@ -1,4 +1,5 @@
 import 'package:proxy_ui/l10n/app_language.dart';
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -336,9 +337,8 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
     final selected = _selected.contains(application.packageName);
     return Material(
       color: selected
-          ? Theme.of(
-              context,
-            ).colorScheme.secondaryContainer.withValues(alpha: .38)
+          ? Theme.of(context).colorScheme.secondaryContainer
+                .withValues(alpha: .38)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
