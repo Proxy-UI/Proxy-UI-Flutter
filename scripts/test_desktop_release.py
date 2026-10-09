@@ -8,6 +8,7 @@ import unittest
 from collect_desktop_release import collect, digest
 from package_windows_portable import package
 from release_artifact_name import artifact_name
+from stage_windows_installer import stage
 
 
 class DesktopReleaseTest(unittest.TestCase):
@@ -73,6 +74,19 @@ class DesktopReleaseTest(unittest.TestCase):
     def test_wrong_tag_cannot_label_old_version(self):
         with self.assertRaisesRegex(ValueError, 'tag must match'):
             collect(self.artifacts, self.root / 'release', 'v0.0.0', '0.4.37', 'b' * 40)
+
+    def test_fastforge_installer_is_staged_without_changing_bytes(self):
+        version, build = self.exe.name.removeprefix('cipherrelay-v').split('-')[:2]
+        original = self.root / f'proxy_ui-{version}+{build}-windows-setup.exe'
+        original.write_bytes(b'MZinstaller')
+        delivered = stage(self.root, self.root / 'staged')
+        self.assertEqual(delivered.name, self.exe.name)
+        self.assertEqual(delivered.read_bytes(), original.read_bytes())
+
+    def test_old_fastforge_installer_cannot_be_relabelled_as_new_version(self):
+        (self.root / 'proxy_ui-0.0.0+1-windows-setup.exe').write_bytes(b'MZold')
+        with self.assertRaisesRegex(ValueError, 'exactly one'):
+            stage(self.root, self.root / 'staged')
 
 
 if __name__ == '__main__':

@@ -312,12 +312,15 @@ jobs:
       - name: Package complete Windows portable directory
         run: python scripts/package_windows_portable.py build/windows/x64/runner/Release build/packages
 
+      - name: Stage versioned Windows installer
+        run: python scripts/stage_windows_installer.py dist build/packages
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7.0.2
         with:
           name: windows-packages
           path: |
-            dist/**/*.exe
+            build/packages/cipherrelay-*-windows-x64-setup.exe
             build/packages/cipherrelay-*-windows-x64.zip
           if-no-files-found: error
 
