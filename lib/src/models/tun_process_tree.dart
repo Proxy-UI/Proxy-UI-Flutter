@@ -192,6 +192,7 @@ bool _isWindowsSystemPath(String path) {
 /// and a Windows name simply never appears in a macOS snapshot.
 const _systemBoundaryNames = <String>{
   // Windows system and shell processes.
+  'cipherrelay',
   'cmd',
   'conhost',
   'csrss',

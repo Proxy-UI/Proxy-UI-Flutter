@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:tray_manager/tray_manager.dart';
+import 'package:tray_manager/legacy.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models/node_model.dart';
@@ -366,19 +366,12 @@ class TrayService with TrayListener {
 
   Future<void> _popUpContextMenu() async {
     await _enqueue(_applyMenu);
-    // `bringAppToFront` is the plugin's only way to reach the
-    // `SetForegroundWindow` that Win32 requires before `TrackPopupMenu`:
-    // without it the menu belongs to a window that is not in the foreground,
-    // and Windows then leaves it on screen when the user clicks away or opens
-    // something else. The flag is marked deprecated upstream but is still the
-    // documented fix, and 0.5.3 is the newest release.
-    //
+    // nativeapi owns foreground handling for the native popup menu.
     // Unbounded because `TrackPopupMenu` is modal: the call does not return
     // until the menu closes, so the shared timeout would fire on any menu a
     // person actually reads before choosing.
     await _call(
-      // ignore: deprecated_member_use
-      () => trayManager.popUpContextMenu(bringAppToFront: true),
+      () => trayManager.popUpContextMenu(),
       'popUpContextMenu',
       bounded: false,
     );

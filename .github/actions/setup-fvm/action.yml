@@ -1,0 +1,22 @@
+name: Setup pinned FVM SDK
+description: Install FVM and select the SDK declared in .fvmrc
+runs:
+  using: composite
+  steps:
+    - name: Bootstrap FVM tooling
+      shell: bash
+      run: |
+        # This Dart invocation installs FVM itself; project commands use FVM.
+        dart pub global activate fvm 4.1.0
+        python - <<'PYTHON'
+        import os
+        from pathlib import Path
+        cache = os.environ.get('PUB_CACHE')
+        if not cache:
+            cache = str(Path(os.environ['LOCALAPPDATA']) / 'Pub/Cache') if os.name == 'nt' else str(Path.home() / '.pub-cache')
+        with open(os.environ['GITHUB_PATH'], 'a') as output:
+            output.write(str(Path(cache) / 'bin') + '\n')
+        PYTHON
+    - name: Install project SDK
+      shell: bash
+      run: fvm install

@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import plistlib
 import subprocess
 import tempfile
 import unittest
@@ -13,6 +14,31 @@ import package_release
 
 
 class ReleaseSafetyTests(unittest.TestCase):
+    def test_mounted_app_assessment_failure_is_fatal_and_detaches_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            info = {"CFBundleIdentifier": "com.example.test", "CFBundleExecutable": "CipherRelay",
+                    "CFBundleShortVersionString": "1.2.22", "CFBundleVersion": "49"}
+            calls = []
+
+            def run(*args):
+                calls.append(args)
+                if args[:2] == ("hdiutil", "attach"):
+                    contents = work / "mounted/CipherRelay.app/Contents"
+                    contents.mkdir(parents=True)
+                    (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+                if args[:2] == ("codesign", "--display"):
+                    return "TeamIdentifier=TEAM\nAuthority=Developer ID Application: Test\n"
+                if args[0] == "spctl":
+                    raise RuntimeError("Gatekeeper rejected mounted application")
+                return ""
+
+            with patch.object(package_release, 'run', side_effect=run):
+                with self.assertRaisesRegex(RuntimeError, 'Gatekeeper rejected'):
+                    package_release.verify_mounted_app(work / 'test.dmg', work, info, 'TEAM', work)
+            self.assertEqual(calls[-1], ("hdiutil", "detach", work / "mounted"))
+            self.assertFalse((work / 'mounted-app-verification.txt').exists())
+
     def test_rejected_notarization_preserves_submission_and_diagnostics(self):
         result = subprocess.CompletedProcess([], 1, '{"id":"rejected-id","status":"Invalid"}', '')
         with tempfile.TemporaryDirectory() as directory:

@@ -160,6 +160,30 @@ void main() {
     expect(roots['code']!.children.single.process.name, 'code helper');
   });
 
+  test('renamed proxy does not adopt applications it launches', () {
+    for (final name in ['proxy_ui', 'cipherrelay']) {
+      final forest = buildTunProcessForest([
+        TunProcessInfo(
+          name: name,
+          pids: [100],
+          executablePaths: ['$name.exe'],
+          instances: [TunProcessInstance(pid: 100)],
+        ),
+        const TunProcessInfo(
+          name: 'firefox',
+          pids: [200],
+          executablePaths: ['firefox.exe'],
+          instances: [TunProcessInstance(pid: 200, parentPid: 100)],
+        ),
+      ]);
+      expect(
+        forest.map((node) => node.process.name),
+        containsAll([name, 'firefox']),
+      );
+      expect(forest.every((node) => node.children.isEmpty), isTrue);
+    }
+  });
+
   test('TUN process search recognizes game initialisms', () {
     const process = TunProcessInfo(
       name: 'league of legends',

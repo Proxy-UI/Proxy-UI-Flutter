@@ -128,7 +128,7 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
-		3439BC3F19FFD7A3131AA289 /* CipherRelay Store.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CipherRelay Store.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3439BC3F19FFD7A3131AA289 /* CipherRelay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CipherRelay.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		34E73F43F4F3853ED2DFB762 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		36E2F2A797A74398AAE12FDF /* Pods-RunnerTests.profile-appstore.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile-appstore.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile-appstore.xcconfig"; sourceTree = "<group>"; };
 		38B93742B15B2DEA6B23DA84 /* Pods_RunnerStore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerStore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -248,7 +248,7 @@
 			children = (
 				33CC10ED2044A3C60003C045 /* CipherRelay.app */,
 				331C80D5294CF71000263BE5 /* RunnerTests.xctest */,
-				3439BC3F19FFD7A3131AA289 /* CipherRelay Store.app */,
+				3439BC3F19FFD7A3131AA289 /* CipherRelay.app */,
 				ACD6FD7E8A4DBFCB6EDED10A /* PacketTunnel.appex */,
 			);
 			name = Products;
@@ -427,7 +427,7 @@
 			);
 			name = RunnerStore;
 			productName = RunnerStore;
-			productReference = 3439BC3F19FFD7A3131AA289 /* CipherRelay Store.app */;
+			productReference = 3439BC3F19FFD7A3131AA289 /* CipherRelay.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A9A6E938F1F57E8AE391B3AF /* PacketTunnel */ = {
@@ -913,7 +913,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store;
 				PRODUCT_MODULE_NAME = Runner;
-				PRODUCT_NAME = "CipherRelay Store";
+				PRODUCT_NAME = "CipherRelay";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -1281,7 +1281,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store;
 				PRODUCT_MODULE_NAME = Runner;
-				PRODUCT_NAME = "CipherRelay Store";
+				PRODUCT_NAME = "CipherRelay";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -1383,7 +1383,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store;
 				PRODUCT_MODULE_NAME = Runner;
-				PRODUCT_NAME = "CipherRelay Store";
+				PRODUCT_NAME = "CipherRelay";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_VERSION = 5.0;
@@ -1594,7 +1594,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store;
 				PRODUCT_MODULE_NAME = Runner;
-				PRODUCT_NAME = "CipherRelay Store";
+				PRODUCT_NAME = "CipherRelay";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_VERSION = 5.0;
@@ -1617,7 +1617,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store;
 				PRODUCT_MODULE_NAME = Runner;
-				PRODUCT_NAME = "CipherRelay Store";
+				PRODUCT_NAME = "CipherRelay";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_VERSION = 5.0;
@@ -1649,7 +1649,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store;
 				PRODUCT_MODULE_NAME = Runner;
-				PRODUCT_NAME = "CipherRelay Store";
+				PRODUCT_NAME = "CipherRelay";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 				SWIFT_VERSION = 5.0;

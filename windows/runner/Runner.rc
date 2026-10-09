@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "com.proxyui" "\0"
             VALUE "FileDescription", "CipherRelay" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "proxy_ui" "\0"
+            VALUE "InternalName", "CipherRelay" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.proxyui. All rights reserved." "\0"
-            VALUE "OriginalFilename", "proxy_ui.exe" "\0"
+            VALUE "OriginalFilename", "CipherRelay.exe" "\0"
             VALUE "ProductName", "CipherRelay" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

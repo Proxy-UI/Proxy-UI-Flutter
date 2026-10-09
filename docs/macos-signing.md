@@ -7,6 +7,19 @@ the app and DMG, and checks Gatekeeper before uploading the DMG. The disk image
 contains the app and an Applications shortcut for drag-and-drop installation.
 macOS may still ask the normal first-open confirmation for an Internet download.
 
+The final DMG is also mounted read-only before delivery. Its enclosed app must
+match the intended version and build, pass deep signature verification, retain
+its stapled ticket, and pass Gatekeeper. Where available, `syspolicy_check`
+also checks distribution readiness. The results are saved in
+`mounted-app-verification.txt`; any rejection stops packaging.
+
+When diagnosing an "unidentified developer" warning, record the exact app path
+and version. The direct-download app was renamed from `proxy_ui.app` to
+`CipherRelay.app`; installing the new name can leave the old app and Dock
+shortcut in place. Open the new app from Applications and compare the DMG's
+SHA-256 with its release report. Do not remove quarantine or disable Gatekeeper
+to validate a release.
+
 Signing credentials are required even for a build with `create_release: false`.
 Missing credentials, incomplete universal binaries, nonportable library paths,
 or rejected notarization stop the macOS job and prevent release publication.
@@ -41,6 +54,19 @@ also covers failed/cancelled jobs. Only the DMG and verification logs are upload
 
 ## Local signing or re-signing an existing release
 
+For a new release, first rebuild both native architectures from the parent
+repository, then build Flutter from this submodule:
+
+```sh
+# Parent repository root:
+./scripts/macos/stage-ui-native.sh --configuration Release --universal
+cd ui/flutter
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 fvm flutter build macos --release
+```
+
+Both `aarch64-apple-darwin` and `x86_64-apple-darwin` Rust targets must be installed.
+Sign `build/macos/Build/Products/Release/CipherRelay.app` with the command below.
+
 Keep the original DMG as a backup. Mount it read-only, copy `CipherRelay.app` out
 using `ditto`, and unmount it. Use the same script as CI, with an existing local
 Developer ID identity and a `notarytool` keychain profile:
@@ -54,7 +80,7 @@ export APPLE_NOTARY_PROFILE='proxy-ui-notary'
 # export APPLE_NOTARY_KEYCHAIN='/path/to/notary.keychain-db'
 python3 scripts/macos/package_release.py \
   --app /path/to/CipherRelay.app \
-  --output /path/to/new/cipherrelay-macos.dmg
+  --output "build/packages/$(python3 scripts/release_artifact_name.py macos universal dmg)"
 ```
 
 The input app is copied before signing. An existing output file is never

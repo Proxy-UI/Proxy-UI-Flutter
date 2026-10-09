@@ -7,14 +7,49 @@ A cross-platform Flutter GUI for encrypted proxy client.
 CipherRelay (formerly Proxy UI) keeps a direct-download edition and a separate
 Mac App Store target. The direct edition produces `CipherRelay.app` and keeps
 its privileged helper, system proxy, LAN access and process bypass. The
-`appstore` scheme produces sandboxed `CipherRelay Store.app` with its own bundle
+`appstore` scheme produces sandboxed `CipherRelay.app` with its own bundle
 ID and Packet Tunnel extension. See [the store build guide](docs/macos-app-store.md).
 Version 1.2.16 (42) was submitted on 14 September 2026; it has not passed App Review.
 
-App IDs, Dart package imports, Windows/Linux executable names and persisted
-settings keys remain unchanged for upgrade compatibility. Repository URLs also
-remain unchanged. Replace the old direct-download app with `CipherRelay.app`
-when installing an update; the Store app has a separate settings container.
+## Application and package names
+
+Every platform displays **CipherRelay**. The Windows executable is
+`CipherRelay.exe`, Linux runs `CipherRelay`, and iOS/macOS produce
+`CipherRelay.app`. Both macOS editions use this name but keep separate bundle
+IDs and settings; use separate installation folders to keep both editions.
+Replace old shortcuts that still point to `proxy_ui` after installing an update.
+
+App IDs, Dart imports (`package:proxy_ui`), settings keys, Windows installer ID,
+and Windows startup/single-instance identifiers retain their existing values.
+Linux keeps GTK ID `com.proxyui.proxy_ui`, which also owns its settings directory.
+The native `http_proxy` library and CLI program names are unchanged.
+
+Delivery filenames use
+`cipherrelay-v<version>-<build>-<platform>-<architecture>.<extension>`.
+`scripts/release_artifact_name.py` reads the version from `pubspec.yaml`; use it
+for local packages as well as the desktop workflow:
+
+```sh
+python3 scripts/release_artifact_name.py macos universal dmg
+python3 scripts/release_artifact_name.py windows x64 zip
+python3 scripts/release_artifact_name.py linux x64 tar.gz
+python3 scripts/release_artifact_name.py android arm64-v8a apk
+python3 scripts/release_artifact_name.py ios arm64 ipa
+```
+
+The Windows `production` Fastforge jobs target the x64 CI bundle; their
+`artifact_name` templates in `distribute_options.yaml` use the same convention,
+with `-setup.exe` for the installer. Its `executable_name` points to
+`CipherRelay.exe`. ZIP naming is configured in `distribute_options.yaml`, not
+an unused ZIP `make_config.yaml`.
+
+Android and iOS packages must still be built and signed locally. Copy the
+verified APK/IPA to `build/packages/` using the filename printed above; never
+publish Flutter's generic intermediate filename. Increment Android's build
+number and verify its application ID and signing certificate before delivery.
+Android retains `com.proxyui.proxy_ui`, Apple direct apps retain
+`com.proxyui.proxyUi`, and the Mac App Store edition retains
+`com.proxyui.proxyUi.store`.
 
 ## Interface language
 
@@ -79,7 +114,7 @@ restored before terminating the process.
 - Visual Studio 2022 with the Desktop development with C++ workload (Windows)
 - Rust toolchain from the parent `proxy-everything` repository
 
-Flutter is pinned to 3.44.9 in `.fvmrc`. Do not invoke a globally installed
+Flutter is pinned to 3.47.7 in `.fvmrc`. Do not invoke a globally installed
 `flutter` or `dart`; use `fvm flutter` and `fvm dart` so local and CI builds use
 the same SDK.
 

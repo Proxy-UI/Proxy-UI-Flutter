@@ -1,5 +1,5 @@
 // Dedicated store target: the default Runner remains the Developer ID build.
-PRODUCT_NAME = CipherRelay Store
+PRODUCT_NAME = CipherRelay
 PRODUCT_BUNDLE_IDENTIFIER = com.proxyui.proxyUi.store
 PRODUCT_MODULE_NAME = Runner
 MACOSX_DEPLOYMENT_TARGET = 13.0

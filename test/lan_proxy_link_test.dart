@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'support/fake_network_interface.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,22 +7,6 @@ import 'package:proxy_ui/src/services/local_network_service.dart';
 import 'package:proxy_ui/src/widgets/lan_proxy_link.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toastification/toastification.dart';
-
-class _FakeInterface implements NetworkInterface {
-  _FakeInterface(this.name, List<String> addresses)
-    : addresses = <InternetAddress>[
-        for (final address in addresses) InternetAddress(address),
-      ];
-
-  @override
-  final String name;
-
-  @override
-  final List<InternetAddress> addresses;
-
-  @override
-  int get index => 0;
-}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -60,7 +44,7 @@ void main() {
               port: 1080,
               networkService: LocalNetworkService(
                 interfaceLookup: () async => [
-                  _FakeInterface('WLAN', ['192.168.21.33']),
+                  FakeNetworkInterface('WLAN', ['192.168.21.33']),
                 ],
               ),
             ),
@@ -88,8 +72,8 @@ void main() {
               port: 1080,
               networkService: LocalNetworkService(
                 interfaceLookup: () async => [
-                  _FakeInterface('WLAN', ['192.168.21.5']),
-                  _FakeInterface('以太网 2', ['192.168.255.10']),
+                  FakeNetworkInterface('WLAN', ['192.168.21.5']),
+                  FakeNetworkInterface('以太网 2', ['192.168.255.10']),
                 ],
               ),
             ),

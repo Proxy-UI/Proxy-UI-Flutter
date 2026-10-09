@@ -5,92 +5,87 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      check_android:
+        description: 'Also compile Android (CI APKs must never be distributed)'
+        type: boolean
+        default: false
 
 env:
   PRIVATE_REPO: acking-you/proxy-everything
-  # Update this version when new native library releases are available
-  LIB_VERSION: '0.4.35'
+  LIB_VERSION: '0.4.37'
+  FLUTTER_VERSION: '3.47.7'
 
 jobs:
-  analyze-and-build:
+  analyze-and-test:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v7.0.1
+      - name: Install native test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libx11-dev libxi-dev
+      - uses: subosito/flutter-action@v2.23.0
         with:
-          # Keep in step with `.fvmrc` and `build.yaml`. `dart format` output
-          # changes between SDKs, so checking formatting on a different one
-          # fails on code the pinned SDK considers correctly formatted.
-          flutter-version: '3.44.9'
-          channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
-
+      - uses: ./.github/actions/setup-fvm
       - name: Get dependencies
-        run: flutter pub get
+        run: fvm flutter pub get
+      - name: Analyze code
+        run: fvm flutter analyze --no-fatal-infos
+      - name: Check formatting
+        run: fvm dart format --set-exit-if-changed lib/ test/
+      - name: Run tests
+        run: fvm flutter test
+      - name: Test desktop packaging
+        run: |
+          python3 -B -m unittest discover -s scripts -p 'test_*.py'
+          python3 -B -m unittest discover -s scripts/macos -p 'test_*.py'
 
+  # Mobile packaging is excluded from this desktop release. Keep a manually
+  # selectable compile check; distributable APKs still require the local key.
+  android-compile-check:
+    if: github.event_name == 'workflow_dispatch' && inputs.check_android
+    needs: analyze-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/setup-fvm
+      - name: Get dependencies
+        run: fvm flutter pub get
       - name: Download Android native libraries
         env:
           GH_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
         run: |
           mkdir -p native/android/{arm64-v8a,armeabi-v7a,x86_64}
           WORK_DIR=$(mktemp -d)
-
-          # Download Android libraries
+          trap 'rm -rf "$WORK_DIR"' EXIT
+          gh release download "$LIB_VERSION" -R "$PRIVATE_REPO" -p SHA256SUMS -D "$WORK_DIR"
           for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
-            echo "Downloading Android: $target"
-            gh release download "$LIB_VERSION" \
-              -R "$PRIVATE_REPO" \
-              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" \
-              -D "$WORK_DIR" || continue
+            gh release download "$LIB_VERSION" -R "$PRIVATE_REPO" \
+              -p "libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -D "$WORK_DIR"
+            (cd "$WORK_DIR" && sha256sum --ignore-missing -c SHA256SUMS)
             tar -xzf "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}.tar.gz" -C "$WORK_DIR"
             case $target in
               aarch64-linux-android) dest="arm64-v8a" ;;
               armv7-linux-androideabi) dest="armeabi-v7a" ;;
               x86_64-linux-android) dest="x86_64" ;;
             esac
-            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.so" "native/android/$dest/" || true
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/libhttp_proxy.so" "native/android/$dest/"
           done
-
-          echo "Downloaded libraries:"
-          find native/android -type f -name "*.so"
-
-      - name: Analyze code
-        run: flutter analyze --no-fatal-infos
-
-      - name: Check formatting
-        run: dart format --set-exit-if-changed lib/ test/
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Build APK (Android)
-        run: flutter build apk --release
-
-      - name: Upload APK (compile check only, not distributable)
-        uses: actions/upload-artifact@v4
+      - name: Compile APK only
+        run: fvm flutter build apk --release
+      - uses: actions/upload-artifact@v7.0.2
         with:
-          name: ci-check-apk
+          name: ci-check-apk-not-distributable
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
-
-      - name: Generate download summary
-        run: |
-          echo "## ✅ Flutter CI Passed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Code Quality" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ Analysis passed" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ Formatting checked" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ Tests passed" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ APK compiled" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 APK (compile check only)" >> $GITHUB_STEP_SUMMARY
-          echo "> ⚠️ Signed with a debug key generated on this runner, so it cannot update an installed copy. Release APKs are built locally." >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [Download](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
-            SIZE=$(ls -lh build/app/outputs/flutter-apk/app-release.apk | awk '{print $5}')
-            echo "File size: $SIZE" >> $GITHUB_STEP_SUMMARY
-          fi
+          if-no-files-found: error

@@ -101,11 +101,10 @@ void main() {
     await _settle();
 
     expect(state.logCount, 4, reason: 'the buffer keeps everything');
-    expect(
-      state.filteredLogs.map((e) => e.level),
-      [3, 4],
-      reason: 'the view shows the threshold and above',
-    );
+    expect(state.filteredLogs.map((e) => e.level), [
+      3,
+      4,
+    ], reason: 'the view shows the threshold and above');
   });
 }
 

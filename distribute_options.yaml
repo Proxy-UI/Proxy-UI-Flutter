@@ -6,7 +6,9 @@ releases:
         package:
           platform: windows
           target: exe
+          artifact_name: 'cipherrelay-v{{build_name}}-{{build_number}}-windows-x64-setup.{{ext}}'
       - name: windows-zip
         package:
           platform: windows
           target: zip
+          artifact_name: 'cipherrelay-v{{build_name}}-{{build_number}}-windows-x64.{{ext}}'

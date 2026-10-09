@@ -12,6 +12,7 @@ import plistlib
 import re
 import secrets
 import shlex
+import shutil
 import subprocess
 import tempfile
 
@@ -150,6 +151,31 @@ def notarize(path, auth, log_dir):
     print(f"Apple accepted {path.name}: {result['id']}", flush=True)
 
 
+def verify_mounted_app(image, work, expected_info, team, logs):
+    """Validate the application users receive, after DMG creation and stapling."""
+    mount = work / "mounted"
+    mount.mkdir()
+    run("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mount, image)
+    try:
+        app = mount / "CipherRelay.app"
+        info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
+        for key in ("CFBundleIdentifier", "CFBundleExecutable", "CFBundleShortVersionString", "CFBundleVersion"):
+            if info.get(key) != expected_info.get(key):
+                raise RuntimeError(f"Mounted release has a mismatched {key}")
+        report = run("codesign", "--verify", "--deep", "--strict", "--verbose=2", app)
+        signature = run("codesign", "--display", "--verbose=4", app)
+        if f"TeamIdentifier={team}" not in signature or "Authority=Developer ID Application:" not in signature:
+            raise RuntimeError("Mounted application is missing the expected Developer ID signature")
+        report += signature
+        report += run("xcrun", "stapler", "validate", app)
+        report += run("spctl", "--assess", "--type", "execute", "--verbose=4", app)
+        if shutil.which("syspolicy_check"):
+            report += run("syspolicy_check", "distribution", app)
+        (logs / "mounted-app-verification.txt").write_text(report)
+    finally:
+        run("hdiutil", "detach", mount)
+
+
 def package(args):
     identity = required("MACOS_SIGNING_IDENTITY")
     team = required("APPLE_TEAM_ID")
@@ -208,10 +234,12 @@ def package(args):
             run("codesign", "--verify", "--strict", candidate)
             run("spctl", "--assess", "--type", "open", "--context", "context:primary-signature",
                 "--verbose=2", candidate)
+            verify_mounted_app(candidate, work, info, team, logs)
             run("ditto", candidate, output)
         report = {"version": info["CFBundleShortVersionString"], "build": info["CFBundleVersion"],
                   "minimum_macos": info["LSMinimumSystemVersion"], "team_id": team,
                   "architectures": ["arm64", "x86_64"], "signed_macho_files": len(files),
+                  "mounted_app_verified": True,
                   "sha256": hashlib.sha256(output.read_bytes()).hexdigest(), "size": output.stat().st_size}
         (logs / "release.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))

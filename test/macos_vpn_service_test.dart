@@ -58,44 +58,42 @@ void main() {
     messenger.setMockMethodCallHandler(events, null);
   });
 
-  testWidgets(
-    'store VPN page hides helper diagnostics and process controls',
-    (tester) async {
-      late ProxyState state;
-      await tester.runAsync(() async {
-        state = ProxyState(service: _QuietStoreService());
-        await waitForState(state);
-      });
-      addTearDown(state.dispose);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      for (final width in [1200.0, 440.0]) {
-        tester.view.physicalSize = Size(width, 900);
-        await tester.pumpWidget(
-          ChangeNotifierProvider.value(
-            value: state,
-            child: MaterialApp(
-              locale: const Locale('en'),
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              supportedLocales: AppLocalizations.supportedLocales,
-              home: Scaffold(
-                body: ProxyPage(scaffoldKey: GlobalKey<ScaffoldState>()),
-              ),
+  testWidgets('store VPN page hides helper diagnostics and process controls', (
+    tester,
+  ) async {
+    late ProxyState state;
+    await tester.runAsync(() async {
+      state = ProxyState(service: _QuietStoreService());
+      await waitForState(state);
+    });
+    addTearDown(state.dispose);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final width in [1200.0, 440.0]) {
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: state,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: ProxyPage(scaffoldKey: GlobalKey<ScaffoldState>()),
             ),
           ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('VPN Service'), findsOneWidget);
-        expect(find.byIcon(Icons.security_outlined), findsNothing);
-        expect(find.byIcon(Icons.help_outline), findsNothing);
-        expect(find.byType(Switch), findsOneWidget);
-        expect(find.textContaining('Android'), findsNothing);
-        expect(tester.takeException(), isNull);
-      }
-    },
-    skip: !BuildCapabilities.isMacAppStore,
-  );
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('VPN Service'), findsOneWidget);
+      expect(find.byIcon(Icons.security_outlined), findsNothing);
+      expect(find.byIcon(Icons.help_outline), findsNothing);
+      expect(find.byType(Switch), findsOneWidget);
+      expect(find.textContaining('Android'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+  }, skip: !BuildCapabilities.isMacAppStore);
 
   test(
     'waits for system connection and sends only provider configuration',

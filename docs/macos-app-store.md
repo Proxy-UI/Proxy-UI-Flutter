@@ -1,6 +1,6 @@
 # Mac App Store development
 
-The `appstore` scheme builds **CipherRelay Store.app** (macOS 13+) with an embedded
+The `appstore` scheme builds **CipherRelay.app** (macOS 13+) with an embedded
 Packet Tunnel extension. It has its own bundle ID and sandbox container. The
 main switch controls the system VPN; helper-based TUN, process bypass and
 system-proxy modification are unavailable in this target. LAN configuration
@@ -36,7 +36,7 @@ credentials stay in the Data Protection Keychain. Each process keeps its own
 sandboxed cache. The extension reports connection state to the app; its detailed
 logs currently use macOS unified logging, not the app's log page.
 
-Output: `build/macos-app-store/Build/Products/Release-appstore/CipherRelay Store.app`.
+Output: `build/macos-app-store/Build/Products/Release-appstore/CipherRelay.app`.
 An unsigned build validates compilation and packaging only: it cannot connect
 a system VPN and must not be distributed as an installable release. A signed
 archive still needs Xcode validation, runtime testing and App Review.

@@ -16,10 +16,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.2.21+48
+version: 1.2.22+50
 
 environment:
-  sdk: ^3.9.0
+  sdk: ^3.13.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -33,17 +33,15 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   ffi: ^2.1.0
   path_provider: ^2.1.0
   provider: ^6.1.0
   shared_preferences: ^2.2.0
   shelf: ^1.4.0
-  # 0.5.x is the first series whose Windows plugin re-adds the notification
-  # icon when the shell broadcasts TaskbarCreated (Explorer restart) or the
-  # machine resumes from sleep, and the first that frees the previous HICON
-  # when the status icon changes.
-  tray_manager: ^0.5.3
+  # The service retains its serialized update queue through the 0.8 compatibility
+  # bridge while tray icons and menus are now provided by nativeapi.
+  tray_manager: ^0.8.0
   window_manager: ^0.5.1
   # Validates a remembered window frame against the displays that are actually
   # connected, so a saved position on an unplugged monitor cannot strand the
