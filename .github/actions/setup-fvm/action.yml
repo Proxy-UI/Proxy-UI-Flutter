@@ -17,6 +17,11 @@ runs:
         with open(os.environ['GITHUB_PATH'], 'a') as output:
             output.write(str(Path(cache) / 'bin') + '\n')
         PYTHON
-    - name: Install project SDK
+    - name: Install project SDK on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: fvm install
+    - name: Install project SDK on POSIX
+      if: runner.os != 'Windows'
       shell: bash
       run: fvm install
