@@ -869,5 +869,10 @@
   "storeDemoEmptyLog": "Your demo actions will appear here. Entries exist only while this screen is open.",
   "storeDemoFooter": "For an actual connection, leave the demo and configure a compatible server you control. CipherRelay does not supply server access.",
   "secureTransport": "Low-latency encrypted transport (v3)",
-  "secureTransportDescription": "Encrypts all traffic without an extra handshake round trip. Upgrade every relay/server first; no automatic fallback. Off uses the legacy protocol for compatibility."
+  "secureTransportDescription": "Encrypts all traffic without an extra handshake round trip. Upgrade every relay/server first; no automatic fallback. Off uses the legacy protocol for compatibility.",
+  "tunDnsServer": "TUN DNS resolver IP",
+  "tunDnsServerDescription": "Default: 8.8.8.8. The proxy server must be able to reach this resolver. Set your private resolver here for internal domains. Reconnect to apply.",
+  "invalidTunDnsServer": "Enter a valid IPv4 or IPv6 DNS resolver address.",
+  "tunFakeIp": "TUN Fake-IP DNS",
+  "tunFakeIpDescription": "Off by default: DNS returns real addresses through the proxy. Enable to use virtual addresses for domain routing. Takes effect after reconnecting."
 }

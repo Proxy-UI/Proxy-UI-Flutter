@@ -14,7 +14,7 @@ on:
 
 env:
   PRIVATE_REPO: acking-you/proxy-everything
-  LIB_VERSION: '0.4.37'
+  LIB_VERSION: '0.4.38'
   FLUTTER_VERSION: '3.47.7'
 
 jobs:

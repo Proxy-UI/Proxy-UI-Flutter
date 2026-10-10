@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../services/build_capabilities.dart';
 
 import 'package:proxy_ui/l10n/app_language.dart';
@@ -27,6 +29,8 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late bool _autoProxy;
   late bool _udpEnabled;
   late bool _udpDirectFallback;
+  late bool _tunFakeIp;
+  late TextEditingController _tunDnsController;
   late bool _reverseGeo;
   late bool _forceCodec;
   late bool _secureTransport;
@@ -55,6 +59,8 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _autoProxy = !BuildCapabilities.isMacAppStore && config.autoProxy;
     _udpEnabled = config.udpEnabled;
     _udpDirectFallback = config.udpDirectFallback;
+    _tunFakeIp = config.tunFakeIp;
+    _tunDnsController = TextEditingController(text: config.tunDnsServer);
     _reverseGeo = !BuildCapabilities.isMacAppStore && config.reverseGeo;
     _forceCodec = config.forceCodec;
     _secureTransport = config.secureTransport;
@@ -67,6 +73,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _serverPortController.dispose();
     _localPortController.dispose();
     _sessionKeyController.dispose();
+    _tunDnsController.dispose();
     super.dispose();
   }
 
@@ -79,6 +86,10 @@ class _ConfigDialogState extends State<ConfigDialog> {
     final state = context.read<ProxyState>();
     final serverPort = int.tryParse(_serverPortController.text);
     final localPort = int.tryParse(_localPortController.text);
+    if (InternetAddress.tryParse(_tunDnsController.text.trim()) == null) {
+      ToastUtils.showError(context.l10n.invalidTunDnsServer);
+      return;
+    }
     if (serverPort == null || serverPort < 1 || serverPort > 65535) {
       ToastUtils.showError(context.l10n.invalidServerPort);
       return;
@@ -103,6 +114,8 @@ class _ConfigDialogState extends State<ConfigDialog> {
         autoProxy: _autoProxy,
         udpEnabled: _udpEnabled,
         udpDirectFallback: _udpDirectFallback,
+        tunFakeIp: _tunFakeIp,
+        tunDnsServer: _tunDnsController.text.trim(),
         tunEnabled: state.config.tunEnabled,
         tunBypassProcesses: state.config.tunBypassProcesses,
         androidVpnRoutingMode: state.config.androidVpnRoutingMode,
@@ -241,6 +254,23 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 subtitle: Text(context.l10n.proxyUdpThroughTheServer),
                 value: _udpEnabled,
                 onChanged: (v) => setState(() => _udpEnabled = v),
+              ),
+              SwitchListTile(
+                key: const Key('tunFakeIpSwitch'),
+                title: Text(context.l10n.tunFakeIp),
+                subtitle: Text(context.l10n.tunFakeIpDescription),
+                value: _tunFakeIp,
+                onChanged: (v) => setState(() => _tunFakeIp = v),
+              ),
+              TextField(
+                key: const Key('tunDnsServerField'),
+                controller: _tunDnsController,
+                enabled: !_tunFakeIp,
+                decoration: InputDecoration(
+                  labelText: context.l10n.tunDnsServer,
+                  helperText: context.l10n.tunDnsServerDescription,
+                  helperMaxLines: 3,
+                ),
               ),
               SwitchListTile(
                 title: Text(context.l10n.directUdpFallback),
