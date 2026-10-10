@@ -95,7 +95,9 @@ BEGIN
             VALUE "InternalName", "CipherRelay" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.proxyui. All rights reserved." "\0"
             VALUE "OriginalFilename", "CipherRelay.exe" "\0"
-            VALUE "ProductName", "CipherRelay" "\0"
+            // Persistent Windows storage identity (path_provider/shared_preferences).
+            // Keep display branding in FileDescription; changing this moves user data.
+            VALUE "ProductName", "proxy_ui" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

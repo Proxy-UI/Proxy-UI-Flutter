@@ -14,6 +14,8 @@ void main() {
 
       expect(node.host, '192.168.1.10');
       expect(node.port, 1081);
+      expect(node.toProxyConfig().tunFakeIp, isFalse);
+      expect(node.toProxyConfig(tunFakeIp: true).tunFakeIp, isTrue);
     });
 
     test('parses bracketed IPv6 host and port', () {

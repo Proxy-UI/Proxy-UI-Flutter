@@ -232,6 +232,13 @@ final class ProxyConfigV7 extends Struct {
   external int wireProtocol;
 }
 
+/// V8 embeds V7 unchanged and adds explicit TUN Fake-IP selection.
+final class ProxyConfigV8 extends Struct {
+  external ProxyConfigV7 base;
+  @Int32()
+  external int tunFakeIp;
+}
+
 // FFI function signatures
 typedef _ProxySetLogCallbackNative = Void Function(
   Pointer<NativeFunction<LogCallbackNative>> callback,
@@ -292,6 +299,15 @@ typedef _ProxyStartV7Native = Int32 Function(
 typedef _ProxyStartV7Dart = int Function(
   Pointer<Void> handle,
   Pointer<ProxyConfigV7> config,
+);
+
+typedef _ProxyStartV8Native = Int32 Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV8> config,
+);
+typedef _ProxyStartV8Dart = int Function(
+  Pointer<Void> handle,
+  Pointer<ProxyConfigV8> config,
 );
 
 typedef _ProxyStartV5Native = Int32 Function(
@@ -544,6 +560,8 @@ class ProxyFFI {
       .lookupFunction<_ProxyStartV5Native, _ProxyStartV5Dart>('proxy_start_v5');
   late final proxyStartV7 = lib
       .lookupFunction<_ProxyStartV7Native, _ProxyStartV7Dart>('proxy_start_v7');
+  late final proxyStartV8 = lib
+      .lookupFunction<_ProxyStartV8Native, _ProxyStartV8Dart>('proxy_start_v8');
 
   late final proxySwitchUpstream = lib
       .lookupFunction<_ProxySwitchUpstreamNative, _ProxySwitchUpstreamDart>(

@@ -185,6 +185,7 @@ class LanguageTestProxyService extends ProxyService {
     bool udpEnabled = true,
     bool udpDirectFallback = true,
     bool tunEnabled = false,
+    bool tunFakeIp = false,
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     String? needCodecIps,

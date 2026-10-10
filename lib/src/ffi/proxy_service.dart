@@ -250,6 +250,7 @@ class ProxyService {
     bool udpEnabled = true,
     bool udpDirectFallback = true,
     bool tunEnabled = false,
+    bool tunFakeIp = false,
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     String? needCodecIps,
@@ -265,7 +266,7 @@ class ProxyService {
     await _destroyHandle();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfigV7>();
+    final config = calloc<ProxyConfigV8>();
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
@@ -274,41 +275,41 @@ class ProxyService {
 
     try {
       serverHostPtr = serverHost.toNativeUtf8();
-      config.ref.base.serverHost = serverHostPtr;
-      config.ref.base.serverPort = serverPort;
-      config.ref.base.localPort = localPort;
+      config.ref.base.base.serverHost = serverHostPtr;
+      config.ref.base.base.serverPort = serverPort;
+      config.ref.base.base.localPort = localPort;
 
       if (sessionKey != null && sessionKey.length == 32) {
         sessionKeyPtr = sessionKey.toNativeUtf8();
-        config.ref.base.sessionKey = sessionKeyPtr;
+        config.ref.base.base.sessionKey = sessionKeyPtr;
       } else {
-        config.ref.base.sessionKey = nullptr;
+        config.ref.base.base.sessionKey = nullptr;
       }
 
-      config.ref.base.autoProxy = autoProxy ? 1 : 0;
-      config.ref.base.enableUdp = udpEnabled ? 1 : 0;
-      config.ref.base.tunUdpDirectFallback = udpDirectFallback ? 1 : 0;
-      config.ref.base.enableTun = tunEnabled ? 1 : 0;
-      config.ref.base.reverseGeo = reverseGeo ? 1 : 0;
-      config.ref.base.allowLan = allowLan ? 1 : 0;
+      config.ref.base.base.autoProxy = autoProxy ? 1 : 0;
+      config.ref.base.base.enableUdp = udpEnabled ? 1 : 0;
+      config.ref.base.base.tunUdpDirectFallback = udpDirectFallback ? 1 : 0;
+      config.ref.base.base.enableTun = tunEnabled ? 1 : 0;
+      config.ref.base.base.reverseGeo = reverseGeo ? 1 : 0;
+      config.ref.base.base.allowLan = allowLan ? 1 : 0;
 
       // A stable private support directory keeps auto-proxy and virtual-DNS
       // state across process restarts and in-place upgrades on every platform.
       final supportDir = await getApplicationSupportDirectory();
       cacheDirPtr = supportDir.path.toNativeUtf8();
-      config.ref.base.cacheDir = cacheDirPtr;
+      config.ref.base.base.cacheDir = cacheDirPtr;
 
       if (needCodecIps != null && needCodecIps.isNotEmpty) {
         needCodecIpsPtr = needCodecIps.toNativeUtf8();
-        config.ref.base.needCodecIps = needCodecIpsPtr;
+        config.ref.base.base.needCodecIps = needCodecIpsPtr;
       } else {
-        config.ref.base.needCodecIps = nullptr;
+        config.ref.base.base.needCodecIps = nullptr;
       }
 
-      config.ref.base.forceCodec = forceCodec ? 1 : 0;
+      config.ref.base.base.forceCodec = forceCodec ? 1 : 0;
 
       // Desktop platforms: set system proxy
-      config.ref.base.setSystemProxy =
+      config.ref.base.base.setSystemProxy =
           (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
               setSystemProxy
           ? 1
@@ -316,13 +317,14 @@ class ProxyService {
 
       if (tunBypassProcesses.isNotEmpty) {
         tunBypassProcessesPtr = jsonEncode(tunBypassProcesses).toNativeUtf8();
-        config.ref.base.tunBypassProcesses = tunBypassProcessesPtr;
+        config.ref.base.base.tunBypassProcesses = tunBypassProcessesPtr;
       } else {
-        config.ref.base.tunBypassProcesses = nullptr;
+        config.ref.base.base.tunBypassProcesses = nullptr;
       }
 
-      config.ref.wireProtocol = secureTransport ? 3 : 0;
-      return _ffi.proxyStartV7(_handle!, config);
+      config.ref.base.wireProtocol = secureTransport ? 3 : 0;
+      config.ref.tunFakeIp = tunFakeIp ? 1 : 0;
+      return _ffi.proxyStartV8(_handle!, config);
     } finally {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);

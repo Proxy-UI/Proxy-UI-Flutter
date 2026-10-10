@@ -1,4 +1,5 @@
 import 'src/services/app_brand.dart';
+import 'src/services/windows_storage_migration.dart';
 import 'src/screens/store_privacy_screen.dart';
 import 'src/services/build_capabilities.dart';
 import 'l10n/app_language.dart';
@@ -24,6 +25,7 @@ import 'src/services/window_state_service.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await WindowsStorageMigration.initialize();
   await AppLanguage.instance.load();
   final enableTunOnStartup =
       arguments.contains('--enable-tun') && !BuildCapabilities.isMacAppStore;

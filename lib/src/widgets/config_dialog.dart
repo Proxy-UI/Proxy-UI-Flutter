@@ -27,6 +27,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late bool _autoProxy;
   late bool _udpEnabled;
   late bool _udpDirectFallback;
+  late bool _tunFakeIp;
   late bool _reverseGeo;
   late bool _forceCodec;
   late bool _secureTransport;
@@ -55,6 +56,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _autoProxy = !BuildCapabilities.isMacAppStore && config.autoProxy;
     _udpEnabled = config.udpEnabled;
     _udpDirectFallback = config.udpDirectFallback;
+    _tunFakeIp = config.tunFakeIp;
     _reverseGeo = !BuildCapabilities.isMacAppStore && config.reverseGeo;
     _forceCodec = config.forceCodec;
     _secureTransport = config.secureTransport;
@@ -103,6 +105,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
         autoProxy: _autoProxy,
         udpEnabled: _udpEnabled,
         udpDirectFallback: _udpDirectFallback,
+        tunFakeIp: _tunFakeIp,
         tunEnabled: state.config.tunEnabled,
         tunBypassProcesses: state.config.tunBypassProcesses,
         androidVpnRoutingMode: state.config.androidVpnRoutingMode,
@@ -241,6 +244,13 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 subtitle: Text(context.l10n.proxyUdpThroughTheServer),
                 value: _udpEnabled,
                 onChanged: (v) => setState(() => _udpEnabled = v),
+              ),
+              SwitchListTile(
+                key: const Key('tunFakeIpSwitch'),
+                title: Text(context.l10n.tunFakeIp),
+                subtitle: Text(context.l10n.tunFakeIpDescription),
+                value: _tunFakeIp,
+                onChanged: (v) => setState(() => _tunFakeIp = v),
               ),
               SwitchListTile(
                 title: Text(context.l10n.directUdpFallback),

@@ -17,6 +17,26 @@ void main() {
   });
 
   test(
+    'Fake-IP is opt-in and reaches the native service on reconnect',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+      );
+      expect(await state.start(), isTrue);
+      expect(service.lastTunFakeIp, isFalse);
+      expect(await state.stop(), isTrue);
+      state.updateConfig(state.config.copyWith(tunFakeIp: true));
+      expect(await state.start(), isTrue);
+      expect(service.lastTunFakeIp, isTrue);
+      expect(await state.stop(), isTrue);
+    },
+  );
+
+  test(
     'a silent native failure updates status without waiting for logs',
     () async {
       final service = _FakeProxyService();
@@ -240,6 +260,7 @@ class _FakeProxyService extends ProxyService {
   final Queue<int> tunStartResults = Queue<int>();
   var listenerStartCount = 0;
   var lastAllowLan = false;
+  var lastTunFakeIp = false;
   List<String> lastBypassProcesses = [];
   var _running = false;
   var _tunRunning = false;
@@ -258,6 +279,7 @@ class _FakeProxyService extends ProxyService {
     bool udpEnabled = true,
     bool udpDirectFallback = true,
     bool tunEnabled = false,
+    bool tunFakeIp = false,
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     String? needCodecIps,
@@ -268,6 +290,7 @@ class _FakeProxyService extends ProxyService {
   }) async {
     listenerStartCount++;
     lastAllowLan = allowLan;
+    lastTunFakeIp = tunFakeIp;
     _running = true;
     _error = null;
     return ProxyResult.ok;

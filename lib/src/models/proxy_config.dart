@@ -30,6 +30,7 @@ class ProxyConfigModel {
   bool udpEnabled;
   bool udpDirectFallback;
   bool tunEnabled;
+  bool tunFakeIp;
   List<String> tunBypassProcesses;
   AndroidVpnRoutingMode androidVpnRoutingMode;
   List<String> androidVpnPackages;
@@ -53,6 +54,7 @@ class ProxyConfigModel {
     this.udpEnabled = false,
     this.udpDirectFallback = true,
     this.tunEnabled = false,
+    this.tunFakeIp = false,
     List<String> tunBypassProcesses = const [],
     this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
     List<String> androidVpnPackages = const [],
@@ -80,6 +82,7 @@ class ProxyConfigModel {
     'udpEnabled': udpEnabled,
     'udpDirectFallback': udpDirectFallback,
     'tunEnabled': tunEnabled,
+    'tunFakeIp': tunFakeIp,
     'tunBypassProcesses': tunBypassProcesses,
     'androidVpnRoutingMode': androidVpnRoutingMode.wireName,
     'androidVpnPackages': androidVpnPackages,
@@ -129,6 +132,7 @@ class ProxyConfigModel {
         // TUN is opt-in so legacy configurations never start changing system
         // routes after an application upgrade.
         tunEnabled: _parseBool(json['tunEnabled'], false),
+        tunFakeIp: _parseBool(json['tunFakeIp'], false),
         tunBypassProcesses:
             (json['tunBypassProcesses'] as List<dynamic>?)
                 ?.whereType<String>()
@@ -159,6 +163,7 @@ class ProxyConfigModel {
     bool? udpEnabled,
     bool? udpDirectFallback,
     bool? tunEnabled,
+    bool? tunFakeIp,
     List<String>? tunBypassProcesses,
     AndroidVpnRoutingMode? androidVpnRoutingMode,
     List<String>? androidVpnPackages,
@@ -177,6 +182,7 @@ class ProxyConfigModel {
     udpEnabled: udpEnabled ?? this.udpEnabled,
     udpDirectFallback: udpDirectFallback ?? this.udpDirectFallback,
     tunEnabled: tunEnabled ?? this.tunEnabled,
+    tunFakeIp: tunFakeIp ?? this.tunFakeIp,
     tunBypassProcesses: tunBypassProcesses ?? this.tunBypassProcesses,
     androidVpnRoutingMode: androidVpnRoutingMode ?? this.androidVpnRoutingMode,
     androidVpnPackages: androidVpnPackages ?? this.androidVpnPackages,
