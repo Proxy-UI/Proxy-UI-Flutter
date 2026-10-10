@@ -28,10 +28,14 @@ void main() {
       );
       expect(await state.start(), isTrue);
       expect(service.lastTunFakeIp, isFalse);
+      expect(service.lastTunDnsServer, '8.8.8.8');
       expect(await state.stop(), isTrue);
-      state.updateConfig(state.config.copyWith(tunFakeIp: true));
+      state.updateConfig(
+        state.config.copyWith(tunFakeIp: true, tunDnsServer: '10.20.30.53'),
+      );
       expect(await state.start(), isTrue);
       expect(service.lastTunFakeIp, isTrue);
+      expect(service.lastTunDnsServer, '10.20.30.53');
       expect(await state.stop(), isTrue);
     },
   );
@@ -261,6 +265,7 @@ class _FakeProxyService extends ProxyService {
   var listenerStartCount = 0;
   var lastAllowLan = false;
   var lastTunFakeIp = false;
+  var lastTunDnsServer = '';
   List<String> lastBypassProcesses = [];
   var _running = false;
   var _tunRunning = false;
@@ -280,6 +285,7 @@ class _FakeProxyService extends ProxyService {
     bool udpDirectFallback = true,
     bool tunEnabled = false,
     bool tunFakeIp = false,
+    String tunDnsServer = '8.8.8.8',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     String? needCodecIps,
@@ -291,6 +297,7 @@ class _FakeProxyService extends ProxyService {
     listenerStartCount++;
     lastAllowLan = allowLan;
     lastTunFakeIp = tunFakeIp;
+    lastTunDnsServer = tunDnsServer;
     _running = true;
     _error = null;
     return ProxyResult.ok;

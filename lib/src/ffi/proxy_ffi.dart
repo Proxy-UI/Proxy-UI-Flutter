@@ -563,6 +563,12 @@ class ProxyFFI {
   late final proxyStartV8 = lib
       .lookupFunction<_ProxyStartV8Native, _ProxyStartV8Dart>('proxy_start_v8');
 
+  late final proxySetTunDnsServer = lib
+      .lookupFunction<
+        Int32 Function(Pointer<Void>, Pointer<Utf8>),
+        int Function(Pointer<Void>, Pointer<Utf8>)
+      >('proxy_set_tun_dns_server');
+
   late final proxySwitchUpstream = lib
       .lookupFunction<_ProxySwitchUpstreamNative, _ProxySwitchUpstreamDart>(
         'proxy_switch_upstream',

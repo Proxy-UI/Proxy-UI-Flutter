@@ -362,6 +362,9 @@
   "storeDemoFooter": "真实连接请退出演示，配置你控制的兼容服务器。CipherRelay 不提供服务器接入服务。",
   "secureTransport": "低延迟加密传输（v3）",
   "secureTransportDescription": "加密全部流量，不增加握手往返。请先升级所有中继和服务端；失败不会自动降级。默认关闭，使用兼容旧版的协议。",
+  "tunDnsServer": "TUN DNS 解析器 IP",
+  "tunDnsServerDescription": "默认 8.8.8.8，需可从代理服务器访问。解析内网域名时请填写相应的私有 DNS 地址。重新连接后生效。",
+  "invalidTunDnsServer": "请输入有效的 IPv4 或 IPv6 DNS 解析器地址。",
   "tunFakeIp": "TUN Fake-IP DNS",
   "tunFakeIpDescription": "默认关闭：通过代理查询真实 IP。开启后使用虚拟地址保留域名路由信息。重新连接后生效。"
 }

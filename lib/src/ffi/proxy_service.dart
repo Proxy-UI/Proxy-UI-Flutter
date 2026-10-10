@@ -251,6 +251,7 @@ class ProxyService {
     bool udpDirectFallback = true,
     bool tunEnabled = false,
     bool tunFakeIp = false,
+    String tunDnsServer = '8.8.8.8',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     String? needCodecIps,
@@ -272,8 +273,12 @@ class ProxyService {
     Pointer<Utf8>? cacheDirPtr;
     Pointer<Utf8>? needCodecIpsPtr;
     Pointer<Utf8>? tunBypassProcessesPtr;
+    Pointer<Utf8>? tunDnsServerPtr;
 
     try {
+      tunDnsServerPtr = tunDnsServer.toNativeUtf8();
+      final dnsResult = _ffi.proxySetTunDnsServer(_handle!, tunDnsServerPtr);
+      if (dnsResult != ProxyResult.ok) return dnsResult;
       serverHostPtr = serverHost.toNativeUtf8();
       config.ref.base.base.serverHost = serverHostPtr;
       config.ref.base.base.serverPort = serverPort;
@@ -326,6 +331,7 @@ class ProxyService {
       config.ref.tunFakeIp = tunFakeIp ? 1 : 0;
       return _ffi.proxyStartV8(_handle!, config);
     } finally {
+      if (tunDnsServerPtr != null) calloc.free(tunDnsServerPtr);
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);
       if (cacheDirPtr != null) calloc.free(cacheDirPtr);

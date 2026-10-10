@@ -47,7 +47,16 @@ void main() {
       expect(handle, isNot(nullptr));
       final config = calloc<ProxyConfigV8>();
       final host = '127.0.0.1'.toNativeUtf8();
+      final setDns = library
+          .lookupFunction<
+            Int32 Function(Pointer<Void>, Pointer<Utf8>),
+            int Function(Pointer<Void>, Pointer<Utf8>)
+          >('proxy_set_tun_dns_server');
+      final resolver = '10.20.30.53'.toNativeUtf8();
+      final invalidResolver = 'not-an-ip'.toNativeUtf8();
       try {
+        expect(setDns(handle, invalidResolver), ProxyResult.invalidParam);
+        expect(setDns(handle, resolver), ProxyResult.ok);
         config.ref.base.base.serverHost = host;
         config.ref.base.base.serverPort = 9;
         // calloc keeps localPort = 0, binding an available loopback port.
@@ -56,6 +65,7 @@ void main() {
           for (final fakeIp in [0, 1]) {
             config.ref.tunFakeIp = fakeIp;
             expect(startV8(handle, config), ProxyResult.ok);
+            expect(setDns(handle, resolver), ProxyResult.alreadyRunning);
             expect(isTunRunning(handle), 0);
             expect(stop(handle), ProxyResult.ok);
           }
@@ -71,6 +81,8 @@ void main() {
       } finally {
         destroy(handle);
         calloc.free(host);
+        calloc.free(resolver);
+        calloc.free(invalidResolver);
         calloc.free(config);
       }
     },
