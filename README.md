@@ -118,6 +118,12 @@ Flutter is pinned to 3.47.7 in `.fvmrc`. Do not invoke a globally installed
 `flutter` or `dart`; use `fvm flutter` and `fvm dart` so local and CI builds use
 the same SDK.
 
+Android builds use Java 17, Gradle 8.14.3, Android Gradle Plugin 8.11.1 and
+Kotlin 2.2.20, matching the pinned Flutter SDK's minimum supported toolchain.
+The Gradle distribution checksum is pinned in the wrapper configuration.
+Build release APKs locally with the existing signing key and increment the
+build number before packaging; CI APKs are not distributable.
+
 ### Local Development
 
 ```bash
