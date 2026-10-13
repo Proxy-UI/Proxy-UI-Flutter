@@ -155,6 +155,7 @@ class ProxyState extends ChangeNotifier {
     _service.restoreOrphanedSystemProxy();
     try {
       await _loadConfig();
+      if (_isDisposed) return;
       _connectionSubscription = _service.connectionChanges.listen((_) {
         if (_isProxyTransitioning) return;
         _isRunning = _service.isRunning;
@@ -309,11 +310,15 @@ class ProxyState extends ChangeNotifier {
     // The unelevated instance releases the local port immediately after it
     // launches this process. Retry briefly so the handoff never reports a
     // false bind failure while the old listener is shutting down.
-    for (var attempt = 0; attempt < 20 && !_isRunning; attempt++) {
+    for (
+      var attempt = 0;
+      attempt < 20 && !_isRunning && !_isDisposed;
+      attempt++
+    ) {
       if (await start()) break;
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    if (!_isRunning) return;
+    if (!_isRunning || _isDisposed) return;
     await setTunEnabled(true);
   }
 
@@ -377,6 +382,7 @@ class ProxyState extends ChangeNotifier {
       : config;
 
   Future<bool> start() async {
+    if (_isDisposed) return false;
     if (_isProxyTransitioning) {
       _lastError = appStrings.proxyOperationIsAlreadyInProgress;
       _safeNotifyListeners();
@@ -393,6 +399,7 @@ class ProxyState extends ChangeNotifier {
       if (!await stop()) {
         return false;
       }
+      if (_isDisposed || _isProxyTransitioning) return false;
     }
 
     _isProxyTransitioning = true;
@@ -469,17 +476,18 @@ class ProxyState extends ChangeNotifier {
 
   /// Persist and, when TUN is active, immediately apply process exclusions.
   Future<bool> updateTunBypassProcesses(List<String> processes) async {
+    if (_isDisposed) return false;
     if (_isRunning && _isTunRunning) {
       final result = _service.setTunBypassProcesses(processes);
       if (result != ProxyResult.ok) {
         _lastError = _service.lastError ?? ProxyResult.message(result);
-        notifyListeners();
+        _safeNotifyListeners();
         return false;
       }
     }
     _config = _config.copyWith(tunBypassProcesses: processes);
     await _saveConfig();
-    notifyListeners();
+    _safeNotifyListeners();
     return true;
   }
 
@@ -496,10 +504,10 @@ class ProxyState extends ChangeNotifier {
     AndroidVpnRoutingMode mode,
     List<String> packages,
   ) async {
-    if (!Platform.isAndroid) return false;
+    if (_isDisposed || !Platform.isAndroid) return false;
     if (mode == AndroidVpnRoutingMode.include && packages.isEmpty) {
       _lastError = appStrings.selectAtLeastOneApplicationForVpnOnlyMode;
-      notifyListeners();
+      _safeNotifyListeners();
       return false;
     }
 
@@ -511,14 +519,14 @@ class ProxyState extends ChangeNotifier {
     if (!_isTunRunning) {
       _config = updated;
       await _saveConfig();
-      notifyListeners();
+      _safeNotifyListeners();
       return true;
     }
     if (_isTunBusy) return false;
 
     _isTunBusy = true;
     _lastError = null;
-    notifyListeners();
+    _safeNotifyListeners();
     try {
       final stopResult = await _stopConfiguredTun();
       if (stopResult != ProxyResult.ok &&
@@ -557,7 +565,7 @@ class ProxyState extends ChangeNotifier {
       return false;
     } finally {
       _isTunBusy = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -580,22 +588,24 @@ class ProxyState extends ChangeNotifier {
   /// Returns `null` when an unelevated Windows instance successfully launched
   /// its elevated replacement. The caller should then close the old window.
   Future<bool?> setTunEnabled(bool enabled) async {
+    if (_isDisposed || _isProxyTransitioning) return false;
     if (BuildCapabilities.isMacAppStore) return enabled ? start() : stop();
     if (_isTunBusy) return false;
     if (enabled == _isTunRunning) return true;
     if (enabled && !_isRunning) {
       _lastError = appStrings.startTheLocalProxyBeforeEnablingTunMode;
-      notifyListeners();
+      _safeNotifyListeners();
       return false;
     }
 
     _isTunBusy = true;
     _lastError = null;
-    notifyListeners();
+    _safeNotifyListeners();
     try {
       if (enabled && Platform.isWindows && !_service.isElevated) {
         _config = _config.copyWith(tunEnabled: true);
         await _saveConfig();
+        if (_isDisposed) return false;
         final result = _service.relaunchElevatedForTun();
         if (result == ProxyResult.ok) {
           return null;
@@ -621,7 +631,7 @@ class ProxyState extends ChangeNotifier {
       return true;
     } finally {
       _isTunBusy = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -637,7 +647,7 @@ class ProxyState extends ChangeNotifier {
     }
     _isRunning = false;
     _isTunRunning = false;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   /// Stop the proxy and any TUN session it owns.
@@ -645,20 +655,15 @@ class ProxyState extends ChangeNotifier {
   /// Completes only after native teardown has restored the system routes and
   /// DNS, so a caller that exits the process afterwards cannot cut that short.
   Future<bool> stop() async {
+    if (_isDisposed) return false;
     if (_isProxyTransitioning) {
       _lastError = appStrings.proxyOperationIsAlreadyInProgress;
       _safeNotifyListeners();
       return false;
     }
     if (_isTunBusy) return false;
-    // TUN can outlive the listener if a previous stop failed part-way. Cancel it
-    // rather than returning early, or its routes and DNS stay installed.
-    if (!_isRunning) {
-      if (_isTunRunning) {
-        await setTunEnabled(false);
-      }
-      return true;
-    }
+    // Native cleanup may still be pending after startup failed, even when
+    // neither running snapshot is true. Always let the owning service stop it.
 
     _isProxyTransitioning = true;
     _lastError = null;
@@ -1125,14 +1130,14 @@ class ProxyState extends ChangeNotifier {
   ) async {
     if (_isTunBusy) {
       _lastError = appStrings.waitForTheCurrentTunOperationToFinish;
-      notifyListeners();
+      _safeNotifyListeners();
       return false;
     }
 
     final previousConfig = _config.copyWith(tunEnabled: true);
     _isTunBusy = true;
     _lastError = null;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       final stopResult = await _stopConfiguredTun();
@@ -1205,7 +1210,7 @@ class ProxyState extends ChangeNotifier {
       return true;
     } finally {
       _isTunBusy = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 

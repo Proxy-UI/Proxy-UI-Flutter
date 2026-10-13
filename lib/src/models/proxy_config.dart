@@ -115,6 +115,9 @@ class ProxyConfigModel {
     return fallback;
   }
 
+  static List<String> _parseStringList(Object? value) =>
+      value is List ? value.whereType<String>().toList() : const [];
+
   factory ProxyConfigModel.fromJson(Map<String, dynamic> json) =>
       ProxyConfigModel(
         // Every field is parsed defensively: imported and hand-edited configs
@@ -137,19 +140,11 @@ class ProxyConfigModel {
         tunEnabled: _parseBool(json['tunEnabled'], false),
         tunFakeIp: _parseBool(json['tunFakeIp'], false),
         tunDnsServer: (json['tunDnsServer'] ?? '8.8.8.8').toString().trim(),
-        tunBypassProcesses:
-            (json['tunBypassProcesses'] as List<dynamic>?)
-                ?.whereType<String>()
-                .toList() ??
-            const [],
+        tunBypassProcesses: _parseStringList(json['tunBypassProcesses']),
         androidVpnRoutingMode: AndroidVpnRoutingMode.fromWireName(
           json['androidVpnRoutingMode'],
         ),
-        androidVpnPackages:
-            (json['androidVpnPackages'] as List<dynamic>?)
-                ?.whereType<String>()
-                .toList() ??
-            const [],
+        androidVpnPackages: _parseStringList(json['androidVpnPackages']),
         reverseGeo: _parseBool(json['reverseGeo'], false),
         needCodecIps: json['needCodecIps']?.toString(),
         forceCodec: _parseBool(json['forceCodec'], false),

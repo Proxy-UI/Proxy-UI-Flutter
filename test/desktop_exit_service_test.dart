@@ -150,6 +150,21 @@ void main() {
       expect(windowCalls, ['hide']);
     },
   );
+
+  testWidgets('failed cleanup cancels exit and permits a later retry', (
+    tester,
+  ) async {
+    var attempts = 0;
+    _listen(
+      TargetPlatform.macOS,
+      hideToTray: windowManager.hide,
+      prepareToQuit: () async {
+        if (attempts++ == 0) throw StateError('route cleanup still pending');
+      },
+    );
+    expect(await _sendAppExitRequest(), 'cancel');
+    expect(await _sendAppExitRequest(), 'exit');
+  });
 }
 
 void _listen(

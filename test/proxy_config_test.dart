@@ -2,6 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:proxy_ui/src/models/proxy_config.dart';
 
 void main() {
+  test('malformed optional lists do not discard the saved endpoint', () {
+    for (final value in [
+      'bad',
+      42,
+      false,
+      {'bad': true},
+      null,
+    ]) {
+      final config = ProxyConfigModel.fromJson({
+        'serverHost': 'saved.example',
+        'serverPort': 1234,
+        'tunBypassProcesses': value,
+        'androidVpnPackages': value,
+      });
+      expect(config.serverHost, 'saved.example');
+      expect(config.serverPort, 1234);
+      expect(config.tunBypassProcesses, isEmpty);
+      expect(config.androidVpnPackages, isEmpty);
+    }
+  });
   test('TUN resolver persists across imports and copies', () {
     expect(ProxyConfigModel.fromJson({}).tunDnsServer, '8.8.8.8');
     final config = ProxyConfigModel.fromJson({'tunDnsServer': ' 10.20.30.53 '});

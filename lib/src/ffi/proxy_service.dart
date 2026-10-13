@@ -608,7 +608,7 @@ class ProxyService {
   /// before returning, so this stays off the UI isolate for the same reason
   /// [stopTun] does.
   Future<int> stop() => _withHandle(() async {
-    if (_handle == null) return ProxyResult.invalidParam;
+    if (_handle == null) return ProxyResult.notRunning;
     await stopAndroidVpnInterface();
     return compute(_stopIsolate, _handle!.address);
   });
