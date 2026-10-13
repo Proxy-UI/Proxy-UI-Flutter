@@ -65,6 +65,13 @@ Translations use Flutter `gen-l10n` with `lib/l10n/app_en.arb` and
 `fvm flutter gen-l10n` from this directory. Generated localization sources are
 ignored; normal FVM builds regenerate them.
 
+Windows bundles Noto Sans SC (variable weights 100–900) and loads it before
+the first frame. Both themes use it, including as the Chinese fallback for
+monospace log text. Font loading needs no network access. The asset and its
+SIL Open Font License are scoped to Windows, so other platform packages keep
+their existing typography and size. The upstream font is unmodified from
+[Google Fonts commit a85815a](https://github.com/google/fonts/tree/a85815a42757630ce188fdad368c2dfc444d4773/ofl/notosanssc).
+
 ## Features
 
 - **TUN ping (1.2.20+46)**: With native 0.4.34 and an updated native proxy exit, TUN forwards IPv4/IPv6 Echo to the real target. The exit needs OS permission for ICMP sockets. Existing TCP/UDP and default legacy protocol stay compatible with old nodes. External HTTP/SOCKS exits and arbitrary IP protocols are not supported by this Echo extension.

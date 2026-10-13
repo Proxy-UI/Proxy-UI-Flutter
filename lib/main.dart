@@ -1,5 +1,6 @@
 import 'src/services/app_brand.dart';
 import 'src/services/windows_storage_migration.dart';
+import 'src/services/windows_typography.dart';
 import 'src/screens/store_privacy_screen.dart';
 import 'src/services/build_capabilities.dart';
 import 'l10n/app_language.dart';
@@ -25,7 +26,31 @@ import 'src/services/window_state_service.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
-  await WindowsStorageMigration.initialize();
+  await WindowsTypography.initialize();
+  try {
+    await WindowsStorageMigration.initialize();
+  } catch (error, stackTrace) {
+    debugPrint('Windows configuration migration failed: $error\n$stackTrace');
+    // Do not fall through to default settings and start overwriting an
+    // installation whose preferences could not be migrated as a unit.
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            title: const Text('CipherRelay — 配置迁移失败 / Migration failed'),
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SelectableText(
+              '原有配置已保留。请修复下方错误后重新启动。\n'
+              'Existing settings were preserved. Correct this error and restart.\n\n$error',
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
+  }
   await AppLanguage.instance.load();
   final enableTunOnStartup =
       arguments.contains('--enable-tun') && !BuildCapabilities.isMacAppStore;
@@ -171,8 +196,8 @@ class _ProxyAppState extends State<ProxyApp>
       final proxyState = context.read<ProxyState>();
       // Awaiting is the point: the exit must not race the privileged helper
       // restoring DNS. `stop` also covers TUN outliving the listener.
-      if (proxyState.isRunning || proxyState.isTunRunning) {
-        await proxyState.stop();
+      if (!await proxyState.stop()) {
+        throw StateError(proxyState.lastError ?? appStrings.failedToStopProxy);
       }
       await proxyState.flushDesktopLogs();
     }
@@ -221,11 +246,15 @@ class _ProxyAppState extends State<ProxyApp>
             supportedLocales: AppLocalizations.supportedLocales,
             themeMode: themeState.themeMode,
             theme: ThemeData(
+              fontFamily: WindowsTypography.themeFamily,
+              fontFamilyFallback: WindowsTypography.themeFallback,
               colorSchemeSeed: themeState.colorSeed.color,
               useMaterial3: true,
               brightness: Brightness.light,
             ),
             darkTheme: ThemeData(
+              fontFamily: WindowsTypography.themeFamily,
+              fontFamilyFallback: WindowsTypography.themeFallback,
               colorSchemeSeed: themeState.colorSeed.color,
               useMaterial3: true,
               brightness: Brightness.dark,

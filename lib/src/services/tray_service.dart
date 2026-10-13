@@ -515,20 +515,23 @@ class TrayService with TrayListener {
 
   Future<void> _quitApp() async {
     final proxyState = _proxyState;
-    _isDisposed = true;
-    _healthCheckTimer?.cancel();
-    _healthCheckTimer = null;
-    proxyState?.removeListener(_onProxyStateChanged);
-    AppLanguage.instance.removeListener(_onLanguageChanged);
     // Stopping releases the native system-proxy guard and, on macOS, waits for
     // the privileged helper to put the system routes and DNS back. `exit` below
     // skips Dart and Rust teardown, so without awaiting this the machine can be
     // left pointing at a proxy listener and a tunnel resolver that are both gone.
     // `stop` also covers a TUN session that outlived the listener.
-    if (proxyState != null &&
-        (proxyState.isRunning || proxyState.isTunRunning)) {
-      await proxyState.stop();
+    if (proxyState != null && !await proxyState.stop()) {
+      await showWindow();
+      ToastUtils.showError(
+        proxyState.lastError ?? appStrings.failedToStopProxy,
+      );
+      return;
     }
+    _isDisposed = true;
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
+    proxyState?.removeListener(_onProxyStateChanged);
+    AppLanguage.instance.removeListener(_onLanguageChanged);
     try {
       await trayManager.destroy();
     } catch (error) {

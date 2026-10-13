@@ -38,7 +38,12 @@ class DesktopExitService with WindowListener, WidgetsBindingObserver {
 
     // macOS's red close button reaches onWindowClose, while Cmd-Q / Dock Quit
     // reaches this callback. Keep awaiting teardown for actual app termination.
-    await prepareToQuit();
-    return AppExitResponse.exit;
+    try {
+      await prepareToQuit();
+      return AppExitResponse.exit;
+    } catch (error) {
+      debugPrint('Proxy cleanup failed; keeping the app open: $error');
+      return AppExitResponse.cancel;
+    }
   }
 }

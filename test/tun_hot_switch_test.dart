@@ -17,6 +17,34 @@ void main() {
   });
 
   test(
+    'stop reaches pending native cleanup and propagates its failure',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      service.stopResult = ProxyResult.runtimeError;
+      expect(await state.stop(), isFalse);
+      expect(service.calls, ['stop']);
+      service.stopResult = ProxyResult.ok;
+      expect(await state.stop(), isTrue);
+    },
+  );
+
+  test(
+    'disposing during initialization cannot start the elevated handoff',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service, enableTunOnStartup: true);
+      state.dispose();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(await state.start(), isFalse);
+      expect(await state.setTunEnabled(true), isFalse);
+      expect(service.listenerStartCount, 0);
+    },
+  );
+
+  test(
     'Fake-IP is opt-in and reaches the native service on reconnect',
     () async {
       final service = _FakeProxyService();
@@ -260,6 +288,7 @@ class _ReachableNode {
 }
 
 class _FakeProxyService extends ProxyService {
+  var stopResult = ProxyResult.ok;
   final List<String> calls = [];
   final Queue<int> tunStartResults = Queue<int>();
   var listenerStartCount = 0;
@@ -339,6 +368,7 @@ class _FakeProxyService extends ProxyService {
   @override
   Future<int> stop() async {
     calls.add('stop');
+    if (stopResult != ProxyResult.ok) return stopResult;
     _running = false;
     _tunRunning = false;
     return ProxyResult.ok;
