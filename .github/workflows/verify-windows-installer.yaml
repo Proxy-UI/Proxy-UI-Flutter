@@ -65,7 +65,7 @@ jobs:
           $log = Join-Path $PWD 'verification/install.log'
           $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS',
             '/TASKS=', "/DIR=`"$destination`"", "/LOG=`"$log`"")
-          $process = Start-Process -FilePath $installers[0].FullName -ArgumentList $arguments -Wait -PassThru
+          $process = Start-Process -FilePath $installers[0].FullName -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Installer failed with exit code $($process.ExitCode)" }
           Expand-Archive -LiteralPath $portable[0].FullName -DestinationPath $expanded
           $reference = Join-Path $expanded 'CipherRelay'
@@ -90,7 +90,11 @@ jobs:
           if (-not $match.Success -or $version.ProductVersion -ne "$($match.Groups[1].Value)+$($match.Groups[2].Value)") {
             throw 'Installed product version does not match the portable filename'
           }
-          if ($version.ProductName -ne 'CipherRelay') { throw 'Installed product name is incorrect' }
+          # ProductName and CompanyName determine the existing Windows preferences directory.
+          if ($version.ProductName -ne 'proxy_ui' -or $version.CompanyName -ne 'com.proxyui') {
+            throw 'Installed application changed the Windows preferences identity'
+          }
+          if ($version.FileDescription -ne 'CipherRelay') { throw 'Installed display name is incorrect' }
           $report = @{
             status = 'verified'; build_run_id = $env:BUILD_RUN_ID; source_commit = $env:SOURCE_COMMIT
             installer_sha256 = (Get-FileHash $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
