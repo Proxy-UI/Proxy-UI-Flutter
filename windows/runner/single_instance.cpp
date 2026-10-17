@@ -27,6 +27,8 @@ constexpr wchar_t kMutexSecurity[] =
 
 // Long enough for the outgoing instance to finish its own shutdown, short
 // enough that a stuck process cannot hang the elevated relaunch forever.
+// Dart's prepareElevationExit uses an 8-second cleanup budget and keeps its
+// window alive on expiry; retain headroom above that budget here.
 constexpr DWORD kHandoffTimeoutMs = 10000;
 
 // The running instance raises its window inside this call, so the timeout only

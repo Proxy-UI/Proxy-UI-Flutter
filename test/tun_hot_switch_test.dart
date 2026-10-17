@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
@@ -15,6 +16,58 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
+
+  test(
+    'elevation handoff waits for native cleanup and preserves TUN intent',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+      );
+      expect(await state.start(), isTrue);
+      state.updateConfig(state.config.copyWith(tunEnabled: true));
+      service.stopGate = Completer<void>();
+      var completed = false;
+      final handoff = state.stopForElevationHandoff().then((result) {
+        completed = true;
+        return result;
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(completed, isFalse);
+      expect(state.isRunning, isTrue);
+      expect(state.isProxyOperationInProgress, isTrue);
+      expect(await state.start(), isFalse);
+      service.stopGate!.complete();
+      expect(await handoff, isTrue);
+      expect(state.isRunning, isFalse);
+      expect(state.config.tunEnabled, isTrue);
+      expect(state.isProxyOperationInProgress, isFalse);
+    },
+  );
+
+  test(
+    'failed elevation cleanup keeps the old listener visible and permits retry',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+      );
+      expect(await state.start(), isTrue);
+      service.stopResult = ProxyResult.runtimeError;
+      expect(await state.stopForElevationHandoff(), isFalse);
+      expect(state.isRunning, isTrue);
+      expect(state.lastError, isNotNull);
+      expect(state.isProxyOperationInProgress, isFalse);
+      service.stopResult = ProxyResult.ok;
+      expect(await state.stopForElevationHandoff(), isTrue);
+    },
+  );
 
   test(
     'stop reaches pending native cleanup and propagates its failure',
@@ -289,6 +342,7 @@ class _ReachableNode {
 
 class _FakeProxyService extends ProxyService {
   var stopResult = ProxyResult.ok;
+  Completer<void>? stopGate;
   final List<String> calls = [];
   final Queue<int> tunStartResults = Queue<int>();
   var listenerStartCount = 0;
@@ -368,6 +422,7 @@ class _FakeProxyService extends ProxyService {
   @override
   Future<int> stop() async {
     calls.add('stop');
+    await stopGate?.future;
     if (stopResult != ProxyResult.ok) return stopResult;
     _running = false;
     _tunRunning = false;
