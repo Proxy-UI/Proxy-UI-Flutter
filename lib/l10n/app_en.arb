@@ -870,7 +870,7 @@
   "secureTransport": "Use v3 transport",
   "secureTransportDescription": "Native proxy sessions are always encrypted. V3 uses separate direction keys without an extra handshake round trip; upgrade every node first. Off uses the encrypted legacy protocol.",
   "tunDnsServer": "TUN DNS resolver IP",
-  "tunDnsServerDescription": "Desktop DNS uses AliDNS and Tencent DNS over the physical interface, then adapter DNS and this fallback address. Mobile DNS uses this address through the proxy. Existing settings are preserved. Reconnect to apply.",
+  "tunDnsServerDescription": "TUN DNS queries use this resolver through the proxy. On desktop, DNS owned by excluded processes uses the physical interface and prefers AliDNS and Tencent DNS. Shared system DNS queries without a matching exclusion stay proxied. Existing settings are preserved. Reconnect to apply.",
   "invalidTunDnsServer": "Enter a valid IPv4 or IPv6 DNS resolver address.",
   "tunFakeIp": "TUN Fake-IP DNS",
   "tunFakeIpDescription": "Off by default: DNS returns real addresses through the proxy. Enable to use virtual addresses for domain routing. Takes effect after reconnecting."
