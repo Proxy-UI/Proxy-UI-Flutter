@@ -32,7 +32,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late bool _tunFakeIp;
   late TextEditingController _tunDnsController;
   late bool _reverseGeo;
-  late bool _forceCodec;
   late bool _secureTransport;
   late bool _minimizeToTray;
   late bool _launchAtStartup;
@@ -62,7 +61,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _tunFakeIp = config.tunFakeIp;
     _tunDnsController = TextEditingController(text: config.tunDnsServer);
     _reverseGeo = !BuildCapabilities.isMacAppStore && config.reverseGeo;
-    _forceCodec = config.forceCodec;
     _secureTransport = config.secureTransport;
   }
 
@@ -121,8 +119,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
         androidVpnRoutingMode: state.config.androidVpnRoutingMode,
         androidVpnPackages: state.config.androidVpnPackages,
         reverseGeo: _reverseGeo,
-        needCodecIps: state.config.needCodecIps,
-        forceCodec: _forceCodec,
         secureTransport: _secureTransport,
         setSystemProxy: state.config.setSystemProxy,
       ),
@@ -290,14 +286,6 @@ class _ConfigDialogState extends State<ConfigDialog> {
                 subtitle: Text(context.l10n.secureTransportDescription),
                 value: _secureTransport,
                 onChanged: (v) => setState(() => _secureTransport = v),
-              ),
-              SwitchListTile(
-                title: Text(context.l10n.forceCodec),
-                subtitle: Text(context.l10n.forceEncryptionForAllConnections),
-                value: _forceCodec,
-                onChanged: _secureTransport
-                    ? null
-                    : (v) => setState(() => _forceCodec = v),
               ),
               if (DesktopSettings.isSupported) ...[
                 const SizedBox(height: 24),

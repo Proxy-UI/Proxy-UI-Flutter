@@ -36,8 +36,6 @@ class ProxyConfigModel {
   AndroidVpnRoutingMode androidVpnRoutingMode;
   List<String> androidVpnPackages;
   bool reverseGeo;
-  String? needCodecIps;
-  bool forceCodec;
   bool secureTransport;
   bool setSystemProxy; // desktop only
 
@@ -61,8 +59,6 @@ class ProxyConfigModel {
     this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
     List<String> androidVpnPackages = const [],
     this.reverseGeo = false,
-    this.needCodecIps,
-    this.forceCodec = false,
     this.secureTransport = false,
     bool? setSystemProxy,
   }) : autoProxy = autoProxy ?? !BuildCapabilities.isMacAppStore,
@@ -90,8 +86,6 @@ class ProxyConfigModel {
     'androidVpnRoutingMode': androidVpnRoutingMode.wireName,
     'androidVpnPackages': androidVpnPackages,
     'reverseGeo': reverseGeo,
-    'needCodecIps': needCodecIps,
-    'forceCodec': forceCodec,
     'secureTransport': secureTransport,
     'setSystemProxy': setSystemProxy,
   };
@@ -146,8 +140,6 @@ class ProxyConfigModel {
         ),
         androidVpnPackages: _parseStringList(json['androidVpnPackages']),
         reverseGeo: _parseBool(json['reverseGeo'], false),
-        needCodecIps: json['needCodecIps']?.toString(),
-        forceCodec: _parseBool(json['forceCodec'], false),
         secureTransport: _parseBool(json['secureTransport'], false),
         setSystemProxy: _parseBool(json['setSystemProxy'], isDesktop),
       );
@@ -168,8 +160,6 @@ class ProxyConfigModel {
     AndroidVpnRoutingMode? androidVpnRoutingMode,
     List<String>? androidVpnPackages,
     bool? reverseGeo,
-    String? needCodecIps,
-    bool? forceCodec,
     bool? secureTransport,
     bool? setSystemProxy,
   }) => ProxyConfigModel(
@@ -188,8 +178,6 @@ class ProxyConfigModel {
     androidVpnRoutingMode: androidVpnRoutingMode ?? this.androidVpnRoutingMode,
     androidVpnPackages: androidVpnPackages ?? this.androidVpnPackages,
     reverseGeo: reverseGeo ?? this.reverseGeo,
-    needCodecIps: needCodecIps ?? this.needCodecIps,
-    forceCodec: forceCodec ?? this.forceCodec,
     secureTransport: secureTransport ?? this.secureTransport,
     setSystemProxy: setSystemProxy ?? this.setSystemProxy,
   );

@@ -86,7 +86,6 @@ void main() {
 
       expect(config.autoProxy, isFalse);
       expect(config.reverseGeo, isTrue);
-      expect(config.forceCodec, isTrue);
     });
   });
 }

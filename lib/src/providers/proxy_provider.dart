@@ -457,8 +457,6 @@ class ProxyState extends ChangeNotifier {
       tunEnabled: false,
       tunBypassProcesses: config.tunBypassProcesses,
       reverseGeo: config.reverseGeo,
-      needCodecIps: config.needCodecIps,
-      forceCodec: config.forceCodec,
       secureTransport: config.secureTransport,
       setSystemProxy: config.setSystemProxy,
     );
@@ -905,7 +903,6 @@ class ProxyState extends ChangeNotifier {
       final probe = await _service.probeNode(
         serverHost: node.host,
         serverPort: node.port,
-        forceCodec: _config.forceCodec,
         secureTransport: _config.secureTransport,
       );
       final verification = NodeVerification(
@@ -968,8 +965,6 @@ class ProxyState extends ChangeNotifier {
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
       androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,
-      needCodecIps: _config.needCodecIps,
-      forceCodec: _config.forceCodec,
       secureTransport: _config.secureTransport,
       setSystemProxy: _config.setSystemProxy,
     );
@@ -1005,8 +1000,6 @@ class ProxyState extends ChangeNotifier {
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
       androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,
-      needCodecIps: _config.needCodecIps,
-      forceCodec: _config.forceCodec,
       secureTransport: _config.secureTransport,
       setSystemProxy: _config.setSystemProxy,
     );

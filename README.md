@@ -74,12 +74,12 @@ their existing typography and size. The upstream font is unmodified from
 
 ## Features
 
-With the matching native TCP protection fix, native proxy TCP connections
-(including HTTPS and node probes) always use session encryption. The existing
-Force Codec switch additionally encrypts UDP/ICMP tunnels; disabling it no
-longer sends native TCP payloads without the session codec. The legacy wire
-format and saved configuration fields remain compatible, and no settings are
-migrated or rewritten. Direct and external HTTP/SOCKS routes retain their own
+With the matching native library, all native TCP, UDP and ICMP sessions use
+encryption, including HTTPS handshakes and node probes. There is no encryption
+toggle or per-IP codec setting. Older saved values are ignored; the existing
+wire format and FFI layout remain compatible. The optional v3 setting selects
+a newer encrypted protocol and requires upgraded nodes; it does not turn
+encryption on or off. Direct and external HTTP/SOCKS routes keep their own
 protocols. Build/stage the matching native library before using this UI change.
 
 - **TUN ping (1.2.20+46)**: With native 0.4.34 and an updated native proxy exit, TUN forwards IPv4/IPv6 Echo to the real target. The exit needs OS permission for ICMP sockets. Existing TCP/UDP and default legacy protocol stay compatible with old nodes. External HTTP/SOCKS exits and arbitrary IP protocols are not supported by this Echo extension.

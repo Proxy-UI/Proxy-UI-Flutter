@@ -371,8 +371,6 @@ class _FakeProxyService extends ProxyService {
     String tunDnsServer = '8.8.8.8',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
-    String? needCodecIps,
-    bool forceCodec = false,
     bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
