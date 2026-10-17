@@ -11,6 +11,10 @@ on:
         description: 'Create GitHub release'
         type: boolean
         default: true
+      draft_release:
+        description: 'Keep the release as a draft until local APK and installer verification finishes'
+        type: boolean
+        default: false
       release_tag:
         description: 'Release tag (e.g., v1.0.0), required if create_release is true'
         required: false
@@ -407,7 +411,7 @@ jobs:
           tag_name: ${{ github.event.inputs.release_tag }}
           target_commitish: ${{ github.sha }}
           name: "CipherRelay ${{ github.event.inputs.release_tag }}"
-          draft: false
+          draft: ${{ inputs.draft_release }}
           body: |
             # CipherRelay Release ${{ github.event.inputs.release_tag }}
 
@@ -419,9 +423,9 @@ jobs:
             - **macOS**: Developer ID signed and Apple notarized universal DMG (Intel / Apple Silicon)
             - **Windows**: Installer (fastforge) or portable package
             - **Linux**: tar.gz archive
-            Android packages are excluded from this release.
+            Android APKs are rebuilt and signed locally, verified for upgrade
+            compatibility, and attached separately by the maintainer.
 
-            Known verification limits: isolated legacy plain/encrypted TCP tests
-            pass; the reported system-wide TUN outage has not been reproduced or
-            confirmed resolved, and Windows has no real-device TUN validation.
+            See the release manifest for source commits, artifact checksums,
+            macOS signing/notarization, and completed package verification.
           files: release/*
