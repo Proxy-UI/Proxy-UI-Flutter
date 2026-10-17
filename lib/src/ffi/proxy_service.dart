@@ -415,23 +415,36 @@ class ProxyService {
     }
   }
 
-  /// Replace the remote endpoint while preserving the bound local proxy port.
-  ///
-  /// Native code refuses this operation while TUN routes are active. The
-  /// provider therefore stops only TUN, switches this endpoint, and starts TUN
-  /// again so its mandatory remote route bypass follows the new node.
-  int switchUpstream({required String serverHost, required int serverPort}) {
-    if (_operations.isBusy || _operations.isClosed) {
-      return ProxyResult.runtimeError;
-    }
-    if (_handle == null) return ProxyResult.notRunning;
-    final serverHostPtr = serverHost.toNativeUtf8();
+  bool get supportsLiveTunSwitch => Platform.isWindows;
+
+  static int _switchUpstreamIsolate(Map<String, dynamic> params) {
+    final ffi = ProxyFFI();
+    final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
+    final serverHostPtr = (params['serverHost'] as String).toNativeUtf8();
     try {
-      return _ffi.proxySwitchUpstream(_handle!, serverHostPtr, serverPort);
+      return ffi.proxySwitchUpstream(
+        handle,
+        serverHostPtr,
+        params['serverPort'] as int,
+      );
     } finally {
       calloc.free(serverHostPtr);
     }
   }
+
+  /// Windows prepares the physical bypass before atomically publishing the
+  /// endpoint. Route/DNS waits must not run on the UI isolate or race teardown.
+  Future<int> switchUpstream({
+    required String serverHost,
+    required int serverPort,
+  }) => _withHandle(() async {
+    if (_handle == null) return ProxyResult.notRunning;
+    return compute(_switchUpstreamIsolate, {
+      'handleAddress': _handle!.address,
+      'serverHost': serverHost,
+      'serverPort': serverPort,
+    });
+  });
 
   static int _startTunIsolate(Map<String, dynamic> params) {
     final ffi = ProxyFFI();

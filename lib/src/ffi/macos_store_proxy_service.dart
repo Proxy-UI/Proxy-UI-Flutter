@@ -92,8 +92,10 @@ class MacosStoreProxyService extends ProxyService {
   @override
   Future<int> stopTun() => stop();
   @override
-  int switchUpstream({required String serverHost, required int serverPort}) =>
-      ProxyResult.invalidParam;
+  Future<int> switchUpstream({
+    required String serverHost,
+    required int serverPort,
+  }) async => ProxyResult.invalidParam;
   @override
   int setTunBypassProcesses(List<String> processes) => ProxyResult.invalidParam;
   @override
