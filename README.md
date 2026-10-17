@@ -74,6 +74,14 @@ their existing typography and size. The upstream font is unmodified from
 
 ## Features
 
+With the matching native library, all native TCP, UDP and ICMP sessions use
+encryption, including HTTPS handshakes and node probes. There is no encryption
+toggle or per-IP codec setting. Older saved values are ignored; the existing
+wire format and FFI layout remain compatible. The optional v3 setting selects
+a newer encrypted protocol and requires upgraded nodes; it does not turn
+encryption on or off. Direct and external HTTP/SOCKS routes keep their own
+protocols. Build/stage the matching native library before using this UI change.
+
 - **TUN ping (1.2.20+46)**: With native 0.4.34 and an updated native proxy exit, TUN forwards IPv4/IPv6 Echo to the real target. The exit needs OS permission for ICMP sockets. Existing TCP/UDP and default legacy protocol stay compatible with old nodes. External HTTP/SOCKS exits and arbitrary IP protocols are not supported by this Echo extension.
 
 - **Low-latency encrypted transport v3 (1.2.19+45)**: Requires native 0.4.33 on the client and every relay/server. The switch encrypts TCP, UDP and control without an extra handshake round trip. Fresh sender salts separate connections/directions; whole-connection replay protection is not promised. Default off retains legacy compatibility. Failures never silently downgrade. Mac App Store Packet Tunnel remains legacy-only.
@@ -275,6 +283,14 @@ Build the complete Rust workspace and Windows UI together with:
 The Windows executable normally runs without administrator privileges. Start
 the local proxy first, then use the top-level TUN switch; only that action
 requests UAC and relaunches the same GUI elevated without a terminal window.
+The outgoing process waits for its local listener to stop, drains tray updates,
+releases the native tray, and flushes logs before exiting. Keeping a nativeapi
+0.5.2 tray alive until Windows process shutdown can crash in `cnativeapi.dll`
+(`0xc0000005`) and delay the elevated replacement while Windows reports the crash.
+Cleanup has an eight-second budget below the replacement's ten-second wait.
+A timeout keeps the window open and cannot cause a later exit. If tray teardown
+has begun, the window's close button retries cleanup and exit, while minimizing
+keeps the window reachable instead of hiding behind an unavailable tray icon.
 The switch reports enabled only after Wintun and route setup are ready. The TUN
 process picker is available before and during a connection. Native code protects
 the resolved remote proxy routes and always excludes the UI executable itself

@@ -457,8 +457,6 @@ class ProxyState extends ChangeNotifier {
       tunEnabled: false,
       tunBypassProcesses: config.tunBypassProcesses,
       reverseGeo: config.reverseGeo,
-      needCodecIps: config.needCodecIps,
-      forceCodec: config.forceCodec,
       secureTransport: config.secureTransport,
       setSystemProxy: config.setSystemProxy,
     );
@@ -638,16 +636,25 @@ class ProxyState extends ChangeNotifier {
   /// Release the local port after the elevated replacement has been accepted.
   /// Keep `tunEnabled` persisted so the new process knows to complete TUN setup.
   ///
-  /// Deliberately not awaited: TUN is not yet running in this unelevated process
-  /// — the whole point of the handoff is that it could not start it — so there is
-  /// no route or DNS teardown to wait for, only the listener to release.
-  void stopForElevationHandoff() {
-    if (_isRunning) {
-      unawaited(_service.stop());
-    }
-    _isRunning = false;
-    _isTunRunning = false;
+  /// Await the native listener and system-proxy guard before exiting. A fixed
+  /// delay cannot guarantee their teardown has finished on a busy machine.
+  Future<bool> stopForElevationHandoff() async {
+    if (_isDisposed || _isProxyTransitioning || _isTunBusy) return false;
+    _isProxyTransitioning = true;
     _safeNotifyListeners();
+    try {
+      final result = await _service.stop();
+      if (result != ProxyResult.ok && result != ProxyResult.notRunning) {
+        _lastError = _service.lastError ?? ProxyResult.message(result);
+        return false;
+      }
+      _isRunning = false;
+      _isTunRunning = false;
+      return true;
+    } finally {
+      _isProxyTransitioning = false;
+      _safeNotifyListeners();
+    }
   }
 
   /// Stop the proxy and any TUN session it owns.
@@ -896,7 +903,6 @@ class ProxyState extends ChangeNotifier {
       final probe = await _service.probeNode(
         serverHost: node.host,
         serverPort: node.port,
-        forceCodec: _config.forceCodec,
         secureTransport: _config.secureTransport,
       );
       final verification = NodeVerification(
@@ -959,8 +965,6 @@ class ProxyState extends ChangeNotifier {
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
       androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,
-      needCodecIps: _config.needCodecIps,
-      forceCodec: _config.forceCodec,
       secureTransport: _config.secureTransport,
       setSystemProxy: _config.setSystemProxy,
     );
@@ -996,8 +1000,6 @@ class ProxyState extends ChangeNotifier {
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
       androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,
-      needCodecIps: _config.needCodecIps,
-      forceCodec: _config.forceCodec,
       secureTransport: _config.secureTransport,
       setSystemProxy: _config.setSystemProxy,
     );

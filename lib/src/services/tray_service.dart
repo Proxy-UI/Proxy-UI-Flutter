@@ -1,5 +1,6 @@
 import 'app_brand.dart';
 import 'build_capabilities.dart';
+import 'elevation_handoff.dart';
 
 import 'package:proxy_ui/l10n/app_language.dart';
 
@@ -38,6 +39,7 @@ class TrayService with TrayListener {
   int? _appliedMenuSignature;
 
   Future<void> _queue = Future<void>.value();
+  Future<void>? _shutdown;
   bool _needsRebuild = false;
 
   /// Latched off when a platform reports a tray call as unimplemented, so a
@@ -60,7 +62,7 @@ class TrayService with TrayListener {
   }
 
   Future<void> initialize(ProxyState proxyState) async {
-    if (_initialized) return;
+    if (_initialized || _shutdown != null) return;
     _initialized = true;
     _isDisposed = false;
     _trayAvailable = true;
@@ -398,7 +400,15 @@ class TrayService with TrayListener {
     await windowManager.focus();
   }
 
-  Future<void> hideWindow() => windowManager.hide();
+  /// Once tray teardown starts, closing must retry Quit and minimizing must
+  /// keep the window reachable, even if native destroy completes much later.
+  bool get needsExitRetry => _isDisposed;
+
+  Future<void> hideWindow() async {
+    if (!_isDisposed) await windowManager.hide();
+    // Recheck after the platform call: shutdown may have begun while hiding.
+    if (_isDisposed) await showWindow();
+  }
 
   /// Nodes worth offering in the menu.
   ///
@@ -459,7 +469,7 @@ class TrayService with TrayListener {
         }
         break;
       case 'quit':
-        await _quitApp();
+        await quit(proxyState);
         break;
     }
   }
@@ -474,16 +484,39 @@ class TrayService with TrayListener {
       ToastUtils.showInfo(
         appStrings.restartingWithAdministratorPrivilegesForTun,
       );
-      proxyState.stopForElevationHandoff();
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      await proxyState.flushDesktopLogs();
-      exit(0);
+      await finishElevationHandoff(proxyState);
+      return;
     }
     if (result == false) {
       ToastUtils.showError(
         proxyState.lastError ?? appStrings.failedToChangeTunMode,
       );
     }
+  }
+
+  /// The elevated child waits for this process's single-instance lock. Release
+  /// native resources before exit, while their Windows dependencies are alive.
+  Future<void> finishElevationHandoff(ProxyState proxyState) async {
+    try {
+      if (!await prepareElevationExit(
+        stopProxy: proxyState.stopForElevationHandoff,
+        releaseTray: shutdown,
+        flushLogs: proxyState.flushDesktopLogs,
+      )) {
+        await showWindow();
+        ToastUtils.showError(
+          proxyState.lastError ?? appStrings.failedToStopProxy,
+        );
+        return;
+      }
+    } catch (error) {
+      await showWindow();
+      ToastUtils.showError(
+        '${appStrings.shutdownFailedRetryFromWindow}\n$error',
+      );
+      return;
+    }
+    exit(0);
   }
 
   Future<void> _switchNode(ProxyState proxyState, String nodeId) async {
@@ -513,33 +546,52 @@ class TrayService with TrayListener {
     }
   }
 
-  Future<void> _quitApp() async {
-    final proxyState = _proxyState;
+  Future<void> quit(ProxyState proxyState) async {
     // Stopping releases the native system-proxy guard and, on macOS, waits for
     // the privileged helper to put the system routes and DNS back. `exit` below
     // skips Dart and Rust teardown, so without awaiting this the machine can be
     // left pointing at a proxy listener and a tunnel resolver that are both gone.
     // `stop` also covers a TUN session that outlived the listener.
-    if (proxyState != null && !await proxyState.stop()) {
+    if (!await proxyState.stop()) {
       await showWindow();
       ToastUtils.showError(
         proxyState.lastError ?? appStrings.failedToStopProxy,
       );
       return;
     }
-    _isDisposed = true;
-    _healthCheckTimer?.cancel();
-    _healthCheckTimer = null;
-    proxyState?.removeListener(_onProxyStateChanged);
-    AppLanguage.instance.removeListener(_onLanguageChanged);
     try {
-      await trayManager.destroy();
+      await shutdown().timeout(_callTimeout);
     } catch (error) {
-      debugPrint('Failed to remove the tray icon on quit: $error');
+      await showWindow();
+      ToastUtils.showError(
+        '${appStrings.shutdownFailedRetryFromWindow}\n$error',
+      );
+      return;
     }
     await WindowStateService.instance.saveNow();
-    await proxyState?.flushDesktopLogs();
+    await proxyState.flushDesktopLogs();
     exit(0);
+  }
+
+  /// Stop updates, drain in-flight work, and explicitly free the native tray.
+  /// cnativeapi 0.5.2 destroys its taskbar callback table before retained tray
+  /// handles during ExitProcess; leaving the tray alive causes an access
+  /// violation in TrayIcon::Impl's destructor. Dart finalizers cannot fix that
+  /// ordering after exit has begun.
+  Future<void> shutdown() {
+    return _shutdown ??= _releaseNativeTray().onError<Object>((
+      error,
+      stackTrace,
+    ) {
+      _shutdown = null;
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+  }
+
+  Future<void> _releaseNativeTray() async {
+    dispose();
+    await _queue;
+    await trayManager.destroy();
   }
 
   void dispose() {

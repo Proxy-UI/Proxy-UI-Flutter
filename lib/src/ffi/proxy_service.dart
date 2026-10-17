@@ -254,8 +254,6 @@ class ProxyService {
     String tunDnsServer = '8.8.8.8',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
-    String? needCodecIps,
-    bool forceCodec = false,
     bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
@@ -271,7 +269,6 @@ class ProxyService {
     Pointer<Utf8>? serverHostPtr;
     Pointer<Utf8>? sessionKeyPtr;
     Pointer<Utf8>? cacheDirPtr;
-    Pointer<Utf8>? needCodecIpsPtr;
     Pointer<Utf8>? tunBypassProcessesPtr;
     Pointer<Utf8>? tunDnsServerPtr;
 
@@ -304,14 +301,10 @@ class ProxyService {
       cacheDirPtr = supportDir.path.toNativeUtf8();
       config.ref.base.base.cacheDir = cacheDirPtr;
 
-      if (needCodecIps != null && needCodecIps.isNotEmpty) {
-        needCodecIpsPtr = needCodecIps.toNativeUtf8();
-        config.ref.base.base.needCodecIps = needCodecIpsPtr;
-      } else {
-        config.ref.base.base.needCodecIps = nullptr;
-      }
+      config.ref.base.base.needCodecIps = nullptr; // Reserved ABI field.
 
-      config.ref.base.base.forceCodec = forceCodec ? 1 : 0;
+      // Reserved ABI field; native sessions are always encrypted.
+      config.ref.base.base.forceCodec = 1;
 
       // Desktop platforms: set system proxy
       config.ref.base.base.setSystemProxy =
@@ -335,7 +328,6 @@ class ProxyService {
       if (serverHostPtr != null) calloc.free(serverHostPtr);
       if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);
       if (cacheDirPtr != null) calloc.free(cacheDirPtr);
-      if (needCodecIpsPtr != null) calloc.free(needCodecIpsPtr);
       if (tunBypassProcessesPtr != null) {
         calloc.free(tunBypassProcessesPtr);
       }
@@ -784,7 +776,7 @@ class ProxyService {
       final result = ffi.proxyProbeNodeV3(
         hostPtr,
         params['serverPort'] as int,
-        (params['forceCodec'] as bool) ? 1 : 0,
+        1, // Reserved ABI argument; always encrypted.
         params['timeoutMs'] as int,
         (params['secureTransport'] as bool) ? 3 : 0,
       );
@@ -827,14 +819,12 @@ class ProxyService {
   Future<NodeProbe> probeNode({
     required String serverHost,
     required int serverPort,
-    bool forceCodec = false,
     bool secureTransport = false,
     int timeoutMs = 10000,
   }) async {
     final result = await compute(_probeNodeIsolate, {
       'serverHost': serverHost,
       'serverPort': serverPort,
-      'forceCodec': forceCodec,
       'secureTransport': secureTransport,
       'timeoutMs': timeoutMs,
     });

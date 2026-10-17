@@ -44,8 +44,6 @@ class MacosStoreProxyService extends ProxyService {
     String tunDnsServer = '8.8.8.8',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
-    String? needCodecIps,
-    bool forceCodec = false,
     bool secureTransport = false,
     bool setSystemProxy = false,
     bool allowLan = false,
@@ -67,8 +65,6 @@ class MacosStoreProxyService extends ProxyService {
         'tunDnsServer': tunDnsServer,
         'udpDirectFallback': udpDirectFallback,
         'reverseGeo': false,
-        'needCodecIps': needCodecIps,
-        'forceCodec': forceCodec,
       });
       _localPort = localPort;
       return isRunning ? ProxyResult.ok : ProxyResult.runtimeError;

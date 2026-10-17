@@ -10,14 +10,19 @@ class DesktopExitService with WindowListener, WidgetsBindingObserver {
     required this.platform,
     required this.hideToTray,
     required this.prepareToQuit,
+    required this.shouldRetryQuit,
+    required this.retryQuit,
   });
 
   final TargetPlatform platform;
   final AsyncCallback hideToTray;
   final AsyncCallback prepareToQuit;
+  final bool Function() shouldRetryQuit;
+  final AsyncCallback retryQuit;
 
   @override
-  Future<void> onWindowClose() => hideToTray();
+  Future<void> onWindowClose() =>
+      shouldRetryQuit() ? retryQuit() : hideToTray();
 
   @override
   Future<AppExitResponse> didRequestAppExit() async {
@@ -27,11 +32,13 @@ class DesktopExitService with WindowListener, WidgetsBindingObserver {
       // the plugin receives the re-dispatched close and hides the window.
       // Cancel here and hide ourselves: cancellation prevents that re-dispatch.
       // The tray's explicit Quit path performs teardown and exits separately.
+      // After tray teardown starts, the window retries that same explicit quit
+      // path instead of hiding behind an icon that can no longer raise it.
       try {
         await onWindowClose();
       } catch (error) {
         // A shell failure must not turn a window-close request into app exit.
-        debugPrint('Failed to hide the window on close: $error');
+        debugPrint('Window close failed; keeping the app open: $error');
       }
       return AppExitResponse.cancel;
     }

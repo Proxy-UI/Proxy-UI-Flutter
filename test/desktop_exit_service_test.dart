@@ -116,6 +116,45 @@ void main() {
   });
 
   testWidgets(
+    'Windows close retries pending quit without hiding to a dead tray',
+    (tester) async {
+      var trayStopped = false;
+      var retries = 0;
+      final cleanup = Completer<void>();
+      _listen(
+        TargetPlatform.windows,
+        hideToTray: windowManager.hide,
+        prepareToQuit: () async => fail('use the explicit quit path'),
+        shouldRetryQuit: () => trayStopped,
+        retryQuit: () async {
+          retries++;
+          if (retries == 1) throw StateError('native teardown failed');
+          await cleanup.future;
+        },
+      );
+      expect(await _sendAppExitRequest(), 'cancel');
+      expect(windowCalls, ['hide']);
+      windowCalls.clear();
+      trayStopped = true;
+      expect(await _sendAppExitRequest(), 'cancel');
+      var finished = false;
+      final retry = _sendAppExitRequest().then((response) {
+        finished = true;
+        return response;
+      });
+      await tester.pump();
+      expect(retries, 2);
+      expect(finished, isFalse);
+      expect(windowCalls, isEmpty);
+      cleanup.complete();
+      // The production explicit-quit callback exits only after cleanup. This
+      // mock returns so the engine callback can still be checked for cancellation.
+      expect(await retry, 'cancel');
+      expect(windowCalls, isEmpty);
+    },
+  );
+
+  testWidgets(
     'macOS Quit after closing waits for teardown before allowing exit',
     (tester) async {
       final teardown = Completer<void>();
@@ -171,11 +210,15 @@ void _listen(
   TargetPlatform platform, {
   required AsyncCallback hideToTray,
   required AsyncCallback prepareToQuit,
+  bool Function()? shouldRetryQuit,
+  AsyncCallback? retryQuit,
 }) {
   final service = DesktopExitService(
     platform: platform,
     hideToTray: hideToTray,
     prepareToQuit: prepareToQuit,
+    shouldRetryQuit: shouldRetryQuit ?? () => false,
+    retryQuit: retryQuit ?? () async => fail('unexpected quit retry'),
   );
   WidgetsBinding.instance.addObserver(service);
   windowManager.addListener(service);

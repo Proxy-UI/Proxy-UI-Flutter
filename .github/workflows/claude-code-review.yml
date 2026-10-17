@@ -11,7 +11,6 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write
 
 jobs:
   review:
@@ -96,7 +95,7 @@ jobs:
               ".min.js", ".pdf", ".png", ".svg", ".webp",
           }
           source_suffixes = {
-              ".c", ".cc", ".cpp", ".cs", ".go", ".h", ".hpp", ".java",
+              ".c", ".cc", ".cpp", ".cs", ".dart", ".go", ".h", ".hpp", ".java",
               ".js", ".jsx", ".kt", ".kts", ".php", ".proto", ".py", ".rb",
               ".rs", ".sh", ".sql", ".swift", ".toml", ".ts", ".tsx", ".yaml",
               ".yml",
@@ -317,6 +316,8 @@ jobs:
           ANTHROPIC_CUSTOM_HEADERS: ${{ secrets.ANTHROPIC_CUSTOM_HEADERS }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # This repository uses the workflow token, not a Claude GitHub App.
+          github_token: ${{ github.token }}
           show_full_output: true
           display_report: true
           # Post each confirmed line finding as Claude discovers it instead of

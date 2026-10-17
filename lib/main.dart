@@ -140,6 +140,8 @@ class _ProxyAppState extends State<ProxyApp>
           await TrayService.instance.hideWindow();
         },
         prepareToQuit: _prepareToQuit,
+        shouldRetryQuit: () => TrayService.instance.needsExitRetry,
+        retryQuit: () => TrayService.instance.quit(context.read<ProxyState>()),
       );
       _exitService = exitService;
       WidgetsBinding.instance.addObserver(exitService);
@@ -199,6 +201,7 @@ class _ProxyAppState extends State<ProxyApp>
       if (!await proxyState.stop()) {
         throw StateError(proxyState.lastError ?? appStrings.failedToStopProxy);
       }
+      await TrayService.instance.shutdown();
       await proxyState.flushDesktopLogs();
     }
   }
