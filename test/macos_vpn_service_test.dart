@@ -126,7 +126,10 @@ void main() {
       expect(service.isRunning, isFalse);
       expect(service.restoreOrphanedSystemProxy(), isFalse);
       expect(
-        service.switchUpstream(serverHost: 'other.example', serverPort: 1),
+        await service.switchUpstream(
+          serverHost: 'other.example',
+          serverPort: 1,
+        ),
         ProxyResult.invalidParam,
       );
     },

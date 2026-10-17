@@ -1004,6 +1004,9 @@ class ProxyState extends ChangeNotifier {
     );
 
     if (_isRunning && _isTunRunning && !BuildCapabilities.isMacAppStore) {
+      if (_service.supportsLiveTunSwitch) {
+        return _switchLiveTunNode(node, newConfig);
+      }
       return _hotSwitchTunNode(node, newConfig);
     }
 
@@ -1118,6 +1121,43 @@ class ProxyState extends ChangeNotifier {
     }
   }
 
+  /// Native Windows route ownership stays with the active TUN session. A failed
+  /// preparation leaves its upstream unchanged, so no restart/rollback is needed.
+  Future<bool> _switchLiveTunNode(
+    NodeInfo node,
+    ProxyConfigModel newConfig,
+  ) async {
+    if (_isTunBusy) return false;
+    _isTunBusy = true;
+    _isProxyTransitioning = true;
+    _lastError = null;
+    _safeNotifyListeners();
+    try {
+      final result = await _service.switchUpstream(
+        serverHost: newConfig.serverHost,
+        serverPort: newConfig.serverPort,
+      );
+      if (result != ProxyResult.ok) {
+        _lastError = _service.lastError ?? ProxyResult.message(result);
+        return false;
+      }
+      _config = newConfig;
+      _currentNodeId = node.nodeId;
+      _lastError = null;
+      await _saveConfig();
+      return true;
+    } catch (error) {
+      _lastError = appStrings.failedToSwitchUpstream(error.toString());
+      return false;
+    } finally {
+      _isRunning = _service.isRunning;
+      _isTunRunning = _service.isTunRunning;
+      _isTunBusy = false;
+      _isProxyTransitioning = false;
+      _safeNotifyListeners();
+    }
+  }
+
   /// Switch a running TUN session without releasing the local proxy port.
   ///
   /// TUN routes contain an explicit exception for the remote proxy address.
@@ -1173,7 +1213,7 @@ class ProxyState extends ChangeNotifier {
         );
       }
 
-      final switchResult = _service.switchUpstream(
+      final switchResult = await _service.switchUpstream(
         serverHost: newConfig.serverHost,
         serverPort: newConfig.serverPort,
       );
@@ -1222,7 +1262,7 @@ class ProxyState extends ChangeNotifier {
   }) async {
     String? rollbackError;
     if (endpointChanged) {
-      final switchBackResult = _service.switchUpstream(
+      final switchBackResult = await _service.switchUpstream(
         serverHost: previousConfig.serverHost,
         serverPort: previousConfig.serverPort,
       );

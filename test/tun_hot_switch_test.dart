@@ -260,6 +260,58 @@ void main() {
   });
 
   test(
+    'live TUN switch stays responsive and keeps capture on failure or success',
+    () async {
+      final service = _FakeProxyService()..supportsLiveTunSwitch = true;
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(serverHost: 'old.example', setSystemProxy: false),
+      );
+      expect(await state.start(), isTrue);
+      expect(await state.setTunEnabled(true), isTrue);
+      service.calls.clear();
+      final node = NodeInfo(
+        nodeId: 'next',
+        addr: 'new.example:2081',
+        lastSeen: DateTime.now(),
+        country: 'Test',
+        region: 'Loopback',
+      );
+
+      for (final result in [ProxyResult.runtimeError, ProxyResult.ok]) {
+        service.switchGate = Completer<int>();
+        final switching = state.switchToNode(node);
+        await Future<void>.delayed(Duration.zero);
+        expect(state.isTunBusy, isTrue);
+        expect(state.isRunning, isTrue);
+        expect(state.isTunRunning, isTrue);
+        expect(state.config.serverHost, 'old.example');
+        expect(await state.stop(), isFalse);
+        await expectLater(state.switchToNode(node), throwsStateError);
+        service.switchGate!.complete(result);
+        expect(await switching, result == ProxyResult.ok);
+        expect(state.isTunBusy, isFalse);
+        expect(state.isProxyOperationInProgress, isFalse);
+        expect(state.isTunRunning, isTrue);
+        if (result != ProxyResult.ok) {
+          expect(state.lastError, contains('bypass update exceeded'));
+          expect(state.config.serverHost, 'old.example');
+          expect(state.currentNodeId, isNull);
+        }
+      }
+      expect(state.config.serverHost, 'new.example');
+      expect(state.currentNodeId, 'next');
+      expect(service.calls, [
+        'switch:new.example:2081',
+        'switch:new.example:2081',
+      ]);
+      expect(service.listenerStartCount, 1);
+    },
+  );
+
+  test(
     'failed TUN restart restores the previous upstream and routes',
     () async {
       final service = _FakeProxyService();
@@ -341,6 +393,9 @@ class _ReachableNode {
 }
 
 class _FakeProxyService extends ProxyService {
+  @override
+  bool supportsLiveTunSwitch = false;
+  Completer<int>? switchGate;
   var stopResult = ProxyResult.ok;
   Completer<void>? stopGate;
   final List<String> calls = [];
@@ -411,8 +466,16 @@ class _FakeProxyService extends ProxyService {
   }
 
   @override
-  int switchUpstream({required String serverHost, required int serverPort}) {
+  Future<int> switchUpstream({
+    required String serverHost,
+    required int serverPort,
+  }) async {
     calls.add('switch:$serverHost:$serverPort');
+    final result = await switchGate?.future ?? ProxyResult.ok;
+    if (result != ProxyResult.ok) {
+      _error = 'TUN upstream bypass update exceeded 5 seconds';
+      return result;
+    }
     _error = null;
     return ProxyResult.ok;
   }
