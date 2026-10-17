@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proxy_ui/src/ffi/proxy_service.dart';
 import 'package:proxy_ui/src/providers/proxy_provider.dart';
@@ -13,6 +15,43 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
+
+  test(
+    'ERROR view still persists INFO diagnostics and keeps the native floor',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'proxy-view-log-',
+      );
+      final disk = DesktopLogService(
+        enabled: true,
+        directoryProvider: () async => directory,
+      );
+      final service = _SilentProxyService();
+      final state = ProxyState(service: service, desktopLogService: disk);
+      await _waitUntilInitialized(state);
+      state.setMinLogLevel(4);
+      expect(service.nativeLevel, 2);
+      ProxyService.debugEmitLog(
+        LogEntry(level: 2, message: 'bypassing UDP game.exe via physical NIC'),
+      );
+      ProxyService.debugEmitLog(
+        LogEntry(level: 4, message: 'failed destination example.test:443'),
+      );
+      await _settle();
+      expect(state.filteredLogs.map((entry) => entry.level), [4]);
+      state.dispose();
+      await disk.dispose();
+      final text = await directory
+          .list()
+          .where((file) => file is File)
+          .cast<File>()
+          .asyncMap((file) => file.readAsString())
+          .join();
+      expect(text, contains('bypassing UDP game.exe via physical NIC'));
+      expect(text, contains('failed destination example.test:443'));
+      await directory.delete(recursive: true);
+    },
+  );
 
   test('log arrivals notify only the log channel, and coalesce', () async {
     final state = ProxyState(
@@ -123,11 +162,17 @@ Future<void> _settle() =>
 /// so log arrivals never trip the connection reconciliation that legitimately
 /// does notify listeners.
 class _SilentProxyService extends ProxyService {
+  int? nativeLevel;
   @override
   void initLogging() {}
 
   @override
-  void setLogLevel(int level) {}
+  void setLogLevel(int level) {
+    nativeLevel = level;
+  }
+
+  @override
+  bool restoreOrphanedSystemProxy() => false;
 
   @override
   bool get isRunning => false;

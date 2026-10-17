@@ -174,7 +174,7 @@ class NodeInfo {
     bool udpDirectFallback = true,
     bool tunEnabled = false,
     bool tunFakeIp = false,
-    String tunDnsServer = '8.8.8.8',
+    String tunDnsServer = '223.5.5.5',
     List<String> tunBypassProcesses = const [],
     AndroidVpnRoutingMode androidVpnRoutingMode = AndroidVpnRoutingMode.all,
     List<String> androidVpnPackages = const [],

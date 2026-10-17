@@ -54,7 +54,7 @@ class ProxyConfigModel {
     this.udpDirectFallback = true,
     this.tunEnabled = false,
     this.tunFakeIp = false,
-    this.tunDnsServer = '8.8.8.8',
+    this.tunDnsServer = '223.5.5.5',
     List<String> tunBypassProcesses = const [],
     this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
     List<String> androidVpnPackages = const [],
@@ -133,7 +133,7 @@ class ProxyConfigModel {
         // routes after an application upgrade.
         tunEnabled: _parseBool(json['tunEnabled'], false),
         tunFakeIp: _parseBool(json['tunFakeIp'], false),
-        tunDnsServer: (json['tunDnsServer'] ?? '8.8.8.8').toString().trim(),
+        tunDnsServer: (json['tunDnsServer'] ?? '223.5.5.5').toString().trim(),
         tunBypassProcesses: _parseStringList(json['tunBypassProcesses']),
         androidVpnRoutingMode: AndroidVpnRoutingMode.fromWireName(
           json['androidVpnRoutingMode'],

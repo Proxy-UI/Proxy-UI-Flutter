@@ -472,10 +472,10 @@ class ProxyState extends ChangeNotifier {
     );
   }
 
-  /// Persist and, when TUN is active, immediately apply process exclusions.
+  /// Persist and apply exclusions to the running listener and TUN session.
   Future<bool> updateTunBypassProcesses(List<String> processes) async {
     if (_isDisposed) return false;
-    if (_isRunning && _isTunRunning) {
+    if (_isRunning) {
       final result = _service.setTunBypassProcesses(processes);
       if (result != ProxyResult.ok) {
         _lastError = _service.lastError ?? ProxyResult.message(result);
@@ -707,9 +707,8 @@ class ProxyState extends ChangeNotifier {
   void setMinLogLevel(int level) {
     _minLogLevel = LogLevel.normalize(level);
     _filteredLogs = null;
-    // Also raise the native floor so the levels the UI filters out are never
-    // shipped across the FFI boundary in the first place.
-    _service.setLogLevel(_minLogLevel);
+    // Disk diagnostics retain INFO even while the view only shows errors.
+    _service.setLogLevel(_minLogLevel.clamp(0, 2));
     if (!_isDisposed) logRevision.value++;
     _safeNotifyListeners();
   }
