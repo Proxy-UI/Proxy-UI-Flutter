@@ -105,7 +105,6 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     setState(() {
       _processes = sorted;
       _selfProcess = selfProcess;
-      _removeInheritedSelections(forest);
       if (!_initializedExpansion) {
         _expanded.addAll(expandableTunProcessNames(forest));
         _initializedExpansion = true;
@@ -113,23 +112,6 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
       _expandSelectedPaths(forest);
       _loading = false;
     });
-  }
-
-  void _removeInheritedSelections(List<TunProcessTreeNode> forest) {
-    void visit(TunProcessTreeNode node, bool ancestorSelected) {
-      if (ancestorSelected) {
-        _selected.remove(node.process.name);
-      }
-      final selectedHere =
-          ancestorSelected || _selected.contains(node.process.name);
-      for (final child in node.children) {
-        visit(child, selectedHere);
-      }
-    }
-
-    for (final root in forest) {
-      visit(root, false);
-    }
   }
 
   void _expandSelectedPaths(List<TunProcessTreeNode> forest) {
@@ -188,11 +170,8 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     setState(() {
       if (selected) {
         _selected.add(node.process.name);
-        // Parent matching already includes every descendant. Removing redundant
-        // explicit names keeps the persisted policy stable across PID changes.
-        for (final descendant in node.descendants) {
-          _selected.remove(descendant.process.name);
-        }
+        // Explicit rules survive launcher exit/restart and changing PID trees.
+        // Inheritance only affects the display, never the stored selection.
         if (node.children.isNotEmpty) {
           _expanded.add(node.process.name);
         }
@@ -425,7 +404,9 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                 .withValues(alpha: .38)
           : Colors.transparent,
       child: InkWell(
-        onTap: isSelf || inherited ? null : () => _setSelected(node, !selected),
+        onTap: isSelf
+            ? null
+            : () => _setSelected(node, !_selected.contains(name)),
         child: Padding(
           padding: EdgeInsets.only(left: row.depth * 24.0, right: 8),
           child: SizedBox(
@@ -453,10 +434,13 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
                         ),
                 ),
                 Checkbox(
-                  value: selected,
-                  onChanged: isSelf || inherited
+                  tristate: true,
+                  value: inherited && !_selected.contains(name)
                       ? null
-                      : (value) => _setSelected(node, value ?? false),
+                      : selected,
+                  onChanged: isSelf
+                      ? null
+                      : (_) => _setSelected(node, !_selected.contains(name)),
                 ),
                 const SizedBox(width: 6),
                 _ProcessIcon(process: process),

@@ -109,7 +109,7 @@ void main() {
       );
       expect(await state.start(), isTrue);
       expect(service.lastTunFakeIp, isFalse);
-      expect(service.lastTunDnsServer, '8.8.8.8');
+      expect(service.lastTunDnsServer, '223.5.5.5');
       expect(await state.stop(), isTrue);
       state.updateConfig(
         state.config.copyWith(tunFakeIp: true, tunDnsServer: '10.20.30.53'),
@@ -368,7 +368,7 @@ class _FakeProxyService extends ProxyService {
     bool udpDirectFallback = true,
     bool tunEnabled = false,
     bool tunFakeIp = false,
-    String tunDnsServer = '8.8.8.8',
+    String tunDnsServer = '223.5.5.5',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     bool secureTransport = false,
