@@ -265,6 +265,18 @@ inside `.app` bundles and only running processes can be enumerated unprivileged.
 
 #### Windows
 
+The configuration dialog can be opened and edited while connected or starting.
+Changes, including imported settings, remain drafts until **Apply configuration**.
+Connection changes reconnect the active proxy/TUN with rollback on startup
+failure. Changing only process exclusions updates the running policy directly.
+
+**Exclude WeGame games and services** covers WeGame/LOL launcher trees, games
+under WeGame/WeGameApps, and independent AntiCheatExpert/SGuard/ACE services.
+Existing LOL/WeGame exclusions enable this group on upgrade; switching it off
+is remembered. It covers direct TCP, UDP and process-attributed DNS even when
+proxy UDP is disabled. A custom game directory with an exited launcher can
+still require an explicit executable exclusion. Native 0.6.3 or later is required.
+
 The desktop app requires the Rust `http_proxy` native library. Windows TUN mode
 also requires `wintun.dll`; the parent build scripts stage both DLLs. When developing
 from the parent repository on Windows, the recommended command builds and

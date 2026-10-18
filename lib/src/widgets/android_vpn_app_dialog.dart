@@ -314,6 +314,7 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
   }
 
   List<Widget> _buildActions() {
+    final proxy = context.watch<ProxyState>();
     return [
       TextButton(
         onPressed: _saving ? null : () => Navigator.of(context).pop(),
@@ -321,7 +322,10 @@ class _AndroidVpnAppDialogState extends State<AndroidVpnAppDialog> {
       ),
       const SizedBox(width: 8),
       FilledButton.icon(
-        onPressed: _saving ? null : _save,
+        onPressed:
+            _saving || proxy.isProxyOperationInProgress || proxy.isTunBusy
+            ? null
+            : _save,
         icon: _saving
             ? const SizedBox.square(
                 dimension: 16,

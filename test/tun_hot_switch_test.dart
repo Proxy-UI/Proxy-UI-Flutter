@@ -17,6 +17,100 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('confirmed draft rolls back a failed listener and commits only a successful apply', () async {
+    final service = _FakeProxyService();
+    final state = ProxyState(service: service);
+    addTearDown(state.dispose);
+    await _waitUntilInitialized(state);
+    state.updateConfig(
+      ProxyConfigModel(serverHost: 'old.example', setSystemProxy: false),
+    );
+    expect(await state.start(), isTrue);
+    expect(await state.setTunEnabled(true), isTrue);
+    final draft = state.config.copyWith(
+      serverHost: 'new.example',
+      localPort: 19080,
+    );
+    service.startResults.add(ProxyResult.runtimeError);
+    service.stopGate = Completer<void>();
+    final failedApply = state.applyConfig(draft);
+    expect(state.isProxyOperationInProgress, isTrue);
+    expect(await state.applyConfig(draft), isFalse);
+    expect(state.config.serverHost, 'old.example');
+    service.stopGate!.complete();
+    expect(await failedApply, isFalse);
+    expect(service.startedHosts, ['old.example', 'new.example', 'old.example']);
+    expect(state.config.serverHost, 'old.example');
+    expect(state.isRunning && state.isTunRunning, isTrue);
+    expect(state.isProxyOperationInProgress, isFalse);
+    expect(state.lastError, contains('simulated listener failure'));
+    expect(await state.applyConfig(draft), isTrue);
+    expect(state.config.serverHost, 'new.example');
+    expect(state.config.localPort, 19080);
+    expect(state.lastError, isNull);
+    expect(state.isRunning && state.isTunRunning, isTrue);
+    final saved = (await SharedPreferences.getInstance()).getString(
+      'proxy_config',
+    )!;
+    expect(saved, contains('new.example'));
+    expect(saved, isNot(contains('old.example')));
+  });
+
+  test(
+    'a failed capture apply restores the previous configuration and TUN',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(serverHost: 'old.example', setSystemProxy: false),
+      );
+      expect(await state.start(), isTrue);
+      expect(await state.setTunEnabled(true), isTrue);
+      service.tunStartResults.add(ProxyResult.runtimeError);
+      expect(
+        await state.applyConfig(
+          state.config.copyWith(tunDnsServer: '119.29.29.29'),
+        ),
+        isFalse,
+      );
+      expect(state.config.tunDnsServer, '223.5.5.5');
+      expect(service.lastTunDnsServer, '223.5.5.5');
+      expect(state.isRunning && state.isTunRunning, isTrue);
+      expect(state.lastError, contains('simulated TUN restart failure'));
+    },
+  );
+
+  test(
+    'applying the WeGame family updates policy without restarting capture',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(
+        ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+      );
+      expect(await state.start(), isTrue);
+      expect(await state.setTunEnabled(true), isTrue);
+      service.calls.clear();
+      expect(
+        await state.applyConfig(state.config.copyWith(tunBypassWeGame: true)),
+        isTrue,
+      );
+      expect(service.calls, ['setTunBypassProcesses']);
+      expect(service.listenerStartCount, 1);
+      expect(
+        service.lastBypassProcesses,
+        Platform.isWindows ? ['@group:wegame'] : isEmpty,
+      );
+      expect(state.config.tunBypassProcesses, isEmpty);
+      expect(state.config.tunBypassWeGame, isTrue);
+      expect(state.isRunning && state.isTunRunning, isTrue);
+    },
+  );
+
   test(
     'elevation handoff waits for native cleanup and preserves TUN intent',
     () async {
@@ -400,6 +494,8 @@ class _FakeProxyService extends ProxyService {
   Completer<void>? stopGate;
   final List<String> calls = [];
   final Queue<int> tunStartResults = Queue<int>();
+  final Queue<int> startResults = Queue<int>();
+  final List<String> startedHosts = [];
   var listenerStartCount = 0;
   var lastAllowLan = false;
   var lastTunFakeIp = false;
@@ -431,12 +527,16 @@ class _FakeProxyService extends ProxyService {
     bool allowLan = false,
   }) async {
     listenerStartCount++;
+    startedHosts.add(serverHost);
     lastAllowLan = allowLan;
     lastTunFakeIp = tunFakeIp;
     lastTunDnsServer = tunDnsServer;
-    _running = true;
-    _error = null;
-    return ProxyResult.ok;
+    final result = startResults.isEmpty
+        ? ProxyResult.ok
+        : startResults.removeFirst();
+    _running = result == ProxyResult.ok;
+    _error = result == ProxyResult.ok ? null : 'simulated listener failure';
+    return result;
   }
 
   @override

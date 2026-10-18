@@ -365,5 +365,15 @@
   "tunDnsServerDescription": "TUN DNS 通过代理访问此解析器。桌面端已匹配排除规则的进程，其 DNS 走物理网卡，优先使用阿里云、腾讯云。共享系统 DNS 查询未匹配排除规则时仍走代理。已有配置保留，重新连接后生效。",
   "invalidTunDnsServer": "请输入有效的 IPv4 或 IPv6 DNS 解析器地址。",
   "tunFakeIp": "TUN Fake-IP DNS",
-  "tunFakeIpDescription": "默认关闭：通过代理查询真实 IP。开启后使用虚拟地址保留域名路由信息。重新连接后生效。"
+  "tunFakeIpDescription": "默认关闭：通过代理查询真实 IP。开启后使用虚拟地址保留域名路由信息。重新连接后生效。",
+  "bypassWeGameFamily": "WeGame 游戏与服务全部直连",
+  "bypassWeGameFamilyDescription": "覆盖 WeGame、它启动的游戏、WeGameApps 目录、LOL 和反作弊服务。相关 TCP、UDP 及进程自身的 DNS 使用物理网卡，其他程序保持原有规则。",
+  "applyConfiguration": "应用配置",
+  "systemProxy": "使用系统代理",
+  "applyingConfiguration": "正在应用…",
+  "configurationDraftDescription": "这里的修改仅为草稿，点击“应用配置”后才生效。",
+  "configurationApplyReconnects": "应用网络设置会重新连接代理，并恢复已开启的 TUN。仅修改排除规则时，TUN 保持运行。",
+  "invalidConfiguration": "请填写服务器地址以及有效的服务器端口和本地端口。",
+  "configurationRestoredAfterFailure": "应用配置失败：{error}。已恢复原配置并重新连接。",
+  "configurationRollbackFailed": "应用配置失败：{error}。恢复原连接也失败：{rollbackError}。"
 }

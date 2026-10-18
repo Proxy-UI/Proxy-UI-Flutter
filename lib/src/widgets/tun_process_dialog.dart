@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../ffi/proxy_service.dart';
 import '../models/tun_process_tree.dart';
+import '../models/proxy_config.dart';
 import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
 
@@ -45,11 +46,13 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
   bool _loading = true;
   bool _saving = false;
   bool _initializedExpansion = false;
+  bool _weGame = false;
   _ProcessScope _scope = _ProcessScope.all;
 
   @override
   void initState() {
     super.initState();
+    _weGame = context.read<ProxyState>().config.tunBypassWeGame;
     _selected.addAll(
       context.read<ProxyState>().config.tunBypassProcesses.map(_normalize),
     );
@@ -134,6 +137,9 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     if (name.isEmpty) return;
     setState(() {
       _selected.add(name);
+      if (Platform.isWindows && ProxyConfigModel.suggestsWeGameBypass([name])) {
+        _weGame = true;
+      }
       if (!_processes.any((process) => process.name == name)) {
         _processes = [
           ..._processes,
@@ -150,6 +156,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
         _selected.where((name) => name != _selfProcess).toList()..sort();
     final success = await context.read<ProxyState>().updateTunBypassProcesses(
       userProcesses,
+      weGame: _weGame,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -170,6 +177,10 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
     setState(() {
       if (selected) {
         _selected.add(node.process.name);
+        if (Platform.isWindows &&
+            ProxyConfigModel.suggestsWeGameBypass([node.process.name])) {
+          _weGame = true;
+        }
         // Explicit rules survive launcher exit/restart and changing PID trees.
         // Inheritance only affects the display, never the stored selection.
         if (node.children.isNotEmpty) {
@@ -183,6 +194,7 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final proxy = context.watch<ProxyState>();
     final forest = buildTunProcessForest(_processes);
     final query = _normalize(_searchController.text);
     final visible = _flattenVisibleProcesses(forest, query);
@@ -205,6 +217,17 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
         height: 580,
         child: Column(
           children: [
+            if (Platform.isWindows)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.sports_esports_outlined),
+                title: Text(context.l10n.bypassWeGameFamily),
+                subtitle: Text(context.l10n.bypassWeGameFamilyDescription),
+                value: _weGame,
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _weGame = value),
+              ),
             TextField(
               controller: _searchController,
               onChanged: (_) => setState(() {}),
@@ -294,7 +317,10 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
           child: Text(context.l10n.cancel),
         ),
         FilledButton.icon(
-          onPressed: _saving ? null : _save,
+          onPressed:
+              _saving || proxy.isProxyOperationInProgress || proxy.isTunBusy
+              ? null
+              : _save,
           icon: _saving
               ? const SizedBox.square(
                   dimension: 16,
