@@ -873,5 +873,17 @@
   "tunDnsServerDescription": "TUN DNS queries use this resolver through the proxy. On desktop, DNS owned by excluded processes uses the physical interface and prefers AliDNS and Tencent DNS. Shared system DNS queries without a matching exclusion stay proxied. Existing settings are preserved. Reconnect to apply.",
   "invalidTunDnsServer": "Enter a valid IPv4 or IPv6 DNS resolver address.",
   "tunFakeIp": "TUN Fake-IP DNS",
-  "tunFakeIpDescription": "Off by default: DNS returns real addresses through the proxy. Enable to use virtual addresses for domain routing. Takes effect after reconnecting."
+  "tunFakeIpDescription": "Off by default: DNS returns real addresses through the proxy. Enable to use virtual addresses for domain routing. Takes effect after reconnecting.",
+  "bypassWeGameFamily": "WeGame games and services use direct connections",
+  "bypassWeGameFamilyDescription": "Include WeGame, its launched games, WeGameApps installations, LOL and anti-cheat services. Their TCP, UDP and owned DNS use the physical interface. Other applications keep their current routing.",
+  "applyConfiguration": "Apply configuration",
+  "systemProxy": "Use system proxy",
+  "applyingConfiguration": "Applying…",
+  "configurationDraftDescription": "Changes here are a draft until you press Apply configuration.",
+  "configurationApplyReconnects": "Applying network settings reconnects the proxy and restores TUN if it is active. Changing only exclusions keeps TUN running.",
+  "invalidConfiguration": "Enter a server host and valid server and local ports.",
+  "configurationRestoredAfterFailure": "Could not apply configuration: {error}. The previous configuration is running again.",
+  "@configurationRestoredAfterFailure": {"placeholders": {"error": {"type": "String"}}},
+  "configurationRollbackFailed": "Could not apply configuration: {error}. Restoring the previous connection also failed: {rollbackError}.",
+  "@configurationRollbackFailed": {"placeholders": {"error": {"type": "String"}, "rollbackError": {"type": "String"}}}
 }

@@ -37,6 +37,26 @@ void main() {
     expect(config.copyWith(tunDnsServer: '::1').tunDnsServer, '::1');
   });
   group('ProxyConfigModel', () {
+    test(
+      'legacy LOL exclusions enable the family while explicit opt-out survives',
+      () {
+        final legacy = ProxyConfigModel.fromJson({
+          'tunBypassProcesses': ['League of Legends.exe', 'browser'],
+        });
+        expect(legacy.tunBypassWeGame, isTrue);
+        expect(legacy.tunBypassProcesses, ['browser', 'league of legends']);
+        expect(
+          legacy.copyWith(serverHost: 'other.test').tunBypassWeGame,
+          isTrue,
+        );
+        final disabled = legacy.copyWith(tunBypassWeGame: false);
+        expect(
+          ProxyConfigModel.fromJson(disabled.toJson()).tunBypassWeGame,
+          isFalse,
+        );
+        expect(ProxyConfigModel.fromJson({}).tunBypassWeGame, isFalse);
+      },
+    );
     test('Fake-IP is opt-in for fresh and upgraded configurations', () {
       expect(ProxyConfigModel().tunFakeIp, isFalse);
       expect(ProxyConfigModel.fromJson({}).tunFakeIp, isFalse);

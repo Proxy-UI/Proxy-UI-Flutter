@@ -368,6 +368,112 @@ class ProxyState extends ChangeNotifier {
     _safeNotifyListeners();
   }
 
+  /// Apply an explicitly confirmed draft. Publish/persist it only after the
+  /// listener and capture have started, and keep the lifecycle locked through
+  /// rollback so another button cannot interleave a start or node switch.
+  Future<bool> applyConfig(ProxyConfigModel draft) async {
+    if (_isDisposed) return false;
+    if (_isProxyTransitioning || _isTunBusy) {
+      _lastError = appStrings.proxyOperationIsAlreadyInProgress;
+      _safeNotifyListeners();
+      return false;
+    }
+    final candidate = _supportedConfig(draft);
+    if (candidate.serverHost.trim().isEmpty ||
+        !_isValidPort(candidate.serverPort) ||
+        !_isValidPort(candidate.localPort)) {
+      _lastError = appStrings.invalidConfiguration;
+      _safeNotifyListeners();
+      return false;
+    }
+    final previous = _config;
+    _lastError = null;
+    if (jsonEncode(candidate.toJson()) == jsonEncode(previous.toJson())) {
+      return true;
+    }
+    final wasRunning = _isRunning;
+    final wasTunRunning = _isTunRunning;
+    if (!wasRunning && !wasTunRunning) {
+      _config = candidate;
+      await _saveConfig();
+      _safeNotifyListeners();
+      return true;
+    }
+
+    final before = previous.toJson()
+      ..remove('tunBypassProcesses')
+      ..remove('tunBypassWeGame');
+    final after = candidate.toJson()
+      ..remove('tunBypassProcesses')
+      ..remove('tunBypassWeGame');
+    if (jsonEncode(before) == jsonEncode(after)) {
+      return updateTunBypassProcesses(
+        candidate.tunBypassProcesses,
+        weGame: candidate.tunBypassWeGame,
+      );
+    }
+
+    _isProxyTransitioning = true;
+    _lastError = null;
+    _safeNotifyListeners();
+    Future<void> startConfigured(ProxyConfigModel config) async {
+      final started = await _startService(config);
+      if (started != ProxyResult.ok) {
+        throw StateError(_service.lastError ?? ProxyResult.message(started));
+      }
+      if (wasTunRunning && !BuildCapabilities.isMacAppStore) {
+        final capture = await _startConfiguredTun(config);
+        if (capture != ProxyResult.ok) {
+          throw StateError(_service.lastError ?? ProxyResult.message(capture));
+        }
+      }
+    }
+
+    try {
+      final stopped = await _service.stop();
+      if (stopped != ProxyResult.ok && stopped != ProxyResult.notRunning) {
+        _lastError = _service.lastError ?? ProxyResult.message(stopped);
+        return false;
+      }
+      try {
+        await startConfigured(candidate);
+      } catch (error) {
+        final failure = error.toString();
+        try {
+          final cleaned = await _service.stop();
+          if (cleaned != ProxyResult.ok && cleaned != ProxyResult.notRunning) {
+            throw StateError(
+              _service.lastError ?? ProxyResult.message(cleaned),
+            );
+          }
+          await startConfigured(previous);
+          _lastError = appStrings.configurationRestoredAfterFailure(failure);
+        } catch (rollbackError) {
+          _lastError = appStrings.configurationRollbackFailed(
+            failure,
+            rollbackError.toString(),
+          );
+        }
+        return false;
+      }
+      _config = candidate.copyWith(tunEnabled: wasTunRunning);
+      if (candidate.serverHost != previous.serverHost ||
+          candidate.serverPort != previous.serverPort) {
+        _currentNodeId = null;
+      }
+      await _saveConfig();
+      return true;
+    } catch (error) {
+      _lastError = error.toString();
+      return false;
+    } finally {
+      _isRunning = _service.isRunning;
+      _isTunRunning = _service.isTunRunning;
+      _isProxyTransitioning = false;
+      _safeNotifyListeners();
+    }
+  }
+
   bool _isValidPort(int port) => port >= 1 && port <= 65535;
 
   ProxyConfigModel _supportedConfig(ProxyConfigModel config) =>
@@ -378,6 +484,7 @@ class ProxyState extends ChangeNotifier {
           autoProxy: false,
           reverseGeo: false,
           tunBypassProcesses: const [],
+          tunBypassWeGame: false,
         )
       : config;
 
@@ -455,7 +562,7 @@ class ProxyState extends ChangeNotifier {
       tunFakeIp: config.tunFakeIp,
       tunDnsServer: config.tunDnsServer,
       tunEnabled: false,
-      tunBypassProcesses: config.tunBypassProcesses,
+      tunBypassProcesses: config.effectiveTunBypassProcesses,
       reverseGeo: config.reverseGeo,
       secureTransport: config.secureTransport,
       setSystemProxy: config.setSystemProxy,
@@ -473,17 +580,26 @@ class ProxyState extends ChangeNotifier {
   }
 
   /// Persist and apply exclusions to the running listener and TUN session.
-  Future<bool> updateTunBypassProcesses(List<String> processes) async {
-    if (_isDisposed) return false;
-    if (_isRunning) {
-      final result = _service.setTunBypassProcesses(processes);
+  Future<bool> updateTunBypassProcesses(
+    List<String> processes, {
+    bool? weGame,
+  }) async {
+    if (_isDisposed || _isProxyTransitioning || _isTunBusy) return false;
+    final candidate = _config.copyWith(
+      tunBypassProcesses: processes,
+      tunBypassWeGame: weGame,
+    );
+    if (_isRunning || _isTunRunning) {
+      final result = _service.setTunBypassProcesses(
+        candidate.effectiveTunBypassProcesses,
+      );
       if (result != ProxyResult.ok) {
         _lastError = _service.lastError ?? ProxyResult.message(result);
         _safeNotifyListeners();
         return false;
       }
     }
-    _config = _config.copyWith(tunBypassProcesses: processes);
+    _config = candidate;
     await _saveConfig();
     _safeNotifyListeners();
     return true;
@@ -503,6 +619,11 @@ class ProxyState extends ChangeNotifier {
     List<String> packages,
   ) async {
     if (_isDisposed || !Platform.isAndroid) return false;
+    if (_isProxyTransitioning || _isTunBusy) {
+      _lastError = appStrings.proxyOperationIsAlreadyInProgress;
+      _safeNotifyListeners();
+      return false;
+    }
     if (mode == AndroidVpnRoutingMode.include && packages.isEmpty) {
       _lastError = appStrings.selectAtLeastOneApplicationForVpnOnlyMode;
       _safeNotifyListeners();
@@ -567,14 +688,15 @@ class ProxyState extends ChangeNotifier {
     }
   }
 
-  Future<int> _startConfiguredTun() {
+  Future<int> _startConfiguredTun([ProxyConfigModel? config]) {
+    config ??= _config;
     if (Platform.isAndroid) {
       return _service.startAndroidTun(
-        mode: _config.androidVpnRoutingMode.wireName,
-        packages: _config.androidVpnPackages,
+        mode: config.androidVpnRoutingMode.wireName,
+        packages: config.androidVpnPackages,
       );
     }
-    return _service.startTun(_config.tunBypassProcesses);
+    return _service.startTun(config.effectiveTunBypassProcesses);
   }
 
   Future<int> _stopConfiguredTun() {
@@ -961,6 +1083,7 @@ class ProxyState extends ChangeNotifier {
       tunDnsServer: _config.tunDnsServer,
       tunEnabled: _config.tunEnabled,
       tunBypassProcesses: _config.tunBypassProcesses,
+      tunBypassWeGame: _config.tunBypassWeGame,
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
       androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,
@@ -996,6 +1119,7 @@ class ProxyState extends ChangeNotifier {
       tunDnsServer: _config.tunDnsServer,
       tunEnabled: _isTunRunning,
       tunBypassProcesses: _config.tunBypassProcesses,
+      tunBypassWeGame: _config.tunBypassWeGame,
       androidVpnRoutingMode: _config.androidVpnRoutingMode,
       androidVpnPackages: _config.androidVpnPackages,
       reverseGeo: _config.reverseGeo,

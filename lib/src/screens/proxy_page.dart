@@ -40,10 +40,6 @@ class ProxyPage extends StatefulWidget {
 }
 
 class _ProxyPageState extends State<ProxyPage> {
-  final TextEditingController _portController = TextEditingController(
-    text: '1080',
-  );
-
   final WidgetStateProperty<Icon?> thumbIcon =
       WidgetStateProperty.resolveWith<Icon?>((states) {
         if (states.contains(WidgetState.selected)) {
@@ -51,12 +47,6 @@ class _ProxyPageState extends State<ProxyPage> {
         }
         return const Icon(Icons.flight_land);
       });
-
-  @override
-  void dispose() {
-    _portController.dispose();
-    super.dispose();
-  }
 
   void _toggleProxy(ProxyState state) async {
     if (state.isProxyOperationInProgress) return;
@@ -86,44 +76,11 @@ class _ProxyPageState extends State<ProxyPage> {
     }
   }
 
-  void _showPortDialog() async {
-    final state = context.read<ProxyState>();
-    _portController.text = state.config.localPort.toString();
-
-    await showDialog<void>(
+  void _showConfigDialog({ProxyConfigModel? initialConfig}) {
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.l10n.changeLocalProxyServerPort),
-        content: TextField(
-          controller: _portController,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(labelText: context.l10n.enterAPortNumber),
-        ),
-        actions: <Widget>[
-          TextButton(
-            child: Text(context.l10n.dismiss),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          FilledButton(
-            child: Text(context.l10n.okay),
-            onPressed: () {
-              final port = int.tryParse(_portController.text);
-              if (port == null || port < 1 || port > 65535) {
-                ToastUtils.showError(context.l10n.invalidPortNumber);
-                return;
-              }
-              state.updateConfig(state.config.copyWith(localPort: port));
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
-      ),
+      builder: (context) => ConfigDialog(initialConfig: initialConfig),
     );
-  }
-
-  void _showConfigDialog() {
-    showDialog(context: context, builder: (context) => const ConfigDialog());
   }
 
   void _showTunProcessDialog() {
@@ -239,8 +196,7 @@ class _ProxyPageState extends State<ProxyPage> {
       final json = utf8.decode(base64Decode(data.text!));
       final config = ProxyConfigModel.fromJson(jsonDecode(json));
       if (mounted) {
-        context.read<ProxyState>().updateConfig(config);
-        ToastUtils.showSuccess(context.l10n.configImportedSuccessfully);
+        _showConfigDialog(initialConfig: config);
       }
     } catch (e) {
       if (mounted) {
@@ -428,9 +384,7 @@ class _ProxyPageState extends State<ProxyPage> {
                     ),
                     if (Platform.isAndroid)
                       IconButton(
-                        onPressed: state.isTunBusy
-                            ? null
-                            : _showAndroidVpnAppDialog,
+                        onPressed: _showAndroidVpnAppDialog,
                         icon: const Icon(Icons.apps_outlined),
                         tooltip: context.l10n.vpnApplications(
                           (state.config.androidVpnPackages.length).toString(),
@@ -446,9 +400,7 @@ class _ProxyPageState extends State<ProxyPage> {
                       ),
                     if (_supportsTunProcessBypass)
                       IconButton(
-                        onPressed: state.isTunBusy
-                            ? null
-                            : _showTunProcessDialog,
+                        onPressed: _showTunProcessDialog,
                         icon: const Icon(Icons.security_outlined),
                         tooltip: context.l10n.tunBypassProcesses(
                           (state.config.tunBypassProcesses.length).toString(),
@@ -482,7 +434,7 @@ class _ProxyPageState extends State<ProxyPage> {
                 children: [
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: state.isRunning ? null : _showConfigDialog,
+                      onPressed: _showConfigDialog,
                       icon: const Icon(Icons.settings_outlined),
                       label: Text(context.l10n.config),
                     ),
@@ -490,7 +442,7 @@ class _ProxyPageState extends State<ProxyPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: state.isRunning ? null : _showPortDialog,
+                      onPressed: _showConfigDialog,
                       icon: const Icon(Icons.lan_outlined),
                       label: Text(
                         state.config.allowLan
@@ -510,7 +462,7 @@ class _ProxyPageState extends State<ProxyPage> {
                 children: [
                   Expanded(
                     child: TextButton.icon(
-                      onPressed: state.isRunning ? null : _importConfig,
+                      onPressed: _importConfig,
                       icon: const Icon(Icons.file_download_outlined),
                       label: Text(context.l10n.importLabel),
                     ),
@@ -555,10 +507,7 @@ class _ProxyPageState extends State<ProxyPage> {
                     FloatingActionButton.extended(
                       heroTag: 'port_fab',
                       icon: const Icon(Icons.network_wifi),
-                      onPressed:
-                          state.isRunning || state.isProxyOperationInProgress
-                          ? null
-                          : _showPortDialog,
+                      onPressed: _showConfigDialog,
                       label: Text(
                         state.config.allowLan
                             ? context.l10n.lan2(
@@ -587,11 +536,7 @@ class _ProxyPageState extends State<ProxyPage> {
                       children: [
                         FloatingActionButton.small(
                           heroTag: 'import_fab',
-                          onPressed:
-                              state.isRunning ||
-                                  state.isProxyOperationInProgress
-                              ? null
-                              : _importConfig,
+                          onPressed: _importConfig,
                           tooltip: context.l10n.importFromClipboard,
                           child: const Icon(Icons.file_download),
                         ),
@@ -608,10 +553,7 @@ class _ProxyPageState extends State<ProxyPage> {
                     FloatingActionButton.extended(
                       heroTag: 'config_fab',
                       icon: const Icon(Icons.settings),
-                      onPressed:
-                          state.isRunning || state.isProxyOperationInProgress
-                          ? null
-                          : _showConfigDialog,
+                      onPressed: _showConfigDialog,
                       label: Text(context.l10n.config),
                     ),
                   ],
@@ -762,9 +704,7 @@ class _ProxyPageState extends State<ProxyPage> {
                               ),
                             if (_supportsTunProcessBypass)
                               IconButton(
-                                onPressed: state.isTunBusy
-                                    ? null
-                                    : _showTunProcessDialog,
+                                onPressed: _showTunProcessDialog,
                                 icon: const Icon(Icons.security_outlined),
                                 tooltip: context.l10n.tunBypassProcesses(
                                   (state.config.tunBypassProcesses.length)
@@ -773,9 +713,7 @@ class _ProxyPageState extends State<ProxyPage> {
                               ),
                             if (Platform.isAndroid)
                               IconButton(
-                                onPressed: state.isTunBusy
-                                    ? null
-                                    : _showAndroidVpnAppDialog,
+                                onPressed: _showAndroidVpnAppDialog,
                                 icon: const Icon(Icons.apps_outlined),
                                 tooltip: context.l10n.vpnApplications(
                                   (state.config.androidVpnPackages.length)

@@ -118,13 +118,7 @@ void main() {
       expect(find.text('No logs yet'), findsOneWidget);
       await tester.tap(find.text('Proxy').first);
       await tester.pumpAndSettle();
-      // Configuration is disabled while connected. Open the existing dialog
-      // directly to verify that a locale rebuild preserves its edit state too.
-      final screenContext = tester.element(find.byType(HomeScreen));
-      showDialog<void>(
-        context: screenContext,
-        builder: (_) => const ConfigDialog(),
-      );
+      await tester.tap(find.text('Config').first);
       await tester.pumpAndSettle();
       expect(find.byType(ConfigDialog), findsOneWidget);
       await tester.enterText(find.byType(TextField).first, 'edited.example');

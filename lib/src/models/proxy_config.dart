@@ -33,6 +33,7 @@ class ProxyConfigModel {
   bool tunFakeIp;
   String tunDnsServer;
   List<String> tunBypassProcesses;
+  bool tunBypassWeGame;
   AndroidVpnRoutingMode androidVpnRoutingMode;
   List<String> androidVpnPackages;
   bool reverseGeo;
@@ -56,6 +57,7 @@ class ProxyConfigModel {
     this.tunFakeIp = false,
     this.tunDnsServer = '223.5.5.5',
     List<String> tunBypassProcesses = const [],
+    bool? tunBypassWeGame,
     this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
     List<String> androidVpnPackages = const [],
     this.reverseGeo = false,
@@ -63,6 +65,8 @@ class ProxyConfigModel {
     bool? setSystemProxy,
   }) : autoProxy = autoProxy ?? !BuildCapabilities.isMacAppStore,
        tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
+       tunBypassWeGame =
+           tunBypassWeGame ?? suggestsWeGameBypass(tunBypassProcesses),
        androidVpnPackages = _normalizePackageNames(androidVpnPackages),
        setSystemProxy =
            setSystemProxy ??
@@ -83,6 +87,7 @@ class ProxyConfigModel {
     'tunFakeIp': tunFakeIp,
     'tunDnsServer': tunDnsServer,
     'tunBypassProcesses': tunBypassProcesses,
+    'tunBypassWeGame': tunBypassWeGame,
     'androidVpnRoutingMode': androidVpnRoutingMode.wireName,
     'androidVpnPackages': androidVpnPackages,
     'reverseGeo': reverseGeo,
@@ -135,6 +140,10 @@ class ProxyConfigModel {
         tunFakeIp: _parseBool(json['tunFakeIp'], false),
         tunDnsServer: (json['tunDnsServer'] ?? '223.5.5.5').toString().trim(),
         tunBypassProcesses: _parseStringList(json['tunBypassProcesses']),
+        tunBypassWeGame: _parseBool(
+          json['tunBypassWeGame'],
+          suggestsWeGameBypass(_parseStringList(json['tunBypassProcesses'])),
+        ),
         androidVpnRoutingMode: AndroidVpnRoutingMode.fromWireName(
           json['androidVpnRoutingMode'],
         ),
@@ -150,6 +159,7 @@ class ProxyConfigModel {
     int? localPort,
     bool? allowLan,
     String? sessionKey,
+    bool clearSessionKey = false,
     bool? autoProxy,
     bool? udpEnabled,
     bool? udpDirectFallback,
@@ -157,6 +167,7 @@ class ProxyConfigModel {
     bool? tunFakeIp,
     String? tunDnsServer,
     List<String>? tunBypassProcesses,
+    bool? tunBypassWeGame,
     AndroidVpnRoutingMode? androidVpnRoutingMode,
     List<String>? androidVpnPackages,
     bool? reverseGeo,
@@ -167,7 +178,7 @@ class ProxyConfigModel {
     serverPort: serverPort ?? this.serverPort,
     localPort: localPort ?? this.localPort,
     allowLan: allowLan ?? this.allowLan,
-    sessionKey: sessionKey ?? this.sessionKey,
+    sessionKey: clearSessionKey ? null : sessionKey ?? this.sessionKey,
     autoProxy: autoProxy ?? this.autoProxy,
     udpEnabled: udpEnabled ?? this.udpEnabled,
     udpDirectFallback: udpDirectFallback ?? this.udpDirectFallback,
@@ -175,12 +186,34 @@ class ProxyConfigModel {
     tunFakeIp: tunFakeIp ?? this.tunFakeIp,
     tunDnsServer: tunDnsServer ?? this.tunDnsServer,
     tunBypassProcesses: tunBypassProcesses ?? this.tunBypassProcesses,
+    tunBypassWeGame: tunBypassWeGame ?? this.tunBypassWeGame,
     androidVpnRoutingMode: androidVpnRoutingMode ?? this.androidVpnRoutingMode,
     androidVpnPackages: androidVpnPackages ?? this.androidVpnPackages,
     reverseGeo: reverseGeo ?? this.reverseGeo,
     secureTransport: secureTransport ?? this.secureTransport,
     setSystemProxy: setSystemProxy ?? this.setSystemProxy,
   );
+
+  /// Keep the saved executable selection separate from the native family rule.
+  List<String> get effectiveTunBypassProcesses => [
+    ...tunBypassProcesses,
+    if (Platform.isWindows && tunBypassWeGame) '@group:wegame',
+  ];
+
+  /// Upgrade a previous explicit LOL/WeGame exclusion to the complete family.
+  /// A saved false value remains authoritative after the user turns it off.
+  static bool suggestsWeGameBypass(Iterable<String> names) =>
+      _normalizeProcessNames(names).any(
+        (name) => const {
+          'league of legends',
+          'leagueclient',
+          'leagueclientux',
+          'leagueclientuxrender',
+          'wegame',
+          'wegame_env',
+          'tgp',
+        }.contains(name),
+      );
 }
 
 List<String> _normalizePackageNames(Iterable<String> packages) {
