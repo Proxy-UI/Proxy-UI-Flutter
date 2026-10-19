@@ -22,7 +22,7 @@ import 'node_list_view.dart';
 enum NodesView { galaxy, list }
 
 /// The words the galaxy writes on the sky, in the current language.
-GalaxyText galaxyTextFor(BuildContext context) {
+GalaxyText _galaxyTextFor(BuildContext context) {
   final language = Localizations.localeOf(context).languageCode;
   final strings = context.l10n;
   return GalaxyText(
@@ -211,7 +211,7 @@ class _NodesPageState extends State<NodesPage> {
           Positioned.fill(
             child: GalaxyCanvas(
               scene: _shown,
-              text: galaxyTextFor(context),
+              text: _galaxyTextFor(context),
               selected: _selected,
               onSelect: _select,
               controller: _galaxy,

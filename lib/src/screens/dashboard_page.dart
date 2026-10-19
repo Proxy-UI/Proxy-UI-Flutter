@@ -9,18 +9,16 @@ import '../services/build_capabilities.dart';
 import '../widgets/lan_proxy_link.dart';
 import '../widgets/node_badges.dart';
 import 'nodes/control_server_dialog.dart';
-import 'nodes/galaxy/galaxy_canvas.dart';
 import 'nodes/galaxy/galaxy_model.dart';
 import 'nodes/node_actions.dart';
 import 'nodes/node_details_panel.dart';
-import 'nodes/nodes_page.dart';
 import 'proxy_controls.dart';
 
-/// The connection at a glance: one control panel and the live node galaxy.
+/// The connection at a glance: one control panel and the countries.
 ///
 /// The panel holds the power control, the node in use, traffic capture and
-/// the local proxy, one row each. The galaxy fills the rest of the window;
-/// clicking a country or a node opens it on the node map.
+/// the local proxy, one row each. Beside it every country with nodes is a
+/// small badge; clicking one opens it on the node map.
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key, required this.onOpenNodes});
 
@@ -34,10 +32,11 @@ class DashboardPage extends StatelessWidget {
       galaxyNodesOf(state),
       connected: state.isRunning,
     );
-    final galaxy = _GalaxyPreview(
+    Widget countries({required bool scrolls}) => _CountryOverview(
       scene: scene,
       loaded: state.nodes.isNotEmpty,
       onOpenNodes: onOpenNodes,
+      scrolls: scrolls,
     );
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -58,7 +57,7 @@ class DashboardPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-                Expanded(child: galaxy),
+                Expanded(child: countries(scrolls: true)),
               ],
             ),
           );
@@ -75,7 +74,7 @@ class DashboardPage extends StatelessWidget {
                 fill: false,
               ),
               const SizedBox(height: 12),
-              SizedBox(height: 320, child: galaxy),
+              countries(scrolls: false),
             ],
           ),
         );
@@ -546,18 +545,24 @@ class _LocalProxyRow extends StatelessWidget {
   }
 }
 
-/// The live galaxy beside the panel. A click on a country or a node opens it
-/// on the node map, where the details and actions are.
-class _GalaxyPreview extends StatelessWidget {
-  const _GalaxyPreview({
+/// Every country with nodes, as a small badge each: its flag inside the
+/// status ring its star wears in the galaxy. A click opens that country on
+/// the node map.
+class _CountryOverview extends StatelessWidget {
+  const _CountryOverview({
     required this.scene,
     required this.loaded,
     required this.onOpenNodes,
+    required this.scrolls,
   });
 
   final GalaxyScene scene;
   final bool loaded;
   final void Function(String? selection) onOpenNodes;
+
+  /// Whether the grid scrolls inside a fixed height, rather than growing
+  /// with its content inside a scrolling page.
+  final bool scrolls;
 
   @override
   Widget build(BuildContext context) {
@@ -567,35 +572,47 @@ class _GalaxyPreview extends StatelessWidget {
     final available = scene.planets
         .where((planet) => planet.node.health.isAvailable)
         .length;
-    final regions = scene.systems.where((system) => !system.unknown).length;
+    final systems = [...scene.systems]
+      ..sort((a, b) {
+        if (a.unknown != b.unknown) return a.unknown ? 1 : -1;
+        return b.planets.length.compareTo(a.planets.length);
+      });
+    final regions = systems.where((system) => !system.unknown).length;
+    final currentSystem = scene.current?.system.id;
+    final grid = GridView.builder(
+      shrinkWrap: !scrolls,
+      physics: scrolls ? null : const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 168,
+        mainAxisExtent: 156,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: systems.length,
+      itemBuilder: (context, index) => _CountryTile(
+        system: systems[index],
+        current: systems[index].id == currentSystem,
+        onTap: () => onOpenNodes(systems[index].id),
+      ),
+    );
     return Card(
-      key: const Key('galaxy-preview'),
+      key: const Key('country-overview'),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GalaxyCanvas(
-              scene: scene,
-              text: galaxyTextFor(context),
-              selected: null,
-              onSelect: (id) {
-                if (id != null) onOpenNodes(id);
-              },
-              semanticLabel: context.l10n.galaxySemantics,
-            ),
-          ),
-          Positioned(
-            top: 14,
-            left: 22,
-            right: 12,
-            child: Row(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 12, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: scrolls ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        context.l10n.nodeMapTitle,
+                        context.l10n.nodes,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -620,20 +637,109 @@ class _GalaxyPreview extends StatelessWidget {
                   key: const Key('open-node-map'),
                   tooltip: context.l10n.openNodeMap,
                   onPressed: () => onOpenNodes(null),
-                  icon: const Icon(Icons.open_in_full),
+                  icon: const Icon(Icons.blur_circular),
                 ),
               ],
             ),
-          ),
-          if (!loaded)
-            Center(
-              child: FilledButton.icon(
-                onPressed: () => ControlServerDialog.show(context),
-                icon: const Icon(Icons.hub_outlined),
-                label: Text(context.l10n.setUpControlServer),
+            const SizedBox(height: 14),
+            if (!loaded)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: FilledButton.icon(
+                    onPressed: () => ControlServerDialog.show(context),
+                    icon: const Icon(Icons.hub_outlined),
+                    label: Text(context.l10n.setUpControlServer),
+                  ),
+                ),
+              )
+            else if (scrolls)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: grid,
+                ),
+              )
+            else
+              Padding(padding: const EdgeInsets.only(right: 8), child: grid),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CountryTile extends StatelessWidget {
+  const _CountryTile({
+    required this.system,
+    required this.current,
+    required this.onTap,
+  });
+
+  final CountrySystem system;
+
+  /// Whether the node in use is in this country.
+  final bool current;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final best = system.bestLatency;
+    return Material(
+      color: scheme.surfaceContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: current
+            ? BorderSide(color: scheme.primary, width: 1.5)
+            : BorderSide.none,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
+          child: Column(
+            children: [
+              CountryHealthBadge(
+                code: system.code,
+                counts: system.counts,
+                size: 56,
               ),
-            ),
-        ],
+              const SizedBox(height: 10),
+              Text(
+                placeName(context, system.code),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                context.l10n.galaxyCountryStats(
+                  system.planets.length,
+                  system.available,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              if (best != null)
+                Text(
+                  context.l10n.bestLatency(best),
+                  maxLines: 1,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
