@@ -1,3 +1,4 @@
+import 'country_atlas.dart';
 import 'node_group_model.dart';
 import 'node_model.dart';
 
@@ -81,12 +82,16 @@ List<NodeInfo> filterNodeCatalog({
       return true;
     }
 
+    final located = countryInfo(country);
     final searchableText = [
       node.nodeId,
       node.addr,
       node.country,
       node.region,
       node.displayName,
+      // Searching "Japan" or "日本" finds the nodes the galaxy puts there.
+      ?located?.english,
+      ?located?.chinese,
       ...?groupNamesByNodeId[node.nodeId],
     ].join(' ').toLowerCase();
 

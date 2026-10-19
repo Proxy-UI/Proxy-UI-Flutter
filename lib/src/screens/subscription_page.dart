@@ -4,8 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
+import '../theme/app_theme.dart';
 import '../utils/toast_utils.dart';
 
+/// Serves Clash and Shadowrocket subscriptions that point other devices on
+/// the network at this device's proxy.
 class SubscriptionPage extends StatefulWidget {
   const SubscriptionPage({super.key});
 
@@ -18,82 +21,177 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Consumer<ProxyState>(
-          builder: (context, state, _) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    context.l10n.subscriptionService,
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 32),
-                  _buildToggleButton(context, state),
-                  const SizedBox(height: 24),
-                  _buildStatusCard(state),
-                  const SizedBox(height: 24),
-                  if (state.subscriptionServiceRunning) ...[
-                    _buildSubscriptionCard(
-                      context,
-                      context.l10n.clashAndroid,
-                      state.clashUrl ?? '',
-                      Icons.android,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSubscriptionCard(
-                      context,
-                      context.l10n.shadowrocketIos,
-                      state.shadowrocketUrl ?? '',
-                      Icons.apple,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildInstructions(),
-                  ],
-                ],
+    final state = context.watch<ProxyState>();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final running = state.subscriptionServiceRunning;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                context.l10n.subscriptionService,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            );
-          },
+              const SizedBox(height: 6),
+              Text(
+                context.l10n.subscriptionHint,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: running
+                              ? StatusColors.of(context).good
+                                    .withValues(alpha: 0.18)
+                              : scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          running
+                              ? Icons.wifi_tethering
+                              : Icons.portable_wifi_off,
+                          color: running
+                              ? StatusColors.of(context).good
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.l10n.status(
+                                running
+                                    ? context.l10n.running
+                                    : context.l10n.stopped,
+                              ),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (running)
+                              Text(
+                                context.l10n.port2(
+                                  state.subscriptionServicePort.toString(),
+                                ),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      _buildToggleButton(context, state),
+                    ],
+                  ),
+                ),
+              ),
+              if (running) ...[
+                const SizedBox(height: 12),
+                _buildSubscriptionCard(
+                  context,
+                  context.l10n.clashAndroid,
+                  state.clashUrl ?? '',
+                  Icons.android,
+                ),
+                const SizedBox(height: 12),
+                _buildSubscriptionCard(
+                  context,
+                  context.l10n.shadowrocketIos,
+                  state.shadowrocketUrl ?? '',
+                  Icons.phone_iphone,
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  color: scheme.tertiaryContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: scheme.onTertiaryContainer,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.l10n.important,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: scheme.onTertiaryContainer,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                context
+                                    .l10n
+                                    .ensureTheLocalProxyIsRunningImportTheSubscription,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: scheme.onTertiaryContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildToggleButton(BuildContext context, ProxyState state) {
-    return FilledButton.icon(
-      onPressed: state.subscriptionServiceBusy
-          ? null
-          : () async {
-              if (state.subscriptionServiceRunning) {
-                await state.stopSubscriptionService();
-              } else {
-                await _showPortDialog(context, state);
-              }
-            },
-      icon: state.subscriptionServiceBusy
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(
-              state.subscriptionServiceRunning ? Icons.stop : Icons.play_arrow,
-            ),
-      label: Text(
-        state.subscriptionServiceBusy
-            ? context.l10n.processing
-            : state.subscriptionServiceRunning
-            ? context.l10n.stopService
-            : context.l10n.startService,
-      ),
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        textStyle: const TextStyle(fontSize: 18),
-      ),
+    final running = state.subscriptionServiceRunning;
+    final onPressed = state.subscriptionServiceBusy
+        ? null
+        : () async {
+            if (running) {
+              await state.stopSubscriptionService();
+            } else {
+              await _showPortDialog(context, state);
+            }
+          };
+    final icon = state.subscriptionServiceBusy
+        ? const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : Icon(running ? Icons.stop : Icons.play_arrow);
+    final label = Text(
+      state.subscriptionServiceBusy
+          ? context.l10n.processing
+          : running
+          ? context.l10n.stopService
+          : context.l10n.startService,
     );
+    return running
+        ? OutlinedButton.icon(onPressed: onPressed, icon: icon, label: label)
+        : FilledButton.icon(onPressed: onPressed, icon: icon, label: label);
   }
 
   Future<void> _showPortDialog(BuildContext context, ProxyState state) async {
@@ -140,7 +238,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           await state.startSubscriptionService(port: result);
         } catch (e) {
           if (mounted) {
-            ToastUtils.showError(strings.failedToStartService((e).toString()));
+            ToastUtils.showError(strings.failedToStartService(e.toString()));
           }
         }
       }
@@ -149,135 +247,53 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     }
   }
 
-  Widget _buildStatusCard(ProxyState state) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  state.subscriptionServiceRunning
-                      ? Icons.check_circle
-                      : Icons.cancel,
-                  color: state.subscriptionServiceRunning
-                      ? Colors.green
-                      : Colors.grey,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  context.l10n.status(
-                    state.subscriptionServiceRunning
-                        ? context.l10n.running
-                        : context.l10n.stopped,
-                  ),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            if (state.subscriptionServiceRunning) ...[
-              const SizedBox(height: 8),
-              Text(
-                context.l10n.port2((state.subscriptionServicePort).toString()),
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSubscriptionCard(
     BuildContext context,
     String title,
     String url,
     IconData icon,
   ) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                Icon(icon, color: scheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: url));
+                    ToastUtils.showInfo(context.l10n.urlCopiedToClipboard);
+                  },
+                  icon: const Icon(Icons.copy, size: 18),
+                  label: Text(context.l10n.copyUrl),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: SelectableText(
                 url,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonalIcon(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: url));
-                ToastUtils.showInfo(context.l10n.urlCopiedToClipboard);
-              },
-              icon: const Icon(Icons.copy, size: 18),
-              label: Text(context.l10n.copyUrl),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInstructions() {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      color: isDark ? colorScheme.surfaceContainerHighest : Colors.amber[50],
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  color: isDark ? colorScheme.primary : Colors.amber[900],
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  context.l10n.important,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? colorScheme.primary : Colors.amber[900],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              context.l10n.ensureTheLocalProxyIsRunningImportTheSubscription,
-              style: TextStyle(
-                color: isDark ? colorScheme.onSurface : Colors.amber[900],
               ),
             ),
           ],

@@ -883,7 +883,137 @@
   "configurationApplyReconnects": "Applying network settings reconnects the proxy and restores TUN if it is active. Changing only exclusions keeps TUN running.",
   "invalidConfiguration": "Enter a server host and valid server and local ports.",
   "configurationRestoredAfterFailure": "Could not apply configuration: {error}. The previous configuration is running again.",
-  "@configurationRestoredAfterFailure": {"placeholders": {"error": {"type": "String"}}},
+  "@configurationRestoredAfterFailure": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "configurationRollbackFailed": "Could not apply configuration: {error}. Restoring the previous connection also failed: {rollbackError}.",
-  "@configurationRollbackFailed": {"placeholders": {"error": {"type": "String"}, "rollbackError": {"type": "String"}}}
+  "@configurationRollbackFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      },
+      "rollbackError": {
+        "type": "String"
+      }
+    }
+  },
+  "nodesViewGalaxy": "Galaxy",
+  "nodesViewList": "List",
+  "nodesSearchHint": "Search IP, country, region or group",
+  "healthFast": "Fast",
+  "healthFair": "Fair",
+  "healthSlow": "Slow",
+  "healthTesting": "Testing",
+  "healthUnreachable": "Unreachable",
+  "healthUntested": "Untested",
+  "filterAvailable": "Available",
+  "galaxyHome": "This device",
+  "galaxyUnlocated": "Unlocated",
+  "galaxyCountryStats": "{total, plural, =1{1 node} other{{total} nodes}} · {available} up",
+  "@galaxyCountryStats": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      },
+      "available": {
+        "type": "int"
+      }
+    }
+  },
+  "galaxyHint": "Drag to orbit · Scroll to zoom · Click a star or planet",
+  "galaxySemantics": "Node galaxy",
+  "resetView": "Reset view",
+  "unlocatedBanner": "{count, plural, =1{1 node has no known location yet. Test it to place it in its country.} other{{count} nodes have no known location yet. Test them to place each one in its country.}}",
+  "@unlocatedBanner": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "testNow": "Test now",
+  "refreshCatalogue": "Refresh catalogue",
+  "controlServerSettings": "Control server settings",
+  "setUpControlServer": "Set up control server",
+  "noNodesHint": "Connect to your control server to load its nodes.",
+  "nodeConnect": "Connect",
+  "nodeInUse": "In use",
+  "nodeAddress": "Address",
+  "nodeId": "Node ID",
+  "nodeEgressIp": "Egress IP",
+  "nodeChecked": "Last test",
+  "nodeLastSeen": "Last seen",
+  "nodeNeverTested": "Never",
+  "nodeCatalogueRegion": "Catalogue region",
+  "copyAddress": "Copy address",
+  "addressCopied": "Address copied",
+  "testRegion": "Test these nodes",
+  "regionAvailable": "{available} of {total} available",
+  "@regionAvailable": {
+    "placeholders": {
+      "available": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "bestLatency": "Best {value} ms",
+  "@bestLatency": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "allGroups": "All groups",
+  "egressDiffers": "Traffic leaves from {actual}; the catalogue says {claimed}.",
+  "@egressDiffers": {
+    "placeholders": {
+      "actual": {
+        "type": "String"
+      },
+      "claimed": {
+        "type": "String"
+      }
+    }
+  },
+  "homeDetail": "Traffic from this device leaves through the node the arc of light points to.",
+  "notConnectedHint": "Not connected. Pick a node and press Connect.",
+  "latencyValue": "{value} ms",
+  "@latencyValue": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "tapToConnect": "Tap to connect",
+  "tapToDisconnect": "Tap to disconnect",
+  "working": "Working…",
+  "currentNodeTitle": "Current node",
+  "openNodeMap": "Open node map",
+  "noCurrentNode": "Not using a node from the catalogue",
+  "localProxy": "Local proxy",
+  "nodeMapTitle": "Node map",
+  "nodeMapSummary": "{regions} regions · {available} of {total} nodes available",
+  "@nodeMapSummary": {
+    "placeholders": {
+      "regions": {
+        "type": "int"
+      },
+      "available": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "subscriptionHint": "Share this device's proxy with Clash and Shadowrocket on your network through a subscription link."
 }

@@ -886,12 +886,18 @@ class ProxyState extends ChangeNotifier {
     }
   }
 
-  // Check if a node is the current one
+  /// Whether [node] is the upstream the proxy is configured to use.
+  ///
+  /// The node id chosen in this session disambiguates nodes sharing an
+  /// address. After a restart there is none, and the configured address alone
+  /// still identifies the node, so the dashboard and the galaxy keep showing
+  /// which node traffic goes through.
   bool isCurrentNode(NodeInfo node) {
     try {
-      return _currentNodeId == node.nodeId &&
-          _config.serverHost == node.host &&
-          _config.serverPort == node.port;
+      final sameAddress =
+          _config.serverHost == node.host && _config.serverPort == node.port;
+      final currentId = _currentNodeId;
+      return sameAddress && (currentId == null || currentId == node.nodeId);
     } catch (_) {
       return false;
     }

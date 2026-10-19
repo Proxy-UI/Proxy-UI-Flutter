@@ -1,33 +1,6 @@
 import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 
-/// Responsive breakpoints
-const double narrowScreenWidthThreshold = 450;
-const double smallWidthBreakpoint = 500;
-const double mediumWidthBreakpoint = 1000;
-const double largeWidthBreakpoint = 1500;
-
-/// Animation
-const double transitionLength = 500;
-
-/// Layout status for responsive design
-enum LayoutStatus { moreSmall, small, medium, large }
-
-/// Spacing constants
-const double tinySpacing = 4.0;
-const double smallSpacing = 8.0;
-const double mediumSpacing = 16.0;
-const double largeSpacing = 24.0;
-const double extraLargeSpacing = 32.0;
-
-/// Animation durations
-const Duration shortDuration = Duration(milliseconds: 200);
-const Duration mediumDuration = Duration(milliseconds: 400);
-const Duration longDuration = Duration(milliseconds: 600);
-
-/// Navigation animation curve
-const Curve navCurve = Curves.easeInOutCubicEmphasized;
-
 /// Color seed options
 enum ColorSeed {
   baseColor('M3 Baseline', Color(0xff6750a4)),

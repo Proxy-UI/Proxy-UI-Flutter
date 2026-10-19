@@ -67,7 +67,7 @@ class _AppWindowTitleBarState extends State<AppWindowTitleBar>
     final theme = Theme.of(context);
 
     return ColoredBox(
-      color: theme.colorScheme.surface,
+      color: theme.colorScheme.surfaceContainer,
       child: SizedBox(
         height: AppWindowTitleBar.height,
         child: Row(

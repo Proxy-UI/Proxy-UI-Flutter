@@ -118,27 +118,17 @@ class _LogPageState extends State<LogPage> {
     _lastKnownLogCount = currentLogCount;
 
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: Column(
         children: [
-          // 工具栏
           _buildToolbar(context, state, logs.length),
-          const SizedBox(height: 16),
-          // 日志卡片
+          const SizedBox(height: 12),
           Expanded(
             child: Stack(
               children: [
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
-                    child: _buildLogList(context, logs),
-                  ),
+                Positioned.fill(
+                  child: Card(child: _buildLogList(context, logs)),
                 ),
-                // 新日志提示按钮
                 if (_newLogsCount > 0 && !_isAtBottom)
                   Positioned(
                     right: 16,
@@ -155,53 +145,49 @@ class _LogPageState extends State<LogPage> {
 
   Widget _buildToolbar(BuildContext context, ProxyState state, int matchCount) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
 
     return Row(
       children: [
-        // 搜索框
         Expanded(
-          child: TextField(
+          child: SearchBar(
             controller: _searchController,
             onChanged: _onSearchChanged,
-            decoration: InputDecoration(
-              hintText: context.l10n.searchLogsGrep,
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$matchCount',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            _onSearchChanged('');
-                          },
-                        ),
-                      ],
-                    )
-                  : null,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+            hintText: context.l10n.searchLogsGrep,
+            elevation: const WidgetStatePropertyAll(0),
+            backgroundColor: WidgetStatePropertyAll(
+              scheme.surfaceContainerHighest,
             ),
+            constraints: const BoxConstraints(minHeight: 44, maxHeight: 44),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 14),
+            ),
+            leading: Icon(Icons.search, color: scheme.onSurfaceVariant),
+            trailing: [
+              if (_searchQuery.isNotEmpty) ...[
+                Text(
+                  '$matchCount',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: context.l10n.clearSearch,
+                  onPressed: () {
+                    _searchController.clear();
+                    _onSearchChanged('');
+                  },
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(width: 12),
-        // Level 过滤（阈值，INFO+ 表示包含更高等级）
-        _buildFilterDropdown(context, state, isDark),
-        const SizedBox(width: 8),
+        // Threshold filter: INFO+ includes every more severe level.
+        _buildFilterMenu(context, state, isDark),
+        const SizedBox(width: 4),
         if (state.hasLocalLogStorage)
           IconButton(
             onPressed: _isOpeningLogDirectory
@@ -210,46 +196,52 @@ class _LogPageState extends State<LogPage> {
             icon: const Icon(Icons.folder_open_outlined),
             tooltip: context.l10n.openLogFolder,
           ),
-        // 清除按钮
         IconButton(
           onPressed: state.clearLogs,
-          icon: const Icon(Icons.delete_outline),
+          icon: const Icon(Icons.delete_sweep_outlined),
           tooltip: context.l10n.clearLogs,
         ),
       ],
     );
   }
 
-  Widget _buildFilterDropdown(
-    BuildContext context,
-    ProxyState state,
-    bool isDark,
-  ) {
-    return DropdownButton<int>(
-      value: state.minLogLevel,
-      items: List.generate(5, (index) {
-        return DropdownMenuItem(
-          value: index,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: LogLevel.getColor(index, isDark: isDark),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(LogLevel.getThresholdLabel(index)),
-            ],
+  Widget _buildFilterMenu(BuildContext context, ProxyState state, bool isDark) {
+    Widget dot(int level) => Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: LogLevel.getColor(level, isDark: isDark),
+      ),
+    );
+    return MenuAnchor(
+      menuChildren: [
+        for (var level = 0; level < LogLevel.names.length; level++)
+          MenuItemButton(
+            leadingIcon: SizedBox(
+              width: 24,
+              child: state.minLogLevel == level
+                  ? const Icon(Icons.check, size: 18)
+                  : Center(child: dot(level)),
+            ),
+            onPressed: () => state.setMinLogLevel(level),
+            child: Text(LogLevel.getThresholdLabel(level)),
           ),
-        );
-      }),
-      onChanged: (value) {
-        if (value != null) state.setMinLogLevel(value);
-      },
+      ],
+      builder: (context, controller, _) => FilterChip(
+        showCheckmark: false,
+        selected: true,
+        avatar: dot(state.minLogLevel),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(LogLevel.getThresholdLabel(state.minLogLevel)),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+        onSelected: (_) =>
+            controller.isOpen ? controller.close() : controller.open(),
+      ),
     );
   }
 
