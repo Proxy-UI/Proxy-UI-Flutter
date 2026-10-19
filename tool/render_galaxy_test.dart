@@ -181,6 +181,11 @@ void main() {
     await openNodes();
     await capture('08-galaxy-phone-dark-zh');
 
+    // The smallest window the desktop app allows.
+    await show(const Size(800, 600), ThemeMode.light, 'zh');
+    await settle(10);
+    await capture('09-dashboard-min-window-light-zh');
+
     await tester.pumpWidget(const SizedBox());
     proxy.dispose();
     theme.dispose();

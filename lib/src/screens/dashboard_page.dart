@@ -4,21 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 
+import '../models/node_health.dart';
 import '../providers/proxy_provider.dart';
 import '../services/build_capabilities.dart';
+import '../theme/app_theme.dart';
 import '../widgets/lan_proxy_link.dart';
 import '../widgets/node_badges.dart';
 import 'nodes/control_server_dialog.dart';
+import 'nodes/galaxy/galaxy_canvas.dart';
 import 'nodes/galaxy/galaxy_model.dart';
 import 'nodes/node_actions.dart';
 import 'nodes/node_details_panel.dart';
+import 'nodes/nodes_page.dart';
 import 'proxy_controls.dart';
 
-/// The connection at a glance: one control panel and the countries.
+/// The connection at a glance.
 ///
-/// The panel holds the power control, the node in use, traffic capture and
-/// the local proxy, one row each. Beside it every country with nodes is a
-/// small badge; clicking one opens it on the node map.
+/// On a desktop window the node galaxy fills the page and the controls float
+/// over its left edge in one compact panel: the power control, the node in
+/// use, traffic capture and the local proxy. On a phone, or any window too
+/// small for the galaxy to read, the panel fills one screen and the galaxy is
+/// a button away. Clicking a country or a node opens it on the node map.
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key, required this.onOpenNodes});
 
@@ -32,50 +38,60 @@ class DashboardPage extends StatelessWidget {
       galaxyNodesOf(state),
       connected: state.isRunning,
     );
-    Widget countries({required bool scrolls}) => _CountryOverview(
-      scene: scene,
-      loaded: state.nodes.isNotEmpty,
-      onOpenNodes: onOpenNodes,
-      scrolls: scrolls,
-    );
     return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 900) {
-          final width = (constraints.maxWidth * 0.34).clamp(380.0, 460.0);
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  width: width,
-                  child: _ControlPanel(
-                    state: state,
-                    scene: scene,
-                    onOpenNodes: onOpenNodes,
-                    fill: true,
-                  ),
+      builder: (context, box) {
+        if (box.maxWidth >= 900 && box.maxHeight >= 520) {
+          return _GalaxyDashboard(
+            state: state,
+            scene: scene,
+            onOpenNodes: onOpenNodes,
+          );
+        }
+        final panel = _ControlPanel(
+          state: state,
+          scene: scene,
+          onOpenNodes: onOpenNodes,
+          floating: false,
+        );
+        final map = _NodeMapButton(
+          scene: scene,
+          onOpen: () => onOpenNodes(null),
+        );
+        final width = box.maxWidth < 560 ? box.maxWidth : 560.0;
+        // Everything fits one screen; only a very short window scrolls.
+        if (box.maxHeight >= 520) {
+          return Center(
+            child: SizedBox(
+              width: width,
+              height: box.maxHeight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: panel),
+                    const SizedBox(height: 12),
+                    map,
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Expanded(child: countries(scrolls: true)),
-              ],
+              ),
             ),
           );
         }
         return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _ControlPanel(
-                state: state,
-                scene: scene,
-                onOpenNodes: onOpenNodes,
-                fill: false,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Center(
+            child: SizedBox(
+              width: width - 32,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(height: 480, child: panel),
+                  const SizedBox(height: 12),
+                  map,
+                ],
               ),
-              const SizedBox(height: 12),
-              countries(scrolls: false),
-            ],
+            ),
           ),
         );
       },
@@ -83,67 +99,187 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-/// Everything the user controls, on one flat surface.
-class _ControlPanel extends StatelessWidget {
-  const _ControlPanel({
+/// The galaxy filling the page, with the control panel over its left edge.
+class _GalaxyDashboard extends StatelessWidget {
+  const _GalaxyDashboard({
     required this.state,
     required this.scene,
     required this.onOpenNodes,
-    required this.fill,
   });
 
   final ProxyState state;
   final GalaxyScene scene;
   final void Function(String? selection) onOpenNodes;
 
-  /// Whether the panel has a height to fill: the power control then takes
-  /// the free space above the rows.
-  final bool fill;
+  static const double _panelWidth = 360;
 
   @override
   Widget build(BuildContext context) {
-    final power = _PowerSection(state: state);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Card(
+        key: const Key('galaxy-dashboard'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GalaxyCanvas(
+                scene: scene,
+                text: galaxyTextFor(context),
+                selected: null,
+                onSelect: (id) {
+                  if (id != null) onOpenNodes(id);
+                },
+                semanticLabel: context.l10n.galaxySemantics,
+                // Framed in the part the panel leaves uncovered.
+                inset: const EdgeInsets.only(left: _panelWidth + 24, top: 40),
+              ),
+            ),
+            Positioned(
+              top: 14,
+              left: _panelWidth + 40,
+              right: 14,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      scene.isEmpty ? '' : _summary(context, scene),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('open-node-map'),
+                    tooltip: context.l10n.openNodeMap,
+                    onPressed: () => onOpenNodes(null),
+                    icon: const Icon(Icons.open_in_full),
+                  ),
+                ],
+              ),
+            ),
+            if (state.nodes.isEmpty)
+              Positioned.fill(
+                left: _panelWidth + 24,
+                child: Center(
+                  child: FilledButton.icon(
+                    onPressed: () => ControlServerDialog.show(context),
+                    icon: const Icon(Icons.hub_outlined),
+                    label: Text(context.l10n.setUpControlServer),
+                  ),
+                ),
+              ),
+            Positioned(
+              left: 14,
+              top: 14,
+              bottom: 14,
+              width: _panelWidth,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SingleChildScrollView(
+                  child: _ControlPanel(
+                    state: state,
+                    scene: scene,
+                    onOpenNodes: onOpenNodes,
+                    floating: true,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _summary(BuildContext context, GalaxyScene scene) {
+  final regions = scene.systems.where((system) => !system.unknown).length;
+  final available = scene.planets
+      .where((planet) => planet.node.health.isAvailable)
+      .length;
+  return context.l10n.nodeMapSummary(regions, available, scene.planets.length);
+}
+
+/// Everything the user controls, on one flat surface: floating over the
+/// galaxy with the power control beside its status, or filling a phone
+/// screen with the power control centred above the rows.
+class _ControlPanel extends StatelessWidget {
+  const _ControlPanel({
+    required this.state,
+    required this.scene,
+    required this.onOpenNodes,
+    required this.floating,
+  });
+
+  final ProxyState state;
+  final GalaxyScene scene;
+  final void Function(String? selection) onOpenNodes;
+  final bool floating;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final rows = [
       _CurrentNodeRow(scene: scene, onOpenNodes: onOpenNodes),
       const Divider(height: 1, indent: 20, endIndent: 20),
       _CaptureRow(state: state),
       const Divider(height: 1, indent: 20, endIndent: 20),
       _LocalProxyRow(state: state),
-      const SizedBox(height: 8),
+      const SizedBox(height: 6),
     ];
+    if (floating) {
+      return Material(
+        key: const Key('control-panel'),
+        color: scheme.surfaceContainerLow,
+        elevation: 3,
+        shadowColor: Colors.black.withValues(alpha: 0.35),
+        surfaceTintColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _PowerSection(state: state, horizontal: true),
+            ...rows,
+          ],
+        ),
+      );
+    }
     return Card(
       key: const Key('control-panel'),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: fill
-          ? LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: Center(child: power)),
-                        ...rows,
-                      ],
-                    ),
-                  ),
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: _PowerSection(state: state, horizontal: false),
               ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [power, ...rows],
             ),
+          ),
+          ...rows,
+        ],
+      ),
     );
   }
 }
 
 /// The power control and what the connection is.
 class _PowerSection extends StatelessWidget {
-  const _PowerSection({required this.state});
+  const _PowerSection({required this.state, required this.horizontal});
 
   final ProxyState state;
+
+  /// Side by side, for the floating panel; stacked and centred otherwise.
+  final bool horizontal;
 
   @override
   Widget build(BuildContext context) {
@@ -154,43 +290,64 @@ class _PowerSection extends StatelessWidget {
     final endpoint = state.config.serverHost.isEmpty
         ? context.l10n.configureAServerToGetStarted
         : '${state.config.serverHost}:${state.config.serverPort}';
+    final align = horizontal
+        ? CrossAxisAlignment.start
+        : CrossAxisAlignment.center;
+    final status = Column(
+      crossAxisAlignment: align,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          busy
+              ? context.l10n.working
+              : running
+              ? context.l10n.connected
+              : context.l10n.disconnected,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: running ? scheme.primary : scheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          endpoint,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        Text(
+          connectionModeLabel(context, state),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+    if (horizontal) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        child: Row(
+          children: [
+            _PowerButton(state: state, size: 96),
+            const SizedBox(width: 14),
+            Expanded(child: status),
+          ],
+        ),
+      );
+    }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _PowerButton(state: state, size: 132),
-          const SizedBox(height: 16),
-          Text(
-            busy
-                ? context.l10n.working
-                : running
-                ? context.l10n.connected
-                : context.l10n.disconnected,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: running ? scheme.primary : scheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            endpoint,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            connectionModeLabel(context, state),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
+          _PowerButton(state: state, size: 128),
+          const SizedBox(height: 12),
+          status,
         ],
       ),
     );
@@ -545,198 +702,96 @@ class _LocalProxyRow extends StatelessWidget {
   }
 }
 
-/// Every country with nodes, as a small badge each: its flag inside the
-/// status ring its star wears in the galaxy. A click opens that country on
-/// the node map.
-class _CountryOverview extends StatelessWidget {
-  const _CountryOverview({
-    required this.scene,
-    required this.loaded,
-    required this.onOpenNodes,
-    required this.scrolls,
-  });
+/// The way to the galaxy where there is no room to show it: a button that
+/// already says how the catalogue is doing.
+class _NodeMapButton extends StatelessWidget {
+  const _NodeMapButton({required this.scene, required this.onOpen});
 
   final GalaxyScene scene;
-  final bool loaded;
-  final void Function(String? selection) onOpenNodes;
-
-  /// Whether the grid scrolls inside a fixed height, rather than growing
-  /// with its content inside a scrolling page.
-  final bool scrolls;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final total = scene.planets.length;
-    final available = scene.planets
-        .where((planet) => planet.node.health.isAvailable)
-        .length;
-    final systems = [...scene.systems]
-      ..sort((a, b) {
-        if (a.unknown != b.unknown) return a.unknown ? 1 : -1;
-        return b.planets.length.compareTo(a.planets.length);
-      });
-    final regions = systems.where((system) => !system.unknown).length;
-    final currentSystem = scene.current?.system.id;
-    final grid = GridView.builder(
-      shrinkWrap: !scrolls,
-      physics: scrolls ? null : const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 168,
-        mainAxisExtent: 156,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: systems.length,
-      itemBuilder: (context, index) => _CountryTile(
-        system: systems[index],
-        current: systems[index].id == currentSystem,
-        onTap: () => onOpenNodes(systems[index].id),
-      ),
-    );
-    return Card(
-      key: const Key('country-overview'),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 12, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: scrolls ? MainAxisSize.max : MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.l10n.nodes,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (total > 0)
-                        Text(
-                          context.l10n.nodeMapSummary(
-                            regions,
-                            available,
-                            total,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  key: const Key('open-node-map'),
-                  tooltip: context.l10n.openNodeMap,
-                  onPressed: () => onOpenNodes(null),
-                  icon: const Icon(Icons.blur_circular),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            if (!loaded)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Center(
-                  child: FilledButton.icon(
-                    onPressed: () => ControlServerDialog.show(context),
-                    icon: const Icon(Icons.hub_outlined),
-                    label: Text(context.l10n.setUpControlServer),
-                  ),
-                ),
-              )
-            else if (scrolls)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: grid,
-                ),
-              )
-            else
-              Padding(padding: const EdgeInsets.only(right: 8), child: grid),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CountryTile extends StatelessWidget {
-  const _CountryTile({
-    required this.system,
-    required this.current,
-    required this.onTap,
-  });
-
-  final CountrySystem system;
-
-  /// Whether the node in use is in this country.
-  final bool current;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final best = system.bestLatency;
+    final status = StatusColors.of(context);
+    final counts = <NodeHealth, int>{};
+    for (final planet in scene.planets) {
+      counts.update(planet.node.health, (n) => n + 1, ifAbsent: () => 1);
+    }
     return Material(
-      color: scheme.surfaceContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: current
-            ? BorderSide(color: scheme.primary, width: 1.5)
-            : BorderSide.none,
-      ),
+      key: const Key('open-node-map'),
+      color: scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(24),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: onOpen,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
             children: [
-              CountryHealthBadge(
-                code: system.code,
-                counts: system.counts,
-                size: 56,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                placeName(context, system.code),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: scheme.secondaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.blur_circular,
+                  color: scheme.onSecondaryContainer,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                context.l10n.galaxyCountryStats(
-                  system.planets.length,
-                  system.available,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      context.l10n.nodeMapTitle,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      scene.isEmpty
+                          ? context.l10n.noNodesHint
+                          : _summary(context, scene),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (!scene.isEmpty) ...[
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: SizedBox(
+                          height: 5,
+                          child: Row(
+                            children: [
+                              for (final health in NodeHealth.displayOrder)
+                                if ((counts[health] ?? 0) > 0)
+                                  Expanded(
+                                    flex: counts[health]!,
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 1,
+                                      ),
+                                      color: status.health(health, scheme),
+                                    ),
+                                  ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (best != null)
-                Text(
-                  context.l10n.bestLatency(best),
-                  maxLines: 1,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

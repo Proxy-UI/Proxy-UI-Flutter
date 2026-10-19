@@ -5,6 +5,8 @@ library;
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/painting.dart' show EdgeInsets;
+
 import 'galaxy_model.dart';
 
 /// One projected point.
@@ -84,10 +86,20 @@ class GalaxyCamera {
   /// One turn every eight minutes.
   static const double driftSpeed = math.pi * 2 / 480;
 
-  /// Fit [radius] world units of disk on a canvas of [size]. The panel and
-  /// toolbar cover part of the canvas, so the disk is framed a little inside.
-  void fit(double radius, Size size) {
-    if (size.isEmpty) return;
+  /// The part of the canvas covered by controls floating over it; the
+  /// galaxy is framed and centred in what is left.
+  EdgeInsets inset = EdgeInsets.zero;
+
+  Rect _viewport(Size size) {
+    final rect = inset.deflateRect(Offset.zero & size);
+    return rect.isEmpty ? Offset.zero & size : rect;
+  }
+
+  /// Fit [radius] world units of disk on a canvas of [canvas] size. The
+  /// toolbar covers part of it, so the disk is framed a little inside.
+  void fit(double radius, Size canvas) {
+    if (canvas.isEmpty) return;
+    final size = _viewport(canvas).size;
     restTilt = size.height > size.width * 1.2 ? 1.0 : _defaultTilt;
     final focal = _focal(size);
     final across = radius * focal / (size.width * 0.5);
@@ -145,6 +157,7 @@ class GalaxyCamera {
 
   /// This frame's projection for a canvas of [size].
   Projection project(Size size) {
+    final viewport = _viewport(size);
     final eye =
         target +
         Vec3(
@@ -156,8 +169,8 @@ class GalaxyCamera {
     return Projection(
       eye: eye,
       target: target,
-      center: Offset(size.width / 2, size.height * 0.54),
-      focal: _focal(size),
+      center: Offset(viewport.center.dx, viewport.top + viewport.height * 0.54),
+      focal: _focal(viewport.size),
     );
   }
 }

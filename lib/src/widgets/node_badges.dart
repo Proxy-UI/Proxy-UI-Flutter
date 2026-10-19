@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
@@ -48,89 +46,6 @@ class CountryFlagBadge extends StatelessWidget {
             ),
     );
   }
-}
-
-/// A country's flag inside the same status ring its star wears in the
-/// galaxy: one arc per health, sized by how many nodes are in it.
-class CountryHealthBadge extends StatelessWidget {
-  const CountryHealthBadge({
-    super.key,
-    required this.code,
-    required this.counts,
-    this.size = 56,
-  });
-
-  final String code;
-  final Map<NodeHealth, int> counts;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final status = StatusColors.of(context);
-    return SizedBox.square(
-      dimension: size,
-      child: CustomPaint(
-        painter: _HealthRingPainter(
-          segments: [
-            for (final health in NodeHealth.displayOrder)
-              if ((counts[health] ?? 0) > 0)
-                (counts[health]!, status.health(health, scheme)),
-          ],
-          track: scheme.outlineVariant.withValues(alpha: 0.5),
-        ),
-        child: Center(
-          child: CountryFlagBadge(code: code, size: size * 0.7),
-        ),
-      ),
-    );
-  }
-}
-
-class _HealthRingPainter extends CustomPainter {
-  _HealthRingPainter({required this.segments, required this.track});
-
-  final List<(int, Color)> segments;
-  final Color track;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke = size.shortestSide * 0.06;
-    final rect = (Offset.zero & size).deflate(stroke / 2);
-    canvas.drawOval(
-      rect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..color = track,
-    );
-    final total = segments.fold<int>(0, (sum, s) => sum + s.$1);
-    if (total == 0) return;
-    final gap = segments.length > 1 ? 0.12 : 0.0;
-    var start = -math.pi / 2;
-    for (final (count, color) in segments) {
-      final sweep = math.pi * 2 * count / total;
-      canvas.drawArc(
-        rect,
-        start + gap / 2,
-        math.max(0.02, sweep - gap),
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = stroke
-          ..strokeCap = StrokeCap.round
-          ..color = color,
-      );
-      start += sweep;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_HealthRingPainter old) =>
-      old.track != track ||
-      old.segments.length != segments.length ||
-      [for (var i = 0; i < segments.length; i++) old.segments[i] != segments[i]]
-          .any((changed) => changed);
 }
 
 /// The localized word for [health].

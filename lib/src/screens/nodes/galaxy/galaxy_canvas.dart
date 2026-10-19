@@ -33,9 +33,13 @@ class GalaxyCanvas extends StatefulWidget {
     required this.onSelect,
     this.controller,
     this.semanticLabel,
+    this.inset = EdgeInsets.zero,
   });
 
   final GalaxyScene scene;
+
+  /// The part of the canvas covered by controls floating over it.
+  final EdgeInsets inset;
   final GalaxyText text;
 
   /// The selected body: [homeId], a system id or a node id.
@@ -72,6 +76,7 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
     widget.controller?._state = this;
     FlagAtlas.instance.addListener(_wake);
     _view.selected = widget.selected;
+    _view.camera.inset = widget.inset;
     _view.update(widget.scene, first: true);
   }
 
@@ -90,6 +95,10 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
     }
     if (old.selected != widget.selected) {
       _focusOn(widget.selected);
+    }
+    if (old.inset != widget.inset) {
+      _view.camera.inset = widget.inset;
+      _refit(entrance: false);
     }
   }
 
