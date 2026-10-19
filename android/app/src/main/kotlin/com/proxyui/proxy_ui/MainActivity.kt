@@ -21,6 +21,7 @@ import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
+    private var updateInstaller: UpdateInstaller? = null
     private var pendingStart: PendingStart? = null
     private val applicationExecutor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "vpn-application-catalog").apply { isDaemon = true }
@@ -59,6 +60,7 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).also { methodChannel ->
             methodChannel.setMethodCallHandler(::handleMethodCall)
         }
+        updateInstaller = UpdateInstaller(this, flutterEngine.dartExecutor.binaryMessenger)
         ProxyVpnController.stateListener = { running, error ->
             runOnUiThread {
                 channel?.invokeMethod(
@@ -70,6 +72,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        updateInstaller?.dispose()
+        updateInstaller = null
         ProxyVpnController.stateListener = null
         channel?.setMethodCallHandler(null)
         channel = null

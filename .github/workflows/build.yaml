@@ -405,6 +405,19 @@ jobs:
           LIB_VERSION: ${{ inputs.lib_version }}
         run: python3 scripts/collect_desktop_release.py artifacts release "$RELEASE_TAG" "$LIB_VERSION" "$GITHUB_SHA"
 
+      # The app installs an update only when this signature covers the
+      # manifest, and only files whose SHA-256 the manifest lists.
+      - name: Sign the release manifest
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          test -n "$UPDATE_SIGNING_KEY" || { echo "UPDATE_SIGNING_KEY is not set"; exit 1; }
+          KEY=$(mktemp)
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$KEY"
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --key "$KEY"
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --verify scripts/update_signing_key.pub.pem
+
       - name: Create Release
         uses: softprops/action-gh-release@v3.0.3
         with:

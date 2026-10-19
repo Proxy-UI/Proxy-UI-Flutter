@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Hands a user-requested, verified update to the system installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="CipherRelay"
@@ -34,6 +36,9 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".UpdateInstallReceiver"
+            android:exported="false" />
         <service
             android:name=".ProxyVpnService"
             android:exported="false"

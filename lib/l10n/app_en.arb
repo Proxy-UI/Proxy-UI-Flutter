@@ -1015,5 +1015,76 @@
       }
     }
   },
-  "subscriptionHint": "Share this device's proxy with Clash and Shadowrocket on your network through a subscription link."
+  "subscriptionHint": "Share this device's proxy with Clash and Shadowrocket on your network through a subscription link.",
+  "checkForUpdates": "Check for updates",
+  "updateInstalledVersion": "Installed: {version} ({build})",
+  "@updateInstalledVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "updateChecking": "Checking for updates…",
+  "updateUpToDate": "You're on the latest version.",
+  "updateAvailable": "Version {version} is available",
+  "@updateAvailable": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownloadSize": "Download size: {size}",
+  "@updateDownloadSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNoteReplace": "Updating stops the proxy, installs the new version and reopens the app.",
+  "updateNoteInstaller": "Updating stops the proxy and runs the installer, which asks for administrator permission, then reopens the app.",
+  "updateNoteAndroid": "The package is checked first, then Android asks you to confirm the installation.",
+  "updateNoteSave": "The archive is checked and saved to Downloads for you to unpack over this copy.",
+  "updateNow": "Update",
+  "updateReleaseNotes": "Release notes",
+  "updateNoPackage": "Version {version} is out, but there is no package for this device yet.",
+  "@updateNoPackage": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownloading": "Downloading… {percent}%",
+  "@updateDownloading": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "updateVerifying": "Checking the signature and package…",
+  "updateInstallingDesktop": "Installing. CipherRelay will reopen in a moment.",
+  "updateInstallingAndroid": "Confirm the installation in the system installer.",
+  "updateSaved": "Saved to {path}",
+  "@updateSaved": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "updateVerifiedOnly": "Verified. Debug builds do not replace themselves.",
+  "updateFailedNetwork": "Could not reach the release server. Check the connection and try again.",
+  "updateFailedSignature": "The release's signature could not be verified, so nothing was installed.",
+  "updateFailedChecksum": "The download did not match the signed release and was deleted.",
+  "updateFailedVerification": "The new version failed its signature check, so nothing was replaced.",
+  "updateFailedInstall": "The update could not be installed.",
+  "updateFailedPermission": "Allow CipherRelay to install apps in the settings that just opened, then try again.",
+  "updateOpenReleasePage": "Open release page"
 }
