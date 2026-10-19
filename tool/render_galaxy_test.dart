@@ -186,6 +186,24 @@ void main() {
     await settle(10);
     await capture('09-dashboard-min-window-light-zh');
 
+    // A first launch: no server, no control server, no nodes.
+    await tester.pumpWidget(const SizedBox());
+    proxy.dispose();
+    // ignore: invalid_use_of_visible_for_testing_member
+    SharedPreferences.setMockInitialValues({});
+    await tester.runAsync(() async {
+      proxy = ProxyState(service: FakeProxyService());
+      while (!proxy.isInitialized) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await show(wide, ThemeMode.dark, 'zh');
+    await settle(20);
+    await capture('10-first-launch-dark-zh');
+    await show(const Size(430, 900), ThemeMode.dark, 'zh');
+    await settle(10);
+    await capture('11-first-launch-phone-dark-zh');
+
     await tester.pumpWidget(const SizedBox());
     proxy.dispose();
     theme.dispose();

@@ -165,7 +165,9 @@ class _GalaxyDashboard extends StatelessWidget {
             if (state.nodes.isEmpty)
               Positioned.fill(
                 left: _panelWidth + 24,
-                child: Center(
+                // Below the home star, which sits at the centre.
+                child: Align(
+                  alignment: const Alignment(0, 0.4),
                   child: FilledButton.icon(
                     onPressed: () => ControlServerDialog.show(context),
                     icon: const Icon(Icons.hub_outlined),
@@ -205,9 +207,10 @@ String _summary(BuildContext context, GalaxyScene scene) {
   return context.l10n.nodeMapSummary(regions, available, scene.planets.length);
 }
 
-/// Everything the user controls, on one flat surface: floating over the
-/// galaxy with the power control beside its status, or filling a phone
-/// screen with the power control centred above the rows.
+/// Everything the user controls: one panel floating over the galaxy with
+/// the power control beside its status, or, on a phone, the power control
+/// centred on the page above a card of rows. The power area there is open
+/// page rather than a tall empty box.
 class _ControlPanel extends StatelessWidget {
   const _ControlPanel({
     required this.state,
@@ -230,7 +233,6 @@ class _ControlPanel extends StatelessWidget {
       _CaptureRow(state: state),
       const Divider(height: 1, indent: 20, endIndent: 20),
       _LocalProxyRow(state: state),
-      const SizedBox(height: 6),
     ];
     if (floating) {
       return Material(
@@ -247,27 +249,37 @@ class _ControlPanel extends StatelessWidget {
           children: [
             _PowerSection(state: state, horizontal: true),
             ...rows,
+            const SizedBox(height: 6),
           ],
         ),
       );
     }
-    return Card(
+    return Column(
       key: const Key('control-panel'),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: _PowerSection(state: state, horizontal: false),
-              ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: _PowerSection(state: state, horizontal: false),
             ),
           ),
-          ...rows,
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: rows,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -413,7 +425,12 @@ class _PowerButtonState extends State<_PowerButton>
     final busy = state.isProxyOperationInProgress || state.isTunBusy;
     final still = MediaQuery.disableAnimationsOf(context);
     final size = widget.size;
-    final label = running
+    // Before any server is configured, the one obvious control on the page
+    // leads to the configuration instead of sitting there disabled.
+    final unconfigured = state.config.serverHost.isEmpty && !running;
+    final label = unconfigured
+        ? context.l10n.configureAServerToGetStarted
+        : running
         ? context.l10n.tapToDisconnect
         : context.l10n.tapToConnect;
     return Semantics(
@@ -457,12 +474,18 @@ class _PowerButtonState extends State<_PowerButton>
                     elevation: running ? 3 : 0,
                     backgroundColor: running
                         ? scheme.primary
+                        : unconfigured
+                        ? scheme.secondaryContainer
                         : scheme.surfaceContainerHighest,
                     foregroundColor: running
                         ? scheme.onPrimary
+                        : unconfigured
+                        ? scheme.onSecondaryContainer
                         : scheme.onSurfaceVariant,
                   ),
-                  onPressed: canToggleProxy(state)
+                  onPressed: unconfigured
+                      ? () => showConfigDialog(context)
+                      : canToggleProxy(state)
                       ? () => toggleProxy(context)
                       : null,
                   child: busy
@@ -473,7 +496,10 @@ class _PowerButtonState extends State<_PowerButton>
                             color: running ? scheme.onPrimary : scheme.primary,
                           ),
                         )
-                      : Icon(Icons.power_settings_new, size: size * 0.32),
+                      : Icon(
+                          unconfigured ? Icons.tune : Icons.power_settings_new,
+                          size: size * 0.32,
+                        ),
                 ),
               ),
             ],
