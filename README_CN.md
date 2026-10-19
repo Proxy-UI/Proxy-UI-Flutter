@@ -39,6 +39,14 @@ Windows 安装器额外带 `-setup`。执行 `python3 scripts/release_artifact_n
 - **响应式布局**：自适应手机、平板、桌面屏幕
 - **Material 3 设计**：现代 UI 与流畅动画
 
+Windows、macOS、Linux、Android 和 iOS 共用优化后的星系图渲染器。
+手机主页不预先构建星系场景。可见的星系图只在交互、节点变化或镜头过渡期间
+重绘，动画跟随屏幕刷新率，静置后停止。进入后台、最小化或窗口失去焦点
+时暂停动画；背景图、国旗和行星纹理随可见状态释放，页面销毁时清理文字布局。
+原生库 0.6.5 通过独立 Rust crate `galaxy-geometry` 批量投影和裁剪轨道，
+Flutter 复用球体光照与光晕纹理，并批量提交可见线段和节点。
+验证方法和测量范围见 [星系图资源验证](docs/galaxy-performance.md)。
+
 ## 支持平台
 
 | 平台 | 状态 |

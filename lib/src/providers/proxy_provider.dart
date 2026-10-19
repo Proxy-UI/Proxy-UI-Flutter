@@ -5,8 +5,8 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
@@ -24,7 +24,7 @@ import '../services/android_vpn_service.dart';
 import '../services/subscription_service.dart';
 
 /// Proxy state provider for UI.
-class ProxyState extends ChangeNotifier {
+class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   final ProxyService _service;
   final DesktopLogService _desktopLogService;
   ProxyConfigModel _config = ProxyConfigModel();
@@ -94,6 +94,7 @@ class ProxyState extends ChangeNotifier {
                ? MacosStoreProxyService()
                : ProxyService()),
        _desktopLogService = desktopLogService ?? DesktopLogService() {
+    WidgetsBinding.instance.addObserver(this);
     _init();
   }
 
@@ -157,11 +158,7 @@ class ProxyState extends ChangeNotifier {
       await _loadConfig();
       if (_isDisposed) return;
       _connectionSubscription = _service.connectionChanges.listen((_) {
-        if (_isProxyTransitioning) return;
-        _isRunning = _service.isRunning;
-        _isTunRunning = _service.isTunRunning;
-        _lastError = _service.lastError;
-        _safeNotifyListeners();
+        _reconcileConnection(forceNotify: true);
       });
       await _service.initializePlatform();
       if (_isDisposed) return;
@@ -169,10 +166,7 @@ class ProxyState extends ChangeNotifier {
         const Duration(seconds: 1),
         (_) => _reconcileConnection(),
       );
-      if (BuildCapabilities.isMacAppStore) {
-        _isRunning = _service.isRunning;
-        _isTunRunning = _service.isTunRunning;
-      }
+      _reconcileConnection();
     } catch (error, stackTrace) {
       debugPrint('ProxyState init failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -201,27 +195,32 @@ class ProxyState extends ChangeNotifier {
     });
   }
 
-  void _reconcileConnection() {
+  void _reconcileConnection({bool forceNotify = false}) {
     if (_isDisposed || _isProxyTransitioning || _isTunBusy) return;
-    var connectionChanged = false;
-    if (_isRunning && !_service.isRunning) {
-      _isRunning = false;
-      _isTunRunning = _service.isTunRunning;
-      connectionChanged = true;
-    } else if (_isTunRunning && !_isTunBusy && !_service.isTunRunning) {
-      _isTunRunning = false;
+    final running = _service.isRunning;
+    final tunRunning = _service.isTunRunning;
+    final connectionChanged =
+        running != _isRunning || tunRunning != _isTunRunning;
+    final lostCapture = _isTunRunning && !tunRunning;
+    _isRunning = running;
+    _isTunRunning = tunRunning;
+    if (lostCapture) {
       _config = _config.copyWith(tunEnabled: false);
       if (Platform.isAndroid) {
         unawaited(_service.stopAndroidVpnInterface());
       }
       unawaited(_saveConfig());
-      connectionChanged = true;
     }
-    // A dropped connection is rare and every screen wants to know at once.
-    if (connectionChanged) {
+    // Connection events can carry a new error even without a state change.
+    if (connectionChanged || forceNotify) {
       _lastError = _service.lastError ?? _lastError;
       _safeNotifyListeners();
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reconcileConnection();
   }
 
   Future<void> _persistLog(LogEntry entry) async {
@@ -499,6 +498,12 @@ class ProxyState extends ChangeNotifier {
       _lastError = appStrings.waitForTunSetupToFinish;
       _safeNotifyListeners();
       return false;
+    }
+
+    // Recover a stale UI snapshot without restarting a healthy native session.
+    if (!_isRunning && _service.isRunning) {
+      _reconcileConnection();
+      return true;
     }
 
     // Stop first if already running to apply new config
@@ -1434,6 +1439,7 @@ class ProxyState extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _isDisposed = true;
     _nodeCatalogSaveTimer?.cancel();
     _logNotificationTimer?.cancel();

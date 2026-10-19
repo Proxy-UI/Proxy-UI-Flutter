@@ -5,18 +5,20 @@
 library;
 
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
 import '../../../models/node_health.dart';
 import '../../../theme/app_theme.dart';
-import '../../../widgets/planet_glyph.dart';
 import 'flag_atlas.dart';
 import 'galaxy_backdrop.dart';
 import 'galaxy_camera.dart';
+import 'galaxy_geometry.dart';
 import 'galaxy_model.dart';
 import 'galaxy_view.dart';
+import 'planet_atlas.dart';
 
 /// The colours of one theme.
 class GalaxyPalette {
@@ -77,11 +79,22 @@ class GalaxyText {
 /// Laid-out labels, reused across frames.
 class LabelCache {
   final Map<String, TextPainter> _painters = {};
+  final Set<String> _used = {};
+
+  void beginFrame() => _used.clear();
+
+  void endFrame() {
+    _painters.removeWhere((key, painter) {
+      if (_used.contains(key)) return false;
+      painter.dispose();
+      return true;
+    });
+  }
 
   TextPainter of(String key, InlineSpan Function() span) {
+    _used.add(key);
     final cached = _painters[key];
     if (cached != null) return cached;
-    if (_painters.length > 400) _painters.clear();
     return _painters[key] = TextPainter(
       text: span(),
       textDirection: TextDirection.ltr,
@@ -89,6 +102,14 @@ class LabelCache {
       maxLines: 2,
       ellipsis: '…',
     )..layout(maxWidth: 240);
+  }
+
+  void dispose() {
+    for (final painter in _painters.values) {
+      painter.dispose();
+    }
+    _painters.clear();
+    _used.clear();
   }
 }
 
@@ -113,6 +134,9 @@ class GalaxyPainter extends CustomPainter {
     required this.text,
     required this.labels,
     required this.starfield,
+    required this.backdrop,
+    required this.planets,
+    required this.geometry,
     required this.onBackdrop,
   }) : super(repaint: view);
 
@@ -121,6 +145,9 @@ class GalaxyPainter extends CustomPainter {
   final GalaxyText text;
   final LabelCache labels;
   final Starfield starfield;
+  final BackdropCache backdrop;
+  final PlanetAtlas planets;
+  final GalaxyGeometry geometry;
 
   /// Called when the backdrop image arrives.
   final VoidCallback onBackdrop;
@@ -128,6 +155,9 @@ class GalaxyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    labels.beginFrame();
     if (view.still) {
       view.appeared.clear();
       view.rippled.clear();
@@ -135,7 +165,12 @@ class GalaxyPainter extends CustomPainter {
       view.ghosts.clear();
     }
     final camera = view.camera;
-    Backdrop.of(size, palette.scheme, palette.ratio, onBackdrop).paint(canvas);
+    final sky = backdrop.of(size, palette.scheme, palette.ratio, onBackdrop);
+    if (sky == null) {
+      paintGround(canvas, size, palette.scheme);
+    } else {
+      sky.paint(canvas);
+    }
     starfield.paint(
       canvas,
       size,
@@ -146,6 +181,7 @@ class GalaxyPainter extends CustomPainter {
       still: view.still,
     );
     final projection = camera.project(size);
+    geometry.project(view.scene, projection, size);
     final frame = _Frame(this, canvas, projection, size);
     frame.plane();
     final ordered = [
@@ -167,6 +203,8 @@ class GalaxyPainter extends CustomPainter {
     frame.ghosts();
     frame.labels();
     view.hits = frame.hits;
+    labels.endFrame();
+    canvas.restore();
   }
 
   @override
@@ -198,10 +236,18 @@ class _Frame {
   final List<Hit> hits = [];
   final List<_Label> pending = [];
   final List<Rect> obstacles = [];
+  final _sprites = _SpriteBatch();
 
   GalaxyView get view => painter.view;
   GalaxyPalette get palette => painter.palette;
   bool get dark => palette.dark;
+
+  /// A reusable texture avoids re-evaluating a large radial shader per halo.
+  void _glow(Offset center, double radius, Color color) {
+    if (!_visible(center, radius * 2.5)) return;
+    final image = painter.planets.glowFor(color, painter.onBackdrop);
+    if (image != null) _sprite(image, center, radius, color.a);
+  }
 
   /// Whether [id] (of [system]) stays bright while something is selected.
   bool _lit(String id, CountrySystem system) {
@@ -215,28 +261,6 @@ class _Frame {
   double _fade(double depth) {
     final reference = view.camera.distance;
     return (1.25 - (depth - reference) / (reference * 1.6)).clamp(0.4, 1.0);
-  }
-
-  Path _worldCircle(double radius, {Vec3 center = Vec3.zero}) {
-    final path = Path();
-    var started = false;
-    for (var i = 0; i <= 120; i++) {
-      final a = i / 120 * math.pi * 2;
-      final p = projection.at(
-        center + Vec3(math.cos(a) * radius, 0, math.sin(a) * radius),
-      );
-      if (p == null) {
-        started = false;
-        continue;
-      }
-      if (started) {
-        path.lineTo(p.point.dx, p.point.dy);
-      } else {
-        path.moveTo(p.point.dx, p.point.dy);
-        started = true;
-      }
-    }
-    return path;
   }
 
   /// The disk's plane: a soft glow, circles of latitude and a few meridians,
@@ -256,17 +280,21 @@ class _Frame {
       for (final point in rim) {
         bounds = bounds.expandToInclude(Rect.fromPoints(point, point));
       }
+      // A radial falloff needs one draw, unlike a canvas-sized blur pass.
       canvas.drawOval(
-        bounds.deflate(bounds.shortestSide * 0.1),
+        bounds,
         Paint()
-          ..color = palette.signal.withValues(alpha: dark ? 0.05 : 0.035)
-          ..maskFilter = MaskFilter.blur(
-            BlurStyle.normal,
-            bounds.shortestSide * 0.2,
-          ),
+          ..shader = RadialGradient(
+            colors: [
+              palette.signal.withValues(alpha: dark ? 0.05 : 0.035),
+              palette.signal.withValues(alpha: 0),
+            ],
+          ).createShader(bounds),
       );
     }
-    for (final lat in const [60.0, 30.0, 0.0, -30.0, -60.0]) {
+    const latitudes = [60.0, 30.0, 0.0, -30.0, -60.0];
+    for (var index = 0; index < latitudes.length; index++) {
+      final lat = latitudes[index];
       final r = latitudeRadius(lat);
       if (r > reach * 1.08) continue;
       final equator = lat == 0;
@@ -278,36 +306,20 @@ class _Frame {
               (equator ? (dark ? 0.12 : 0.13) : (dark ? 0.06 : 0.07)) *
               (1 - r / (reach * 1.3)),
         );
-      final path = _worldCircle(r);
-      if (equator) {
-        for (final metric in path.computeMetrics()) {
-          for (var d = 0.0; d < metric.length; d += 9) {
-            canvas.drawPath(metric.extractPath(d, d + 5), paint);
-          }
-        }
-      } else {
-        canvas.drawPath(path, paint);
-      }
+      painter.geometry.guides[index].draw(canvas, paint, dashed: equator);
     }
     final meridian = Paint()
       ..strokeWidth = 0.7
       ..color = palette.ink.withValues(alpha: dark ? 0.045 : 0.05);
-    final inner = latitudeRadius(75);
-    final outer = math.min(reach, latitudeRadius(-60));
-    for (var lon = 0; lon < 360; lon += 30) {
-      final theta = lon * math.pi / 180;
-      final a = projection.at(
-        Vec3(math.sin(theta) * inner, 0, math.cos(theta) * inner),
-      );
-      final b = projection.at(
-        Vec3(math.sin(theta) * outer, 0, math.cos(theta) * outer),
-      );
-      if (a != null && b != null) canvas.drawLine(a.point, b.point, meridian);
-    }
+    painter.geometry.guides[5].draw(canvas, meridian);
   }
+
+  bool _visible(Offset point, double margin) =>
+      (Offset.zero & size).inflate(margin).contains(point);
 
   /// The device in the user's hand, at the centre.
   void home(Projected core) {
+    if (!_visible(core.point, 400)) return;
     final breath = view.still ? 1.0 : 1 + 0.05 * math.sin(view.time * 1.1);
     final radius = (0.26 * core.scale).clamp(5.0, 24.0) * breath;
     final c = core.point;
@@ -316,26 +328,13 @@ class _Frame {
         ? 1.0
         : 0.55;
     for (final (scale, alpha) in [(6.0, 0.07), (3.2, 0.16), (1.8, 0.3)]) {
-      canvas.drawCircle(
+      _glow(
         c,
         radius * scale,
-        Paint()
-          ..color = color.withValues(alpha: alpha * opacity * (dark ? 1 : 0.7))
-          ..maskFilter = MaskFilter.blur(
-            BlurStyle.normal,
-            radius * scale * 0.5,
-          ),
+        color.withValues(alpha: alpha * opacity * (dark ? 1 : 0.7)),
       );
     }
-    paintPlanet(
-      canvas,
-      c,
-      radius,
-      color,
-      dark: dark,
-      glow: 0,
-      opacity: opacity,
-    );
+    _sphere(c, radius, color, opacity, glow: 0);
     _focusRings(homeId, c, radius);
     hits.add(Hit(homeId, c, radius * 1.5, core.depth));
     obstacles.add(Rect.fromCircle(center: c, radius: radius));
@@ -354,77 +353,36 @@ class _Frame {
   void system(CountrySystem system, Projected core) {
     final lit = _lit(system.id, system);
     final base = (lit ? 1.0 : 0.28) * _fade(core.depth);
-    final rings = <int, NodePlanet>{};
-    for (final planet in system.planets) {
-      rings.putIfAbsent(planet.ring, () => planet);
-    }
-    final back = <List<Offset>>[];
-    final front = <List<Offset>>[];
-    for (final planet in rings.values) {
-      _ring(system, planet, core.depth, back, front);
-    }
+    final orbit = painter.geometry.orbits[system.id]!;
     final placed = [
       for (final planet in system.planets)
         if (_place(system, planet) case final p?) (planet, p.$1, p.$2),
     ];
-    _strokeRuns(back, base * 0.55);
+    _strokeOrbit(orbit.back, base * 0.55);
     for (final (planet, projected, appear) in placed) {
       if (projected.depth > core.depth) {
         _planet(system, planet, projected, appear, base);
       }
     }
+    _sprites.draw(canvas);
     _star(system, core, base);
-    _strokeRuns(front, base);
+    _strokeOrbit(orbit.front, base);
     for (final (planet, projected, appear) in placed) {
       if (projected.depth <= core.depth) {
         _planet(system, planet, projected, appear, base);
       }
     }
+    _sprites.draw(canvas);
   }
 
-  void _ring(
-    CountrySystem system,
-    NodePlanet planet,
-    double coreDepth,
-    List<List<Offset>> back,
-    List<List<Offset>> front,
-  ) {
-    List<Offset>? run;
-    bool? behind;
-    for (var i = 0; i <= 96; i++) {
-      final a = i / 96 * math.pi * 2;
-      final local = tiltAround(
-        Vec3(math.cos(a) * planet.radius, 0, math.sin(a) * planet.radius),
-        planet.tiltAxis,
-        planet.tilt,
-      );
-      final p = projection.at(system.position + local);
-      if (p == null) {
-        run = null;
-        continue;
-      }
-      final isBehind = p.depth > coreDepth;
-      if (run == null || isBehind != behind) {
-        final previous = run?.last;
-        run = [?previous, p.point];
-        (isBehind ? back : front).add(run);
-        behind = isBehind;
-      } else {
-        run.add(p.point);
-      }
-    }
-  }
-
-  void _strokeRuns(List<List<Offset>> runs, double opacity) {
-    if (runs.isEmpty || opacity <= 0) return;
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = dark ? 0.9 : 0.8
-      ..color = palette.ink.withValues(alpha: (dark ? 0.15 : 0.2) * opacity);
-    for (final run in runs) {
-      if (run.length < 2) continue;
-      canvas.drawPath(Path()..addPolygon(run, false), paint);
-    }
+  void _strokeOrbit(GalaxyLines lines, double opacity) {
+    if (opacity <= 0) return;
+    lines.draw(
+      canvas,
+      Paint()
+        ..strokeWidth = dark ? 0.9 : 0.8
+        ..color = palette.ink.withValues(alpha: (dark ? 0.15 : 0.2) * opacity),
+    );
   }
 
   /// Where [planet] is drawn now, and how far it has come out of its star.
@@ -454,12 +412,15 @@ class _Frame {
       }
     }
     final projected = projection.at(world);
-    return projected == null ? null : (projected, appear);
+    return projected == null || !_visible(projected.point, 140)
+        ? null
+        : (projected, appear);
   }
 
   /// A country's star: its flag as a lit sphere, and around it a ring
   /// divided by how its nodes answered.
   void _star(CountrySystem system, Projected core, double opacity) {
+    if (!_visible(core.point, 330)) return;
     final breath = view.still
         ? 1.0
         : 1 + 0.03 * math.sin(view.time * 0.8 + system.position.x);
@@ -474,44 +435,34 @@ class _Frame {
         : palette.scheme.outline;
     if (dark) {
       for (final (scale, alpha) in [(4.4, 0.06), (2.4, 0.14)]) {
-        canvas.drawCircle(
+        _glow(
           c,
           radius * scale,
-          Paint()
-            ..color = Color.lerp(
-              Colors.white,
-              glow,
-              0.35,
-            )!.withValues(alpha: alpha * opacity)
-            ..maskFilter = MaskFilter.blur(
-              BlurStyle.normal,
-              radius * scale * 0.5,
-            ),
+          Color.lerp(
+            Colors.white,
+            glow,
+            0.35,
+          )!.withValues(alpha: alpha * opacity),
         );
       }
     } else {
-      canvas.drawCircle(
-        c,
-        radius * 2.2,
-        Paint()
-          ..color = glow.withValues(alpha: 0.12 * opacity)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 1.2),
-      );
+      _glow(c, radius * 2.2, glow.withValues(alpha: 0.12 * opacity));
     }
     final flag = system.unknown
         ? null
         : FlagAtlas.instance.imageFor(system.code);
-    if (flag == null) {
-      paintPlanet(
-        canvas,
+    final sprite = flag == null
+        ? null
+        : painter.planets.flagFor(system.code, flag, dark, painter.onBackdrop);
+    if (sprite == null) {
+      _sphere(
         c,
         radius,
         system.unknown
             ? palette.scheme.outline
             : Color.lerp(palette.scheme.surfaceContainerHighest, glow, 0.3)!,
-        dark: dark,
+        opacity,
         glow: 0,
-        opacity: opacity,
       );
       final mark = system.unknown ? '?' : system.code;
       final glyph = _text(
@@ -533,7 +484,7 @@ class _Frame {
       glyph.paint(canvas, c - Offset(glyph.width / 2, glyph.height / 2));
       canvas.restore();
     } else {
-      _flagSphere(flag, c, radius, opacity);
+      _sprite(sprite, c, radius, opacity);
     }
     _statusRing(system, c, radius * 1.42, opacity);
     _focusRings(system.id, c, radius * 1.42);
@@ -567,49 +518,6 @@ class _Frame {
         ),
       ),
     );
-  }
-
-  void _flagSphere(ui.Image flag, Offset c, double radius, double opacity) {
-    final rect = Rect.fromCircle(center: c, radius: radius);
-    if (!dark) {
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: c + Offset(radius * 0.15, radius * 0.95),
-          width: radius * 1.9,
-          height: radius * 0.55,
-        ),
-        Paint()
-          ..color = Colors.black.withValues(alpha: 0.12 * opacity)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.35),
-      );
-    }
-    canvas.save();
-    canvas.clipPath(Path()..addOval(rect));
-    canvas.drawImageRect(
-      flag,
-      Rect.fromLTWH(0, 0, flag.width.toDouble(), flag.height.toDouble()),
-      rect,
-      Paint()
-        ..filterQuality = FilterQuality.medium
-        ..color = Colors.white.withValues(alpha: opacity),
-    );
-    // Shade the flag into a sphere: lit upper left, dark lower right.
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-0.4, -0.45),
-          radius: 1.1,
-          colors: [
-            Colors.white.withValues(alpha: 0.18 * opacity),
-            Colors.transparent,
-            Colors.black.withValues(alpha: (dark ? 0.5 : 0.32) * opacity),
-          ],
-          stops: const [0, 0.5, 1],
-        ).createShader(rect),
-    );
-    canvas.restore();
-    paintSphereLight(canvas, c, radius, dark: dark, opacity: opacity);
   }
 
   void _statusRing(
@@ -687,14 +595,10 @@ class _Frame {
       final pulse = view.still || !live
           ? 0.5
           : (math.sin(view.time * 2.2) + 1) / 2;
-      canvas.drawCircle(
+      _glow(
         c,
         radius * (2.0 + pulse * 0.5),
-        Paint()
-          ..color = palette.signal.withValues(
-            alpha: (live ? 0.18 : 0.08) * opacity,
-          )
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius),
+        palette.signal.withValues(alpha: (live ? 0.18 : 0.08) * opacity),
       );
       canvas.drawCircle(
         c,
@@ -705,15 +609,7 @@ class _Frame {
           ..color = palette.signal.withValues(alpha: 0.9 * opacity),
       );
     }
-    paintPlanet(
-      canvas,
-      c,
-      radius,
-      color,
-      dark: dark,
-      opacity: opacity,
-      glow: 0.9,
-    );
+    _sphere(c, radius, color, opacity, batch: true);
     if (node.health == NodeHealth.testing) {
       final spin = view.still ? 0.0 : view.time * 4;
       canvas.drawArc(
@@ -765,6 +661,50 @@ class _Frame {
     );
   }
 
+  void _sphere(
+    Offset c,
+    double radius,
+    Color color,
+    double opacity, {
+    double glow = 0.9,
+    bool batch = false,
+  }) {
+    final image = painter.planets.imageFor(
+      color,
+      dark,
+      painter.onBackdrop,
+      glow: glow,
+    );
+    if (image == null) {
+      // A cheap placeholder while the full-quality texture is rasterized once.
+      canvas.drawCircle(
+        c,
+        radius,
+        Paint()..color = color.withValues(alpha: opacity),
+      );
+    } else {
+      if (batch) {
+        _sprites.add(image, c, radius, opacity);
+      } else {
+        _sprite(image, c, radius, opacity);
+      }
+    }
+  }
+
+  void _sprite(ui.Image image, Offset c, double radius, double opacity) {
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromCircle(
+        center: c,
+        radius: radius * PlanetAtlas.edge / (2 * PlanetAtlas.radius),
+      ),
+      Paint()
+        ..filterQuality = FilterQuality.low
+        ..color = Colors.white.withValues(alpha: opacity),
+    );
+  }
+
   bool _emphasized(String id) =>
       view.selected == id || view.hovered == id || view.focused == id;
 
@@ -804,14 +744,33 @@ class _Frame {
     final control = from.lerp(to, 0.5) + Vec3(0, rise, 0);
     Vec3 at(double t) =>
         from * ((1 - t) * (1 - t)) + control * (2 * (1 - t) * t) + to * (t * t);
-    final points = <Offset>[];
-    for (var i = 0; i <= 40; i++) {
-      final p = projection.at(at(i / 40));
-      if (p != null) points.add(p.point);
+    final lines = GalaxyLines(40);
+    final path = Path();
+    var previous = at(0);
+    var visible = false;
+    for (var i = 1; i <= 40; i++) {
+      final next = at(i / 40);
+      final segment = clipWorldLine(
+        previous,
+        next,
+        projection,
+        (Offset.zero & size).inflate(8),
+      );
+      previous = next;
+      if (segment == null) continue;
+      visible = true;
+      path.moveTo(segment.start.dx, segment.start.dy);
+      path.lineTo(segment.end.dx, segment.end.dy);
+      lines.add(
+        segment.start.dx,
+        segment.start.dy,
+        segment.end.dx,
+        segment.end.dy,
+      );
     }
-    if (points.length < 2) return;
+    if (!visible) return;
     final light = palette.signal;
-    final bounds = Rect.fromPoints(points.first, points.last).inflate(1);
+    final bounds = path.getBounds().inflate(1);
     final dim =
         view.selected == null ||
             view.selected == homeId ||
@@ -819,7 +778,6 @@ class _Frame {
             view.selected == current.system.id
         ? 1.0
         : 0.35;
-    final path = Path()..addPolygon(points, false);
     if (!view.scene.connected) {
       // Configured but stopped: a faint dashed course, nothing flowing.
       final dash = Paint()
@@ -827,11 +785,7 @@ class _Frame {
         ..strokeWidth = 1.2
         ..strokeCap = StrokeCap.round
         ..color = light.withValues(alpha: (dark ? 0.4 : 0.35) * dim);
-      for (final metric in path.computeMetrics()) {
-        for (var d = 0.0; d < metric.length; d += 10) {
-          canvas.drawPath(metric.extractPath(d, d + 4), dash);
-        }
-      }
+      lines.draw(canvas, dash, dashed: true);
       return;
     }
     canvas.drawPath(
@@ -840,8 +794,7 @@ class _Frame {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 4
         ..strokeCap = StrokeCap.round
-        ..color = light.withValues(alpha: (dark ? 0.12 : 0.08) * dim)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        ..color = light.withValues(alpha: (dark ? 0.12 : 0.08) * dim),
     );
     canvas.drawPath(
       path,
@@ -859,14 +812,8 @@ class _Frame {
     for (var k = 0; k < 4; k++) {
       final t = view.still ? (k + 1) / 5 : (view.time * 0.25 + k / 4) % 1.0;
       final p = projection.at(at(t));
-      if (p == null) continue;
-      canvas.drawCircle(
-        p.point,
-        dark ? 2.3 : 1.9,
-        Paint()
-          ..color = light.withValues(alpha: 0.9 * dim)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, dark ? 2.2 : 1.2),
-      );
+      if (p == null || !_visible(p.point, 16)) continue;
+      _glow(p.point, dark ? 2.3 : 1.9, light.withValues(alpha: 0.9 * dim));
     }
   }
 
@@ -876,13 +823,12 @@ class _Frame {
       final p = projection.at(ghost.position);
       if (p == null) continue;
       final t = (view.time - ghost.since).clamp(0.0, 1.0);
-      paintPlanet(
-        canvas,
+      if (!_visible(p.point, 140)) continue;
+      _sphere(
         p.point,
-        math.max(2.0, ghost.size * p.scale) * (1 + t * 0.4),
+        (ghost.size * p.scale).clamp(2.0, 14.0) * (1 + t * 0.4),
         palette.scheme.outline,
-        dark: dark,
-        opacity: 1 - t,
+        1 - t,
       );
     }
   }
@@ -897,7 +843,8 @@ class _Frame {
         color: (dark ? Colors.black : Colors.white).withValues(
           alpha: dark ? 0.9 : 0.95,
         ),
-        blurRadius: 6,
+        offset: const Offset(0, 1),
+        blurRadius: 1,
       ),
     ],
   );
@@ -943,5 +890,47 @@ class _Frame {
       text.paint(canvas, offset);
       shown++;
     }
+  }
+}
+
+/// Submit equal-texture planets together while retaining each system's depth
+/// order. The per-sprite colour carries opacity without offscreen layers.
+class _SpriteBatch {
+  final _groups =
+      <
+        ui.Image,
+        ({List<double> transforms, List<double> rects, List<int> colors})
+      >{};
+
+  void add(ui.Image image, Offset center, double radius, double opacity) {
+    final group = _groups.putIfAbsent(
+      image,
+      () => (transforms: [], rects: [], colors: []),
+    );
+    final scale = radius / PlanetAtlas.radius;
+    group.transforms.addAll([
+      scale,
+      0,
+      center.dx - image.width * scale / 2,
+      center.dy - image.height * scale / 2,
+    ]);
+    group.rects.addAll([0, 0, image.width.toDouble(), image.height.toDouble()]);
+    group.colors.add(Colors.white.withValues(alpha: opacity).toARGB32());
+  }
+
+  void draw(Canvas canvas) {
+    for (final entry in _groups.entries) {
+      final group = entry.value;
+      canvas.drawRawAtlas(
+        entry.key,
+        Float32List.fromList(group.transforms),
+        Float32List.fromList(group.rects),
+        Int32List.fromList(group.colors),
+        BlendMode.modulate,
+        null,
+        Paint()..filterQuality = FilterQuality.low,
+      );
+    }
+    _groups.clear();
   }
 }

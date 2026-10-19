@@ -3,6 +3,7 @@ package com.proxyui.proxy_ui
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -13,6 +14,7 @@ import android.os.Build
 import android.util.LruCache
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
@@ -20,6 +22,14 @@ import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    // VpnService and the Rust runtime outlive an Activity. Retain the Dart
+    // isolate that owns their handle too, including after Android reclaims
+    // the background Activity or the user dismisses its task.
+    override fun provideFlutterEngine(context: Context): FlutterEngine? =
+        FlutterEngineCache.getInstance().get(PROXY_ENGINE_ID)
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+
     private var channel: MethodChannel? = null
     private var updateInstaller: UpdateInstaller? = null
     private var pendingStart: PendingStart? = null
@@ -57,6 +67,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        FlutterEngineCache.getInstance().put(PROXY_ENGINE_ID, flutterEngine)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).also { methodChannel ->
             methodChannel.setMethodCallHandler(::handleMethodCall)
         }
@@ -314,6 +325,7 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val CHANNEL = "com.proxyui.proxy_ui/vpn"
+        private const val PROXY_ENGINE_ID = "cipherrelay-proxy"
         const val VPN_PERMISSION_REQUEST = 4107
         const val APPLICATION_ICON_SIZE = 48
         const val APPLICATION_ICON_CACHE_BYTES = 4 * 1024 * 1024

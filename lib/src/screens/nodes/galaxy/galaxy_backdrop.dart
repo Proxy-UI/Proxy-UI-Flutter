@@ -61,6 +61,41 @@ void paintGround(Canvas canvas, Size size, ColorScheme scheme) {
 }
 
 /// The backdrop image for one size and palette, rendered once.
+class BackdropCache {
+  Backdrop? _current;
+  bool _enabled = true;
+
+  set enabled(bool enabled) {
+    _enabled = enabled;
+    if (!enabled) dispose();
+  }
+
+  Backdrop? of(
+    Size size,
+    ColorScheme scheme,
+    double ratio,
+    VoidCallback ready,
+  ) {
+    if (!_enabled) return null;
+    final current = _current;
+    if (current != null &&
+        current.size == size &&
+        current.scheme == scheme &&
+        current.ratio == ratio) {
+      return current.._ready = ready;
+    }
+    dispose();
+    final next = _current = Backdrop._(size, scheme, ratio).._ready = ready;
+    next._render();
+    return next;
+  }
+
+  void dispose() {
+    _current?._dispose();
+    _current = null;
+  }
+}
+
 class Backdrop {
   Backdrop._(this.size, this.scheme, this.ratio);
 
@@ -71,32 +106,8 @@ class Backdrop {
   ui.Image? _image;
   bool _disposed = false;
 
-  /// Told when the image arrives: whichever page asked last, since one
-  /// render may outlive the page that started it.
+  /// Wakes the owning canvas when its image is ready; cleared on disposal.
   VoidCallback? _ready;
-
-  static Backdrop? _current;
-
-  /// The backdrop for this size and palette, starting its render if new;
-  /// [ready] runs when the image arrives.
-  static Backdrop of(
-    Size size,
-    ColorScheme scheme,
-    double ratio,
-    VoidCallback ready,
-  ) {
-    final current = _current;
-    if (current != null &&
-        current.size == size &&
-        current.scheme == scheme &&
-        current.ratio == ratio) {
-      return current.._ready = ready;
-    }
-    current?._dispose();
-    final next = _current = Backdrop._(size, scheme, ratio).._ready = ready;
-    next._render();
-    return next;
-  }
 
   Future<void> _render() async {
     final program = await _program;
@@ -108,11 +119,12 @@ class Backdrop {
     final dark = scheme.brightness == Brightness.dark;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
+    ui.FragmentShader? shader;
     canvas.scale(scale);
     paintGround(canvas, size, scheme);
     if (program != null) {
       final tint = scheme.primary;
-      final shader = program.fragmentShader()
+      shader = program.fragmentShader()
         ..setFloat(0, size.width)
         ..setFloat(1, size.height)
         ..setFloat(2, 23.0)
@@ -150,6 +162,7 @@ class Backdrop {
       // No rasteriser (tests): the ground is painted live instead.
     } finally {
       picture.dispose();
+      shader?.dispose();
     }
   }
 

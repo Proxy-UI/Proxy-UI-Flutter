@@ -27,6 +27,21 @@ class WindowStateService {
   Timer? _saveTimer;
   bool _restoring = false;
 
+  final _visible = ValueNotifier<bool>(true);
+
+  /// Explicit show/hide state: desktop shells do not all emit blur on hide.
+  ValueListenable<bool> get visible => _visible;
+
+  Future<void> show() async {
+    await windowManager.show();
+    _visible.value = true;
+  }
+
+  Future<void> hide() async {
+    await windowManager.hide();
+    _visible.value = false;
+  }
+
   /// Applies the remembered frame. Call before the window is first shown.
   Future<void> restore() async {
     _restoring = true;

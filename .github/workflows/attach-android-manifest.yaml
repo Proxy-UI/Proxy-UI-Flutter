@@ -1,0 +1,48 @@
+name: Verify local APKs and sign update manifest
+run-name: Finalize locally built APKs for ${{ inputs.release_tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release with locally built APKs already uploaded
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Download the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          mkdir release
+          gh release download "$RELEASE_TAG" --dir release
+      - name: Verify original signature and all package identities
+        run: |
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --verify scripts/update_signing_key.pub.pem
+          python3 -B -m unittest discover -s scripts -p 'test_*.py'
+          python3 scripts/attach_android_manifest.py release "$ANDROID_HOME/build-tools/36.0.0" "$GITHUB_SHA"
+      - name: Sign the updated manifest
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          test -n "$UPDATE_SIGNING_KEY"
+          KEY=$(mktemp)
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$KEY"
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --key "$KEY"
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --verify scripts/update_signing_key.pub.pem
+      - name: Upload verified metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh release upload "$RELEASE_TAG" release/release-manifest.json release/release-manifest.json.sig release/SHA256SUMS --clobber

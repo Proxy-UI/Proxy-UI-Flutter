@@ -385,7 +385,7 @@ class TrayService with TrayListener {
     if (await windowManager.isMinimized()) {
       await windowManager.restore();
     }
-    await windowManager.show();
+    await WindowStateService.instance.show();
     await windowManager.focus();
 
     // macOS hides by ordering the window out, which also drops the app from the
@@ -396,7 +396,7 @@ class TrayService with TrayListener {
     if (!Platform.isMacOS) return;
     await Future<void>.delayed(const Duration(milliseconds: 120));
     if (await windowManager.isVisible()) return;
-    await windowManager.show();
+    await WindowStateService.instance.show();
     await windowManager.focus();
   }
 
@@ -405,7 +405,7 @@ class TrayService with TrayListener {
   bool get needsExitRetry => _isDisposed;
 
   Future<void> hideWindow() async {
-    if (!_isDisposed) await windowManager.hide();
+    if (!_isDisposed) await WindowStateService.instance.hide();
     // Recheck after the platform call: shutdown may have begun while hiding.
     if (_isDisposed) await showWindow();
   }

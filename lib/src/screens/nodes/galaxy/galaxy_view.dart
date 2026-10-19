@@ -55,7 +55,8 @@ class GalaxyView extends ChangeNotifier {
   /// Reduced motion: every body rests where its orbit starts.
   bool still = false;
 
-  double get orbitTime => still ? 0 : time;
+  double motionTime = 0;
+  double get orbitTime => still ? 0 : motionTime;
 
   String? selected;
   String? hovered;
@@ -80,11 +81,23 @@ class GalaxyView extends ChangeNotifier {
   /// Whether anything is animating on its own: entrances, ripples, flights,
   /// fading ghosts or a probe in flight.
   bool get busy =>
-      appeared.isNotEmpty ||
-      rippled.isNotEmpty ||
-      migrations.isNotEmpty ||
-      ghosts.isNotEmpty ||
-      scene.planets.any((p) => p.node.health == NodeHealth.testing);
+      !still &&
+      (appeared.isNotEmpty ||
+          rippled.isNotEmpty ||
+          migrations.isNotEmpty ||
+          ghosts.isNotEmpty ||
+          scene.planets.any((p) => p.node.health == NodeHealth.testing));
+
+  /// Expire transitions even for nodes behind the camera or removed by a
+  /// filter. Their lifetime must not depend on the painter visiting them.
+  void expireTransitions() {
+    appeared.removeWhere((_, since) => still || time - since >= 1.6);
+    rippled.removeWhere((_, since) => still || time - since >= 1.4);
+    migrations.removeWhere(
+      (_, flight) => still || time - flight.since >= Migration.duration,
+    );
+    ghosts.removeWhere((ghost) => still || time - ghost.since >= 1);
+  }
 
   void tick() => notifyListeners();
 
@@ -126,7 +139,6 @@ class GalaxyView extends ChangeNotifier {
       }
     }
     scene = next;
-    notifyListeners();
   }
 
   /// The world position of body [id] as it is drawn now.

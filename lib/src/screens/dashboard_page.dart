@@ -34,27 +34,24 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<ProxyState>();
-    final scene = buildGalaxyScene(
-      galaxyNodesOf(state),
-      connected: state.isRunning,
-    );
+    final nodes = galaxyNodesOf(state);
     return LayoutBuilder(
       builder: (context, box) {
         if (box.maxWidth >= 900 && box.maxHeight >= 520) {
           return _GalaxyDashboard(
             state: state,
-            scene: scene,
+            nodes: nodes,
             onOpenNodes: onOpenNodes,
           );
         }
         final panel = _ControlPanel(
           state: state,
-          scene: scene,
+          nodes: nodes,
           onOpenNodes: onOpenNodes,
           floating: false,
         );
         final map = _NodeMapButton(
-          scene: scene,
+          nodes: nodes,
           onOpen: () => onOpenNodes(null),
         );
         final width = box.maxWidth < 560 ? box.maxWidth : 560.0;
@@ -100,21 +97,53 @@ class DashboardPage extends StatelessWidget {
 }
 
 /// The galaxy filling the page, with the control panel over its left edge.
-class _GalaxyDashboard extends StatelessWidget {
+class _GalaxyDashboard extends StatefulWidget {
   const _GalaxyDashboard({
     required this.state,
-    required this.scene,
+    required this.nodes,
     required this.onOpenNodes,
   });
 
   final ProxyState state;
-  final GalaxyScene scene;
+  final List<GalaxyNode> nodes;
   final void Function(String? selection) onOpenNodes;
 
+  @override
+  State<_GalaxyDashboard> createState() => _GalaxyDashboardState();
+}
+
+class _GalaxyDashboardState extends State<_GalaxyDashboard> {
   static const double _panelWidth = 360;
+  List<GalaxyNode>? _nodes;
+  GalaxyScene _scene = GalaxyScene.empty;
+
+  void _syncScene() {
+    final previous = _nodes;
+    final next = widget.nodes;
+    if (previous != null &&
+        previous.length == next.length &&
+        _scene.connected == widget.state.isRunning &&
+        Iterable<int>.generate(next.length).every((i) {
+          final a = previous[i], b = next[i];
+          return a.id == b.id &&
+              a.country == b.country &&
+              a.health == b.health &&
+              a.current == b.current &&
+              a.latencyMs == b.latencyMs &&
+              identical(a.node, b.node);
+        })) {
+      return;
+    }
+    _nodes = next;
+    _scene = buildGalaxyScene(next, connected: widget.state.isRunning);
+  }
 
   @override
   Widget build(BuildContext context) {
+    _syncScene();
+    final state = widget.state;
+    final scene = _scene;
+    final onOpenNodes = widget.onOpenNodes;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Padding(
@@ -145,7 +174,7 @@ class _GalaxyDashboard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      scene.isEmpty ? '' : _summary(context, scene),
+                      scene.isEmpty ? '' : _summary(context, widget.nodes),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -185,7 +214,7 @@ class _GalaxyDashboard extends StatelessWidget {
                 child: SingleChildScrollView(
                   child: _ControlPanel(
                     state: state,
-                    scene: scene,
+                    nodes: widget.nodes,
                     onOpenNodes: onOpenNodes,
                     floating: true,
                   ),
@@ -199,12 +228,14 @@ class _GalaxyDashboard extends StatelessWidget {
   }
 }
 
-String _summary(BuildContext context, GalaxyScene scene) {
-  final regions = scene.systems.where((system) => !system.unknown).length;
-  final available = scene.planets
-      .where((planet) => planet.node.health.isAvailable)
+String _summary(BuildContext context, List<GalaxyNode> nodes) {
+  final regions = nodes
+      .map((node) => node.country)
+      .where((code) => code.isNotEmpty)
+      .toSet()
       .length;
-  return context.l10n.nodeMapSummary(regions, available, scene.planets.length);
+  final available = nodes.where((node) => node.health.isAvailable).length;
+  return context.l10n.nodeMapSummary(regions, available, nodes.length);
 }
 
 /// Everything the user controls: one panel floating over the galaxy with
@@ -214,13 +245,13 @@ String _summary(BuildContext context, GalaxyScene scene) {
 class _ControlPanel extends StatelessWidget {
   const _ControlPanel({
     required this.state,
-    required this.scene,
+    required this.nodes,
     required this.onOpenNodes,
     required this.floating,
   });
 
   final ProxyState state;
-  final GalaxyScene scene;
+  final List<GalaxyNode> nodes;
   final void Function(String? selection) onOpenNodes;
   final bool floating;
 
@@ -228,7 +259,7 @@ class _ControlPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final rows = [
-      _CurrentNodeRow(scene: scene, onOpenNodes: onOpenNodes),
+      _CurrentNodeRow(nodes: nodes, onOpenNodes: onOpenNodes),
       const Divider(height: 1, indent: 20, endIndent: 20),
       _CaptureRow(state: state),
       const Divider(height: 1, indent: 20, endIndent: 20),
@@ -380,6 +411,7 @@ class _PowerButton extends StatefulWidget {
 
 class _PowerButtonState extends State<_PowerButton>
     with SingleTickerProviderStateMixin {
+  bool _wasRunning = false;
   late final AnimationController _halo = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2400),
@@ -397,17 +429,22 @@ class _PowerButtonState extends State<_PowerButton>
     _sync();
   }
 
-  /// Breathe only while traffic flows, and never under reduced motion.
+  /// A connection gets one pulse; only an in-flight operation keeps moving.
   void _sync() {
+    final running = widget.state.isRunning;
+    final newlyConnected = running && !_wasRunning;
+    _wasRunning = running;
     final animate =
-        (widget.state.isRunning || widget.state.isProxyOperationInProgress) &&
-        !MediaQuery.disableAnimationsOf(context);
-    if (animate && !_halo.isAnimating) {
-      _halo.repeat();
-    } else if (!animate && _halo.isAnimating) {
+        !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled;
+    if (!animate || !running && !widget.state.isProxyOperationInProgress) {
       _halo
         ..stop()
         ..value = 0;
+    } else if (widget.state.isProxyOperationInProgress) {
+      if (!_halo.isAnimating) _halo.repeat();
+    } else if (newlyConnected || _halo.isAnimating) {
+      _halo.forward(from: 0);
     }
   }
 
@@ -575,30 +612,25 @@ class _PanelRow extends StatelessWidget {
 
 /// The node traffic goes through; opens it on the node map.
 class _CurrentNodeRow extends StatelessWidget {
-  const _CurrentNodeRow({required this.scene, required this.onOpenNodes});
+  const _CurrentNodeRow({required this.nodes, required this.onOpenNodes});
 
-  final GalaxyScene scene;
+  final List<GalaxyNode> nodes;
   final void Function(String? selection) onOpenNodes;
 
   @override
   Widget build(BuildContext context) {
-    final current = scene.current;
+    final current = nodes.where((node) => node.current).firstOrNull;
     return _PanelRow(
       key: const Key('current-node'),
-      onTap: () => onOpenNodes(current?.planet.id),
-      leading: CountryFlagBadge(code: current?.system.code ?? '', size: 30),
+      onTap: () => onOpenNodes(current?.id),
+      leading: CountryFlagBadge(code: current?.country ?? '', size: 30),
       title: current == null
           ? context.l10n.currentNodeTitle
-          : placeName(context, current.system.code),
-      detail: current == null
-          ? context.l10n.noCurrentNode
-          : current.planet.node.node.addr,
+          : placeName(context, current.country),
+      detail: current == null ? context.l10n.noCurrentNode : current.node.addr,
       trailing: [
         if (current != null)
-          HealthChip(
-            health: current.planet.node.health,
-            latencyMs: current.planet.node.latencyMs,
-          ),
+          HealthChip(health: current.health, latencyMs: current.latencyMs),
         Icon(
           Icons.chevron_right,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -731,9 +763,9 @@ class _LocalProxyRow extends StatelessWidget {
 /// The way to the galaxy where there is no room to show it: a button that
 /// already says how the catalogue is doing.
 class _NodeMapButton extends StatelessWidget {
-  const _NodeMapButton({required this.scene, required this.onOpen});
+  const _NodeMapButton({required this.nodes, required this.onOpen});
 
-  final GalaxyScene scene;
+  final List<GalaxyNode> nodes;
   final VoidCallback onOpen;
 
   @override
@@ -742,8 +774,8 @@ class _NodeMapButton extends StatelessWidget {
     final scheme = theme.colorScheme;
     final status = StatusColors.of(context);
     final counts = <NodeHealth, int>{};
-    for (final planet in scene.planets) {
-      counts.update(planet.node.health, (n) => n + 1, ifAbsent: () => 1);
+    for (final node in nodes) {
+      counts.update(node.health, (n) => n + 1, ifAbsent: () => 1);
     }
     return Material(
       key: const Key('open-node-map'),
@@ -780,16 +812,16 @@ class _NodeMapButton extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      scene.isEmpty
+                      nodes.isEmpty
                           ? context.l10n.noNodesHint
-                          : _summary(context, scene),
+                          : _summary(context, nodes),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
                     ),
-                    if (!scene.isEmpty) ...[
+                    if (nodes.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(999),

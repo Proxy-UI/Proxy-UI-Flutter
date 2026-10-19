@@ -21,11 +21,15 @@ import 'node_list_view.dart';
 
 enum NodesView { galaxy, list }
 
+final _galaxyTexts = Expando<GalaxyText>();
+
 /// The words the galaxy writes on the sky, in the current language.
 GalaxyText galaxyTextFor(BuildContext context) {
   final language = Localizations.localeOf(context).languageCode;
   final strings = context.l10n;
-  return GalaxyText(
+  // Keep text identity stable across unrelated provider updates, so rebuilding
+  // the surrounding page does not invalidate a resting map's paint or labels.
+  return _galaxyTexts[strings] ??= GalaxyText(
     home: strings.galaxyHome,
     unlocated: strings.galaxyUnlocated,
     countryName: (code) => countryName(code, language),

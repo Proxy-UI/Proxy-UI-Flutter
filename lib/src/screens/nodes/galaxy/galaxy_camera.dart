@@ -134,7 +134,7 @@ class GalaxyCamera {
 
   /// Advance by [dt] seconds; [drifting] turns the disk slowly.
   void step(double dt, {required bool drifting}) {
-    final ease = 1 - math.exp(-dt * 3.2);
+    final ease = 1 - math.exp(-dt * 5.5);
     tilt += (goalTilt - tilt) * ease;
     distance += (goalDistance - distance) * ease;
     target = target.lerp(goalTarget, ease);
