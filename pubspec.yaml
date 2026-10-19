@@ -48,6 +48,11 @@ dependencies:
   # window off-screen.
   screen_retriever: ^0.2.0
   country_flags: ^4.1.2
+  # Draws the same flag assets country_flags ships straight onto the galaxy
+  # canvas, so a country's star wears the flag the lists show.
+  jovial_svg: ^1.1.25
+  # Pinned by the Flutter SDK; harmonises status colours with the seed colour.
+  material_color_utilities: any
   toastification: ^3.0.3
 
 dev_dependencies:
@@ -83,6 +88,9 @@ flutter:
       platforms: [windows]
     - path: assets/fonts/OFL-NotoSansSC.txt
       platforms: [windows]
+  # The galaxy's nebula backdrop.
+  shaders:
+    - shaders/nebula.frag
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

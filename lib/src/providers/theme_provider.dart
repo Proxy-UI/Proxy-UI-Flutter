@@ -16,7 +16,6 @@ class ThemeState extends ChangeNotifier {
 
   ThemeMode get themeMode => _themeMode;
   ColorSeed get colorSeed => _colorSeed;
-  bool get isDark => _themeMode == ThemeMode.dark;
 
   ThemeState() {
     _load();
@@ -54,23 +53,15 @@ class ThemeState extends ChangeNotifier {
     }
   }
 
-  void toggleMode() {
-    _themeMode = _themeMode == ThemeMode.dark
-        ? ThemeMode.light
-        : ThemeMode.dark;
+  void setThemeMode(ThemeMode mode) {
+    if (_themeMode == mode) return;
+    _themeMode = mode;
     unawaited(_save());
     _safeNotifyListeners();
   }
 
   void setColorSeed(ColorSeed seed) {
     _colorSeed = seed;
-    unawaited(_save());
-    _safeNotifyListeners();
-  }
-
-  void nextColorSeed() {
-    final next = (_colorSeed.index + 1) % ColorSeed.values.length;
-    _colorSeed = ColorSeed.values[next];
     unawaited(_save());
     _safeNotifyListeners();
   }

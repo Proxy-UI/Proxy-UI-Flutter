@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
-import 'package:proxy_ui/src/screens/proxy_page.dart';
+import 'package:proxy_ui/src/screens/dashboard_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proxy_ui/src/ffi/macos_store_proxy_service.dart';
 import 'package:proxy_ui/src/ffi/proxy_ffi.dart';
@@ -79,9 +79,7 @@ void main() {
             locale: const Locale('en'),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: ProxyPage(scaffoldKey: GlobalKey<ScaffoldState>()),
-            ),
+            home: Scaffold(body: DashboardPage(onOpenNodes: (_) {})),
           ),
         ),
       );
@@ -89,7 +87,9 @@ void main() {
       expect(find.text('VPN Service'), findsOneWidget);
       expect(find.byIcon(Icons.security_outlined), findsNothing);
       expect(find.byIcon(Icons.help_outline), findsNothing);
-      expect(find.byType(Switch), findsOneWidget);
+      // The provider owns capture: the only control is the power button.
+      expect(find.byKey(const Key('power-button')), findsOneWidget);
+      expect(find.byType(Switch), findsNothing);
       expect(find.textContaining('Android'), findsNothing);
       expect(tester.takeException(), isNull);
     }

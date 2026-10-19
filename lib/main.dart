@@ -17,6 +17,8 @@ import 'package:window_manager/window_manager.dart';
 import 'src/providers/proxy_provider.dart';
 import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
+import 'src/theme/app_theme.dart';
+import 'src/widgets/theme_transition.dart';
 import 'src/services/desktop_exit_service.dart';
 import 'src/services/desktop_log_service.dart';
 import 'src/services/desktop_settings.dart';
@@ -174,6 +176,15 @@ class _ProxyAppState extends State<ProxyApp>
   }
 
   @override
+  void didChangePlatformBrightness() {
+    // Only a window following the system changes with it; cross-fade that
+    // change rather than letting it snap.
+    if (context.read<ThemeState>().themeMode == ThemeMode.system) {
+      ThemeTransition.systemChange(context);
+    }
+  }
+
+  @override
   void didChangeLocales(List<Locale>? locales) {
     if (locales != null && locales.isNotEmpty) {
       AppLanguage.instance.systemLocaleChanged(locales.first);
@@ -248,25 +259,22 @@ class _ProxyAppState extends State<ProxyApp>
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             themeMode: themeState.themeMode,
-            theme: ThemeData(
-              fontFamily: WindowsTypography.themeFamily,
-              fontFamilyFallback: WindowsTypography.themeFallback,
-              colorSchemeSeed: themeState.colorSeed.color,
-              useMaterial3: true,
-              brightness: Brightness.light,
-            ),
-            darkTheme: ThemeData(
-              fontFamily: WindowsTypography.themeFamily,
-              fontFamilyFallback: WindowsTypography.themeFallback,
-              colorSchemeSeed: themeState.colorSeed.color,
-              useMaterial3: true,
-              brightness: Brightness.dark,
+            // No lerp: ThemeTransition reveals the new theme over a frozen
+            // frame of the old one, and a lerp underneath would flip
+            // brightness-chosen colours halfway through it.
+            themeAnimationDuration: Duration.zero,
+            theme: buildAppTheme(themeState.colorSeed.color, Brightness.light),
+            darkTheme: buildAppTheme(
+              themeState.colorSeed.color,
+              Brightness.dark,
             ),
             builder: (context, child) {
+              // The theme switch captures this subtree; see ThemeTransition.
+              final content = ThemeTransitionHost(child: child!);
               if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-                return VirtualWindowFrame(child: child!);
+                return VirtualWindowFrame(child: content);
               }
-              return child!;
+              return content;
             },
             home: const HomeScreen(),
           );

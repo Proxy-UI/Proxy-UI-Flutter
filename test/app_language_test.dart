@@ -66,8 +66,15 @@ void main() {
     (tester) async {
       tester.view.physicalSize = const Size(1600, 900);
       tester.view.devicePixelRatio = 1;
+      // The connected power control breathes and the galaxy turns; with
+      // reduced motion both come to rest, so frames can settle.
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
       await AppLanguage.instance.load(systemLocale: const Locale('en'));
       final service = LanguageTestProxyService();
       final proxy = ProxyState(service: service);
@@ -102,10 +109,10 @@ void main() {
       }
       await tester.tap(find.text('节点').first);
       await tester.pumpAndSettle();
-      expect(find.text('控制服务器'), findsOneWidget);
+      expect(find.text('设置控制服务器'), findsOneWidget);
       await selectLanguage('English');
-      expect(find.text('Control Server'), findsOneWidget);
-      expect(find.text('Fetch Nodes'), findsOneWidget);
+      expect(find.text('Set up control server'), findsOneWidget);
+      expect(find.text('Galaxy'), findsOneWidget);
       await tester.tap(find.text('Subscription').first);
       await tester.pumpAndSettle();
       expect(find.text('Subscription Service'), findsOneWidget);
