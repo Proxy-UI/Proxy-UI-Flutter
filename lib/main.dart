@@ -19,6 +19,7 @@ import 'src/providers/theme_provider.dart';
 import 'src/screens/home_screen.dart';
 import 'src/theme/app_theme.dart';
 import 'src/widgets/theme_transition.dart';
+import 'src/widgets/app_render_activity.dart';
 import 'src/services/desktop_exit_service.dart';
 import 'src/services/desktop_log_service.dart';
 import 'src/services/desktop_settings.dart';
@@ -87,7 +88,7 @@ void main(List<String> arguments) async {
       // Before the first show, so the window never appears at the default
       // position and then jumps to the remembered one.
       await WindowStateService.instance.restore();
-      await windowManager.show();
+      await WindowStateService.instance.show();
       await windowManager.focus();
     });
   }
@@ -270,7 +271,9 @@ class _ProxyAppState extends State<ProxyApp>
             ),
             builder: (context, child) {
               // The theme switch captures this subtree; see ThemeTransition.
-              final content = ThemeTransitionHost(child: child!);
+              final content = AppRenderActivity(
+                child: ThemeTransitionHost(child: child!),
+              );
               if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
                 return VirtualWindowFrame(child: content);
               }

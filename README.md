@@ -100,6 +100,12 @@ python3 scripts/sign_release_manifest.py release-manifest.json --key /path/to/up
 gh release upload vX.Y.Z release-manifest.json release-manifest.json.sig --clobber
 ```
 
+Alternatively, after uploading the three locally signed split APKs, dispatch
+`attach-android-manifest.yaml` on the same commit as the desktop release. It
+verifies the existing signed manifest, desktop hashes, APK identities and the
+stable local certificate, then signs the updated manifest using the existing
+update-manifest key. It never builds or signs a mobile package.
+
 Debug builds verify an update but never replace themselves. Set
 `CIPHERRELAY_UPDATE_FEED` to a directory URL holding a release's files to try
 the flow against a local copy.
@@ -120,6 +126,15 @@ protocols. Build/stage the matching native library before using this UI change.
 - **Connection recovery (1.2.17+43)**: Paired with native 0.4.31, Windows refreshes physical egress for new sessions after network changes. Native handle operations are serialized, cleanup runs off the UI thread, logs are bounded, and connection status is checked independently of logs. See the parent repository's `docs/network-resilience.md` for limits and validation.
 - **Node galaxy**: The node catalogue opens as a 3D map. Each country is a star wearing its flag, placed where the country is on Earth as seen from above the North Pole; its nodes orbit it as planets coloured by their last test (fast, fair, slow, unreachable, untested), and a ring around the star shows the mix. An arc of light runs from this device to the node in use. Drag to orbit, scroll or pinch to zoom, click a star or planet for its addresses, egress IP and latency, and connect or test from the panel. Nodes whose egress has not been located gather in an "Unlocated" cluster and fly to their country once a test finds it. A list view shows the same nodes grouped by country.
 - **Proxy Control**: A power control on the dashboard and in the navigation rail starts and stops the proxy from any page
+
+Windows, macOS, Linux, Android and iOS share the optimized galaxy renderer.
+The phone dashboard does not construct a galaxy scene. A visible map repaints
+on interaction and node changes, follows display vsync during animation,
+and rests after the interaction and camera transition finish. Background,
+minimized and inactive views stop their animation clocks. Backdrops, flag and
+planet textures are released with visibility, and label layouts with their
+canvas. Native 0.6.5 batches geometry in the independent Rust `galaxy-geometry`
+crate; visible lines and textured planets are submitted in GPU batches. See [resource verification](docs/galaxy-performance.md).
 - **Configuration**: Server host, port, session key, and local port settings
 - **Optional LAN Access**: Expose the local proxy to trusted LAN devices with a copyable Wi-Fi HTTP proxy link
 - **Auto Proxy**: Geo-based routing (CN direct, others proxy)

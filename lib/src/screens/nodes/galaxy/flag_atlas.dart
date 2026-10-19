@@ -12,7 +12,7 @@ import 'package:country_flags/country_flags.dart';
 import 'package:flutter/services.dart';
 import 'package:jovial_svg/jovial_svg.dart';
 
-/// Rasterised flags, loaded on first use and kept for the process.
+/// Rasterised flags shared by visible canvases and released when none remain.
 class FlagAtlas {
   FlagAtlas._();
 
@@ -26,15 +26,25 @@ class FlagAtlas {
   final Set<String> _pending = {};
   final Set<String> _missing = {};
   final List<void Function()> _listeners = [];
+  int _generation = 0;
 
   /// Called whenever a flag finishes loading.
   void addListener(void Function() listener) => _listeners.add(listener);
 
-  void removeListener(void Function() listener) => _listeners.remove(listener);
+  void removeListener(void Function() listener) {
+    if (!_listeners.remove(listener) || _listeners.isNotEmpty) return;
+    _generation++;
+    for (final image in _images.values) {
+      image.dispose();
+    }
+    _images.clear();
+    _pending.clear();
+  }
 
   /// The flag for [countryCode], or null until it has loaded (or when there
   /// is none). Asking starts the load.
   ui.Image? imageFor(String countryCode) {
+    if (_listeners.isEmpty) return null;
     final code = countryCode.toUpperCase();
     final image = _images[code];
     if (image != null || _missing.contains(code)) return image;
@@ -43,6 +53,7 @@ class FlagAtlas {
   }
 
   Future<void> _load(String code) async {
+    final generation = _generation;
     final flagCode = FlagCode.fromCountryCode(code);
     if (flagCode == null) {
       _missing.add(code);
@@ -54,6 +65,7 @@ class FlagAtlas {
         rootBundle,
         'packages/country_flags/res/si/$flagCode.si',
       );
+      if (generation != _generation) return;
       final viewport = si.viewport;
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(recorder);
@@ -73,7 +85,12 @@ class FlagAtlas {
       si.paint(canvas);
       final picture = recorder.endRecording();
       try {
-        _images[code] = await picture.toImage(resolution, resolution);
+        final image = await picture.toImage(resolution, resolution);
+        if (generation != _generation) {
+          image.dispose();
+          return;
+        }
+        _images[code] = image;
       } finally {
         picture.dispose();
       }
@@ -82,9 +99,9 @@ class FlagAtlas {
       }
     } catch (_) {
       // No flag, or no rasteriser (tests): the star keeps its plain face.
-      _missing.add(code);
+      if (generation == _generation) _missing.add(code);
     } finally {
-      _pending.remove(code);
+      if (generation == _generation) _pending.remove(code);
     }
   }
 }

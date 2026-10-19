@@ -12,9 +12,11 @@ import 'package:flutter/services.dart';
 import '../../../theme/app_theme.dart';
 import 'flag_atlas.dart';
 import 'galaxy_backdrop.dart';
+import 'galaxy_geometry.dart';
 import 'galaxy_model.dart';
 import 'galaxy_painter.dart';
 import 'galaxy_view.dart';
+import 'planet_atlas.dart';
 
 /// Camera commands from outside the canvas.
 class GalaxyController {
@@ -53,14 +55,19 @@ class GalaxyCanvas extends StatefulWidget {
 }
 
 class _GalaxyCanvasState extends State<GalaxyCanvas>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final GalaxyView _view = GalaxyView();
   final LabelCache _labels = LabelCache();
   final Starfield _stars = Starfield();
+  final BackdropCache _backdrop = BackdropCache();
+  final PlanetAtlas _planets = PlanetAtlas();
+  final GalaxyGeometry _geometry = GalaxyGeometry();
   final FocusNode _focus = FocusNode(debugLabel: 'galaxy');
-  late final Ticker _ticker = createTicker(_onTick);
+  late final Ticker _frameTicker;
   Duration _last = Duration.zero;
-  DateTime _touched = DateTime.fromMillisecondsSinceEpoch(0);
+  double _touched = -6;
+  bool _foreground = true;
+  bool _enabled = false;
   bool _settled = true;
   bool _first = true;
   double _pinch = 1;
@@ -68,16 +75,51 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
   Size _canvas = Size.zero;
 
   /// After this long without input the camera glides back to the galaxy.
-  static const _glideAfter = Duration(seconds: 6);
+  static const _glideAfter = 6.0;
 
   @override
   void initState() {
     super.initState();
+    _frameTicker = createTicker(_onTick);
     widget.controller?._state = this;
-    FlagAtlas.instance.addListener(_wake);
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
     _view.selected = widget.selected;
     _view.camera.inset = widget.inset;
     _view.update(widget.scene, first: true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _view.still = MediaQuery.disableAnimationsOf(context);
+    _view.expireTransitions();
+    _syncActivity();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _syncActivity();
+  }
+
+  void _syncActivity() {
+    final enabled = _foreground && TickerMode.valuesOf(context).enabled;
+    if (enabled == _enabled) return;
+    _enabled = enabled;
+    _planets.enabled = enabled;
+    _backdrop.enabled = enabled;
+    if (enabled) {
+      FlagAtlas.instance.addListener(_wake);
+      _wake();
+    } else {
+      _stopFrames();
+      _geometry.dispose();
+      _last = Duration.zero;
+      FlagAtlas.instance.removeListener(_wake);
+      _labels.dispose();
+    }
   }
 
   @override
@@ -87,6 +129,7 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
       old.controller?._state = null;
       widget.controller?._state = this;
     }
+    if (old.text != widget.text) _labels.dispose();
     if (!identical(old.scene, widget.scene)) {
       _view.update(widget.scene, first: _first && widget.scene.isEmpty);
       final reach = widget.scene.reach;
@@ -104,26 +147,31 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     FlagAtlas.instance.removeListener(_wake);
     if (widget.controller?._state == this) widget.controller?._state = null;
-    _ticker.dispose();
+    _stopFrames();
+    _frameTicker.dispose();
     _focus.dispose();
     _view.dispose();
+    _labels.dispose();
+    _backdrop.dispose();
+    _planets.dispose();
+    _geometry.dispose();
     super.dispose();
   }
 
-  Duration get _idleFor => DateTime.now().difference(_touched);
+  bool get _ambient => !_view.still && _view.time - _touched < _glideAfter;
 
-  bool get _needsFrames =>
-      (!_view.still && !_view.scene.isEmpty) ||
-      !_view.camera.settled ||
-      _view.busy;
+  bool get _needsFrames => _ambient || !_view.camera.settled || _view.busy;
 
   void _onTick(Duration elapsed) {
-    final dt = ((elapsed - _last).inMicroseconds / 1e6).clamp(0.0, 0.05);
+    if (!_enabled) return;
+    final seconds = (elapsed - _last).inMicroseconds / 1e6;
+    final dt = seconds.clamp(0.0, 0.05);
     _last = elapsed;
     final camera = _view.camera;
-    final idle = _idleFor >= _glideAfter;
+    final idle = !_ambient;
     if (idle && !_settled && _view.selected == null) {
       camera.overview();
       _settled = true;
@@ -132,23 +180,34 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
       final at = _view.positionOf(id);
       if (at != null) camera.goalTarget = at;
     }
-    camera.step(dt, drifting: idle && _view.selected == null && !_view.still);
-    _view.time += dt;
+    camera.step(dt, drifting: _ambient && _view.selected == null);
+    // Slow rasterization must not stretch a six-second interaction into a
+    // much longer animation. Only camera integration needs a bounded step.
+    _view.time += seconds;
+    if (_ambient) _view.motionTime += dt;
+    _view.expireTransitions();
     _view.tick();
-    if (!_needsFrames) _ticker.stop();
+    if (!_needsFrames) _stopFrames();
   }
 
   /// Draw frames again: something moved, changed or was asked for.
   void _wake() {
-    if (!mounted) return;
+    if (!mounted || !_enabled) return;
+    if (_frameTicker.isActive) return;
     _view.tick();
-    if (_ticker.isActive || !_needsFrames) return;
+    if (!_needsFrames) return;
     _last = Duration.zero;
-    _ticker.start();
+    // Follow display vsync during interaction; stop requesting engine frames
+    // entirely once the finite animation settles or the view is hidden.
+    _frameTicker.start();
+  }
+
+  void _stopFrames() {
+    _frameTicker.stop();
   }
 
   void _touch() {
-    _touched = DateTime.now();
+    _touched = _view.time;
     _settled = false;
     _wake();
   }
@@ -272,6 +331,7 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
       ratio: MediaQuery.devicePixelRatioOf(context),
       text: theme.textTheme.bodySmall ?? const TextStyle(),
     );
+    _planets.palette(palette.scheme);
     return LayoutBuilder(
       builder: (context, constraints) {
         final canvas = constraints.biggest;
@@ -339,9 +399,10 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
                         text: widget.text,
                         labels: _labels,
                         starfield: _stars,
-                        onBackdrop: () {
-                          if (mounted) _view.tick();
-                        },
+                        backdrop: _backdrop,
+                        planets: _planets,
+                        geometry: _geometry,
+                        onBackdrop: _wake,
                       ),
                     ),
                   ),
