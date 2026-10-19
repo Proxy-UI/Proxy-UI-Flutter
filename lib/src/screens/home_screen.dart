@@ -6,6 +6,7 @@ import 'package:proxy_ui/l10n/app_language.dart';
 import '../services/app_brand.dart';
 import '../services/build_capabilities.dart';
 import '../widgets/app_window_title_bar.dart';
+import '../updates/update_dialog.dart';
 import '../widgets/appearance_controls.dart';
 import 'dashboard_page.dart';
 import 'log_page.dart';
@@ -87,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final actions = [
       if (BuildCapabilities.isMacAppStore) const StoreDemoButton(compact: true),
       if (BuildCapabilities.isMacAppStore) const StorePrivacyButton(),
+      const UpdateButton(),
       const LanguageMenuButton(),
       const ColorSeedMenu(),
       const ThemeToggle(),

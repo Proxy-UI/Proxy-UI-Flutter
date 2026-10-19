@@ -72,6 +72,38 @@ SIL Open Font License are scoped to Windows, so other platform packages keep
 their existing typography and size. The upstream font is unmodified from
 [Google Fonts commit a85815a](https://github.com/google/fonts/tree/a85815a42757630ce188fdad368c2dfc444d4773/ofl/notosanssc).
 
+## Updates
+
+Updates are only ever looked for when the user presses **Check for updates** in
+the title bar. Nothing is fetched in the background and nothing is offered
+unprompted. The check reads `release-manifest.json` from the latest release
+(through the local proxy while it runs) and trusts it only if
+`release-manifest.json.sig` is a valid Ed25519 signature of its exact bytes by
+the key built into the app. If the release is newer, one confirmation starts
+the update:
+
+| Installation | What happens |
+|--------------|--------------|
+| macOS (Developer ID) | The disk image is checked against the manifest, its app must be signed by team `5T7QB722FM`, accepted by Gatekeeper and carry the expected bundle id and build. The app then quits through its normal path, a helper swaps the bundle and reopens it. |
+| Windows installer | The installer is checked against the manifest; the app quits, the installer runs silently (one UAC prompt) and the app reopens. |
+| Windows portable, Linux | The archive is checked and saved to Downloads for the user to unpack. |
+| Android | The package matching the device's ABI is checked and handed to the system installer, which asks the user to confirm. |
+| iOS, Mac App Store | Not offered: the store updates these builds. |
+
+The release workflow signs the manifest with the `UPDATE_SIGNING_KEY` secret
+and verifies it against `scripts/update_signing_key.pub.pem`. After attaching
+locally signed Android packages and updating the manifest, sign it again and
+upload the new signature:
+
+```bash
+python3 scripts/sign_release_manifest.py release-manifest.json --key /path/to/update-signing-ed25519.pem
+gh release upload vX.Y.Z release-manifest.json release-manifest.json.sig --clobber
+```
+
+Debug builds verify an update but never replace themselves. Set
+`CIPHERRELAY_UPDATE_FEED` to a directory URL holding a release's files to try
+the flow against a local copy.
+
 ## Features
 
 With the matching native library, all native TCP, UDP and ICMP sessions use
