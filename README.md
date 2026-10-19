@@ -134,7 +134,12 @@ and rests after the interaction and camera transition finish. Background,
 minimized and inactive views stop their animation clocks. Backdrops, flag and
 planet textures are released with visibility, and label layouts with their
 canvas. Native 0.6.5 batches geometry in the independent Rust `galaxy-geometry`
-crate; visible lines and textured planets are submitted in GPU batches. See [resource verification](docs/galaxy-performance.md).
+crate; visible lines and textured planets are submitted in GPU batches.
+Testing a country draws nothing while its probes wait: in-flight rings and
+progress are still, answers are applied in batches, and the catalogue is saved
+once per run. A native library exporting `proxy_probe_nodes_v1` runs the probes
+as tasks on its shared runtime instead of one blocked isolate per node. See
+[resource verification](docs/galaxy-performance.md).
 - **Configuration**: Server host, port, session key, and local port settings
 - **Optional LAN Access**: Expose the local proxy to trusted LAN devices with a copyable Wi-Fi HTTP proxy link
 - **Auto Proxy**: Geo-based routing (CN direct, others proxy)

@@ -78,15 +78,18 @@ class GalaxyView extends ChangeNotifier {
   /// Bodies drawn in the last frame.
   List<Hit> hits = const [];
 
-  /// Whether anything is animating on its own: entrances, ripples, flights,
-  /// fading ghosts or a probe in flight.
+  /// Whether anything is animating on its own: entrances, ripples, flights
+  /// or fading ghosts.
+  ///
+  /// A probe in flight is not: it can wait the whole timeout, and drawing at
+  /// display rate for that long rasters the entire window every frame. Its
+  /// ring is drawn still, and starting and answering each ripple instead.
   bool get busy =>
       !still &&
       (appeared.isNotEmpty ||
           rippled.isNotEmpty ||
           migrations.isNotEmpty ||
-          ghosts.isNotEmpty ||
-          scene.planets.any((p) => p.node.health == NodeHealth.testing));
+          ghosts.isNotEmpty);
 
   /// Expire transitions even for nodes behind the camera or removed by a
   /// filter. Their lifetime must not depend on the painter visiting them.

@@ -252,10 +252,7 @@ class _CountryDetails extends StatelessWidget {
                   for (final planet in system.planets) planet.node.node,
                 ]),
           icon: actions.testingMany
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? TestingRing(size: 18, progress: actions.testProgress)
               : const Icon(Icons.network_check),
           label: Text(context.l10n.testRegion),
         ),
@@ -486,10 +483,7 @@ class _NodeDetails extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: testing ? null : () => actions.test(context, info),
               icon: testing
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const TestingRing(size: 18)
                   : const Icon(Icons.speed),
               label: Text(context.l10n.testLabel),
             ),

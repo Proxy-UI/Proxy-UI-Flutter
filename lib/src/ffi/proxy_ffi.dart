@@ -473,6 +473,34 @@ typedef _ProxyFreeNodeProbeResultDart = void Function(
   Pointer<NodeProbeResult> result,
 );
 
+/// Receives one finished probe of a `proxy_probe_nodes_v1` batch.
+typedef NodeProbeCallbackNative = Void Function(
+  Uint64 batch,
+  Uint32 index,
+  Pointer<NodeProbeResult> result,
+);
+
+typedef _ProxyProbeNodesNative = Int32 Function(
+  Pointer<Pointer<Utf8>> hosts,
+  Pointer<Uint16> ports,
+  Uint32 count,
+  Uint32 concurrency,
+  Uint32 timeoutMs,
+  Int32 wireProtocol,
+  Pointer<NativeFunction<NodeProbeCallbackNative>> callback,
+  Uint64 batch,
+);
+typedef ProxyProbeNodesDart = int Function(
+  Pointer<Pointer<Utf8>> hosts,
+  Pointer<Uint16> ports,
+  int count,
+  int concurrency,
+  int timeoutMs,
+  int wireProtocol,
+  Pointer<NativeFunction<NodeProbeCallbackNative>> callback,
+  int batch,
+);
+
 // proxy_free_groups_result
 typedef _ProxyFreeGroupsResultNative = Void Function(
   Pointer<GroupsResult> result,
@@ -696,4 +724,20 @@ class ProxyFFI {
       .lookupFunction<_ProxyFreeGroupsResultNative, _ProxyFreeGroupsResultDart>(
         'proxy_free_groups_result',
       );
+
+  /// Probes a batch of nodes without blocking; null on a native library that
+  /// predates it.
+  late final ProxyProbeNodesDart? proxyProbeNodes =
+      lib.providesSymbol('proxy_probe_nodes_v1')
+      ? lib.lookupFunction<_ProxyProbeNodesNative, ProxyProbeNodesDart>(
+          'proxy_probe_nodes_v1',
+        )
+      : null;
+
+  /// Releases one result delivered by [proxyProbeNodes].
+  late final proxyReleaseNodeProbeResult = lib
+      .lookupFunction<
+        _ProxyFreeNodeProbeResultNative,
+        _ProxyFreeNodeProbeResultDart
+      >('proxy_release_node_probe_result');
 }

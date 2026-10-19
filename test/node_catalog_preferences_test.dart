@@ -20,7 +20,7 @@ void main() {
         serverPort: 8443,
         sessionKey: 'test-session-key',
         sortByLatency: true,
-      ).withLatency(node, 42);
+      ).withResults([(node, _answered(42))]);
 
       final restored = NodeCatalogPreferences.fromJson(
         jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
@@ -33,6 +33,27 @@ void main() {
       expect(restored.latencyFor(node), 42);
     },
   );
+
+  test('a failed test keeps the last measured latency', () {
+    final node = NodeInfo(
+      nodeId: 'node-01',
+      addr: '10.0.0.1:1081',
+      lastSeen: DateTime(2026, 7, 19),
+      country: 'SG',
+      region: 'Singapore',
+    );
+    final failed = NodeVerification(
+      status: NodeVerificationStatus.unreachable,
+      checkedAt: DateTime(2026, 7, 20),
+      latencyMs: 10000,
+    );
+    final preferences = const NodeCatalogPreferences()
+        .withResults([(node, _answered(25))])
+        .withResults([(node, failed)]);
+
+    expect(preferences.latencyFor(node), 25);
+    expect(preferences.verificationFor(node)?.isVerified, isFalse);
+  });
 
   test('latency is scoped to both node id and address', () {
     final original = NodeInfo(
@@ -49,10 +70,9 @@ void main() {
       country: 'SG',
       region: 'Singapore',
     );
-    final preferences = const NodeCatalogPreferences().withLatency(
-      original,
-      25,
-    );
+    final preferences = const NodeCatalogPreferences().withResults([
+      (original, _answered(25)),
+    ]);
 
     expect(preferences.latencyFor(original), 25);
     expect(preferences.latencyFor(moved), isNull);
@@ -82,3 +102,11 @@ void main() {
     expect(restored.legacyLatencies, {'10.0.0.8:1081': 37});
   });
 }
+
+NodeVerification _answered(int latencyMs) => NodeVerification(
+  status: NodeVerificationStatus.verified,
+  checkedAt: DateTime(2026, 7, 19),
+  countryCode: 'SG',
+  egressIp: '203.0.113.1',
+  latencyMs: latencyMs,
+);

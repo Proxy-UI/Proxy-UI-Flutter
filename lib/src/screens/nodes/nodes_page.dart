@@ -585,10 +585,7 @@ class _Toolbar extends StatelessWidget {
                 ? null
                 : () => actions.testMany(context, shownNodes),
             icon: actions.testingMany
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? TestingRing(size: 20, progress: actions.testProgress)
                 : const Icon(Icons.network_check),
           ),
           // Where the catalogue comes from and how the list is ordered are
