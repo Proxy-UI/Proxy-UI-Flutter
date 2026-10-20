@@ -16,6 +16,12 @@ class PlanetAtlas {
   bool _enabled = false;
   int _generation = 0;
 
+  static int _liveBytes = 0;
+
+  /// Bytes held by every canvas's planet images: for diagnostics (the galaxy
+  /// resource probe).
+  static int get liveBytes => _liveBytes;
+
   set enabled(bool enabled) {
     if (_enabled == enabled) return;
     _enabled = enabled;
@@ -119,6 +125,7 @@ class PlanetAtlas {
         return;
       }
       _images[key] = image;
+      _liveBytes += image.width * image.height * 4;
       ready();
     } catch (_) {
       // The vector sphere remains available where offscreen rendering fails.
@@ -132,6 +139,7 @@ class PlanetAtlas {
   void dispose() {
     _generation++;
     for (final image in _images.values) {
+      _liveBytes -= image.width * image.height * 4;
       image.dispose();
     }
     _images.clear();
