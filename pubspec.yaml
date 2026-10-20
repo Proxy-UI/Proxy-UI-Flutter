@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.0.6+75
+version: 2.0.8+76
 
 environment:
   sdk: ^3.13.0
@@ -38,7 +38,6 @@ dependencies:
   path_provider: ^2.1.0
   provider: ^6.1.0
   shared_preferences: ^2.2.0
-  shelf: ^1.4.0
   # The service retains its serialized update queue through the 0.8 compatibility
   # bridge while tray icons and menus are now provided by nativeapi.
   tray_manager: ^0.8.0
@@ -57,14 +56,13 @@ dependencies:
   # The running build's version, compared with the release manifest when the
   # user checks for an update.
   package_info_plus: ^10.2.2
-  # Verifies the Ed25519 signature on the release manifest, and the SHA-256 of
-  # each download against it.
-  cryptography: ^2.9.0
-  crypto: ^3.0.7
   # Opens a release's page from the update dialog.
   url_launcher: ^6.3.3
 
 dev_dependencies:
+  # Independent reference implementations for native crypto integration tests.
+  cryptography: ^2.9.0
+  crypto: ^3.0.7
   flutter_test:
     sdk: flutter
 

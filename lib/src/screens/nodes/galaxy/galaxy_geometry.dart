@@ -8,6 +8,8 @@ import 'package:ffi/ffi.dart';
 import '../../../ffi/proxy_ffi.dart';
 import 'galaxy_camera.dart';
 import 'galaxy_model.dart';
+import 'galaxy_native.dart';
+import 'galaxy_view.dart';
 
 typedef WorldLine = ({Vec3 start, Vec3 end, int group});
 typedef _ProjectNative = Int32 Function(
@@ -28,7 +30,11 @@ typedef _Project = int Function(
 /// One bounded leaf call per frame. Dart owns and reuses both native buffers.
 /// Older libraries and widget tests use the same clipped geometry in Dart.
 class GeometryBatch {
-  GeometryBatch(this.lines, {DynamicLibrary? library, bool useNative = true}) {
+  GeometryBatch(
+    List<WorldLine> lines, {
+    DynamicLibrary? library,
+    bool useNative = true,
+  }) : _count = lines.length {
     _project = useNative && lines.length <= 100000
         ? (library == null ? _native : _lookup(library))
         : null;
@@ -57,6 +63,7 @@ class GeometryBatch {
     } else {
       coordinates = Float32List(lines.length * 6);
     }
+    _fallbackLines = _project == null ? lines : const [];
     groups = Uint32List.view(coordinates.buffer, coordinates.offsetInBytes);
   }
 
@@ -82,7 +89,8 @@ class GeometryBatch {
 
   static bool get nativeAvailable => _native != null;
   bool get usesNative => _project != null;
-  final List<WorldLine> lines;
+  final int _count;
+  late final List<WorldLine> _fallbackLines;
   _Project? _project;
   Pointer<Double>? _camera;
   Pointer<Uint8>? _input;
@@ -93,43 +101,15 @@ class GeometryBatch {
 
   int project(Projection projection, Rect viewport) {
     if (_disposed) throw StateError('Disposed geometry batch');
-    if (lines.isEmpty) return 0;
+    if (_count == 0) return 0;
     if (_project case final project?) {
-      final p = projection;
-      _camera!.asTypedList(20).setAll(0, [
-        p.eye.x,
-        p.eye.y,
-        p.eye.z,
-        p.right.x,
-        p.right.y,
-        p.right.z,
-        p.up.x,
-        p.up.y,
-        p.up.z,
-        p.forward.x,
-        p.forward.y,
-        p.forward.z,
-        p.center.dx,
-        p.center.dy,
-        p.focal,
-        0.2,
-        viewport.left,
-        viewport.top,
-        viewport.right,
-        viewport.bottom,
-      ]);
-      final count = project(
-        _camera!,
-        _input!,
-        lines.length,
-        _output!,
-        lines.length,
-      );
+      writeGalaxyCamera(_camera!.asTypedList(20), projection, viewport);
+      final count = project(_camera!, _input!, _count, _output!, _count);
       if (count >= 0) return count;
       throw StateError('Galaxy projection rejected its buffers: $count');
     }
     var count = 0;
-    for (final line in lines) {
+    for (final line in _fallbackLines) {
       final clipped = clipWorldLine(line.start, line.end, projection, viewport);
       if (clipped == null) continue;
       final i = count++ * 6;
@@ -258,12 +238,37 @@ class GalaxyLines {
 class GalaxyGeometry {
   GalaxyScene? _scene;
   GeometryBatch? _batch;
+  NativeBodyBatch? bodies;
   final guides = <GalaxyLines>[];
   final orbits = <String, ({GalaxyLines back, GalaxyLines front})>{};
   final _systems = <CountrySystem>[];
 
-  void project(GalaxyScene scene, Projection projection, Size size) {
-    if (!identical(scene, _scene)) _build(scene);
+  void project(
+    GalaxyScene scene,
+    Projection projection,
+    Size size, {
+    GalaxyView? view,
+  }) {
+    if (!identical(scene, _scene)) {
+      if (_sameLayout(scene)) {
+        _scene = scene;
+        _systems
+          ..clear()
+          ..addAll(scene.systems);
+      } else {
+        _build(scene);
+      }
+    }
+    if (view != null) {
+      bodies?.project(
+        projection,
+        size,
+        view.orbitTime,
+        view.time,
+        view.appeared,
+        view.migrations,
+      );
+    }
     for (final guide in guides) {
       guide.clear();
     }
@@ -292,9 +297,42 @@ class GalaxyGeometry {
     }
   }
 
+  bool _sameLayout(GalaxyScene scene) {
+    final previous = _scene;
+    if (previous == null ||
+        previous.reach != scene.reach ||
+        previous.systems.length != scene.systems.length) {
+      return false;
+    }
+    for (var i = 0; i < scene.systems.length; i++) {
+      final a = previous.systems[i], b = scene.systems[i];
+      if (a.code != b.code ||
+          a.position.x != b.position.x ||
+          a.position.y != b.position.y ||
+          a.position.z != b.position.z ||
+          a.planets.length != b.planets.length) {
+        return false;
+      }
+      for (var j = 0; j < a.planets.length; j++) {
+        final p = a.planets[j], q = b.planets[j];
+        if (p.id != q.id ||
+            p.ring != q.ring ||
+            p.radius != q.radius ||
+            p.phase != q.phase ||
+            p.period != q.period ||
+            p.tiltAxis != q.tiltAxis ||
+            p.tilt != q.tilt) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   void _build(GalaxyScene scene) {
     dispose();
     _scene = scene;
+    bodies = NativeBodyBatch(scene);
     final lines = <WorldLine>[];
     void circle(int group, Vec3 Function(double) point, int segments) {
       var start = point(0);
@@ -362,6 +400,8 @@ class GalaxyGeometry {
   }
 
   void dispose() {
+    bodies?.dispose();
+    bodies = null;
     _batch?.dispose();
     _batch = null;
     _scene = null;

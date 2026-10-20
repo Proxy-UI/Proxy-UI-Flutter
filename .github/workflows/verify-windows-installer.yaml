@@ -69,7 +69,7 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Installer failed with exit code $($process.ExitCode)" }
           Expand-Archive -LiteralPath $portable[0].FullName -DestinationPath $expanded
           $reference = Join-Path $expanded 'CipherRelay'
-          foreach ($required in @('CipherRelay.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
+          foreach ($required in @('CipherRelay.exe', 'cipherrelay-updater.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
             if (-not (Test-Path -LiteralPath (Join-Path $destination $required))) {
               throw "Installed application is missing $required"
             }
@@ -104,6 +104,67 @@ jobs:
           }
           $report | ConvertTo-Json -Depth 5 | Set-Content verification/installer-verification.json
           Write-Host "Installed $($version.ProductName) $($version.ProductVersion); $($verified.Count) files match the portable bundle"
+
+      - name: Exercise the Rust handoff with the real installer
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'CipherRelay-verify'
+          $work = Join-Path $env:RUNNER_TEMP 'CipherRelay-update-verify'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          $installer = @(Get-ChildItem artifacts -Recurse -Filter '*-setup.exe')[0]
+          $package = Join-Path $work $installer.Name
+          Copy-Item -LiteralPath $installer.FullName -Destination $package
+          $app = Join-Path $destination 'CipherRelay.exe'
+          $helper = Join-Path $destination 'cipherrelay-updater.exe'
+          $native = Join-Path $destination 'http_proxy.dll'
+          $expected = (Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash
+          $version = (Get-Item -LiteralPath $app).VersionInfo.ProductVersion
+          # An owned fixture process stands in for the outgoing GUI. No desktop
+          # app is started or killed, and the CI administrator needs no UAC UI.
+          $parent = Start-Process powershell.exe -WindowStyle Hidden -PassThru -ArgumentList @(
+            '-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 180')
+          try {
+            $request = @{
+              processId = $parent.Id; installer = $package; app = $app
+              version = $version; size = (Get-Item -LiteralPath $package).Length
+              sha256 = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
+              elevate = $false; reopen = $false; showErrors = $false; exitTimeoutSeconds = 60
+            }
+            $requestPath = Join-Path $work 'install-request.json'
+            $request | ConvertTo-Json | Set-Content -LiteralPath $requestPath -Encoding utf8
+            # Require an actual installer repair, not only an already matching version.
+            Remove-Item -LiteralPath $native
+            & $helper --prepare $requestPath
+            if ($LASTEXITCODE -ne 0) { throw 'Updater did not acknowledge readiness' }
+            $statusPath = Join-Path $work 'install-status.json'
+            $status = Get-Content -LiteralPath $statusPath | ConvertFrom-Json
+            if ($status.stage -ne 'ready' -or (Test-Path -LiteralPath $native)) {
+              throw 'Installer ran before outgoing process exit'
+            }
+            $parent.Kill()
+            $parent.WaitForExit()
+            $deadline = (Get-Date).AddMinutes(2)
+            do {
+              Start-Sleep -Milliseconds 250
+              $status = Get-Content -LiteralPath $statusPath | ConvertFrom-Json
+              if ($status.stage -in @('failed', 'cancelled')) { throw $status.message }
+              if ((Get-Date) -gt $deadline) { throw 'Updater completion timed out' }
+            } while ($status.stage -ne 'complete')
+            if ((Get-FileHash -LiteralPath $native -Algorithm SHA256).Hash -ne $expected) {
+              throw 'Updater did not restore the exact packaged native library'
+            }
+            if ((Get-Item -LiteralPath $app).VersionInfo.ProductVersion -ne $version) {
+              throw 'Updated executable has the wrong ProductVersion'
+            }
+            @{status = 'verified'; version = $version; real_installer_handoff = $true
+              waits_for_exit = $true; restored_native_sha256 = $expected.ToLowerInvariant()
+            } | ConvertTo-Json | Set-Content verification/update-handoff-verification.json
+          } finally {
+            if (-not $parent.HasExited) { $parent.Kill(); $parent.WaitForExit() }
+            $parent.Dispose()
+            Get-ChildItem -LiteralPath $work -Filter '*.log' | Copy-Item -Destination verification/
+            Get-ChildItem -LiteralPath $work -Filter '*status.json' | Copy-Item -Destination verification/
+          }
 
       - name: Upload verification result
         if: always()

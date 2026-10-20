@@ -156,6 +156,7 @@ class _GalaxyCanvasState extends State<GalaxyCanvas>
     _view.dispose();
     _labels.dispose();
     _backdrop.dispose();
+    _stars.dispose();
     _planets.dispose();
     _geometry.dispose();
     super.dispose();

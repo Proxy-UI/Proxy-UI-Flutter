@@ -182,7 +182,7 @@ class GalaxyPainter extends CustomPainter {
       still: view.still,
     );
     final projection = camera.project(size);
-    geometry.project(view.scene, projection, size);
+    geometry.project(view.scene, projection, size, view: view);
     final frame = _Frame(this, canvas, projection, size);
     planets.begin(canvas, ratio: palette.ratio);
     frame.plane();
@@ -398,6 +398,10 @@ class _Frame {
 
   /// Where [planet] is drawn now, and how far it has come out of its star.
   (Projected, double)? _place(CountrySystem system, NodePlanet planet) {
+    final bodies = painter.geometry.bodies;
+    if (bodies != null && bodies.usesNative) {
+      return bodies.placed(planet.id, (Offset.zero & size).inflate(140));
+    }
     final since = view.appeared[planet.id];
     final appear = since == null ? 1.0 : _easeOut((view.time - since) / 1.6);
     if (since != null && appear >= 1) view.appeared.remove(planet.id);

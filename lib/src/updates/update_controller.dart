@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/build_capabilities.dart';
 import 'release_manifest.dart';
+import 'native_update_transport.dart';
 import 'update_installers.dart';
 
 /// Whether this build can update itself at all. Store builds and iOS are
@@ -68,6 +69,7 @@ class UpdateController extends ChangeNotifier {
     this.loadHost = _loadHost,
     Uri? feed,
     this.publicKey = updatePublicKey,
+    this.transport,
   }) : feed = feed ?? _debugFeed;
 
   /// The local proxy's port while it runs; update traffic goes through it.
@@ -86,6 +88,12 @@ class UpdateController extends ChangeNotifier {
 
   /// The key release manifests must be signed with.
   final String publicKey;
+  final UpdateTransport? transport;
+  UpdateDownloader? _activeDownload;
+  bool _cancelled = false;
+  bool _disposed = false;
+  int receivedBytes = 0;
+  double bytesPerSecond = 0;
 
   UpdateStage _stage = UpdateStage.idle;
   InstalledVersion? _installed;
@@ -95,7 +103,6 @@ class UpdateController extends ChangeNotifier {
   double _progress = 0;
   UpdateException? _failure;
   String? _savedPath;
-  bool _cancelled = false;
 
   UpdateStage get stage => _stage;
   InstalledVersion? get installed => _installed;
@@ -125,7 +132,7 @@ class UpdateController extends ChangeNotifier {
 
   void _set(UpdateStage stage) {
     _stage = stage;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void _fail(UpdateException failure) {
@@ -134,7 +141,8 @@ class UpdateController extends ChangeNotifier {
     _set(UpdateStage.failed);
   }
 
-  UpdateDownloader get _downloader => UpdateDownloader(proxyPort: proxyPort());
+  UpdateDownloader get _downloader =>
+      UpdateDownloader(proxyPort: proxyPort(), transport: transport);
 
   /// Ask the newest release whether it is newer, and keep it only if its
   /// manifest is signed by the release key.
@@ -163,6 +171,7 @@ class UpdateController extends ChangeNotifier {
         manifestBytes,
         utf8.decode(signature),
         publicKey: publicKey,
+        transport: transport,
       );
       _release = release;
       if (!isNewerRelease(release, host)) {
@@ -185,29 +194,41 @@ class UpdateController extends ChangeNotifier {
     final release = _release;
     final plan = _plan;
     final installed = _installed;
-    if (release == null || plan == null || installed == null || busy) return;
+    if (release == null ||
+        plan == null ||
+        installed == null ||
+        busy ||
+        _disposed) {
+      return;
+    }
     _failure = null;
     _cancelled = false;
+    receivedBytes = 0;
+    bytesPerSecond = 0;
     _progress = 0;
     _set(UpdateStage.downloading);
     Directory? work;
     try {
       work = await _workDirectory();
+      if (_cancelled || _disposed) throw const UpdateCancelled();
       final file = File(
         '${work.path}${Platform.pathSeparator}${plan.asset.name}',
       );
-      await _downloader.file(
+      final downloader = _activeDownload = _downloader;
+      await downloader.file(
         release.assetUrl(plan.asset, feed: feed),
         file,
-        expectedSize: plan.asset.size,
-        cancelled: () => _cancelled,
-        onProgress: (progress) {
-          _progress = progress;
-          notifyListeners();
+        asset: plan.asset,
+        onProgress: (received, total, speed) {
+          receivedBytes = received;
+          bytesPerSecond = speed;
+          _progress = total == 0 ? 0 : received / total;
+          if (!_disposed) notifyListeners();
         },
       );
       _set(UpdateStage.verifying);
-      await verifyChecksum(file, plan.asset);
+      if (_cancelled || _disposed) throw const UpdateCancelled();
+      // Rust verified size and SHA-256 while streaming, before publishing file.
       await _apply(release, plan, installed, file, work);
     } on UpdateException catch (failure) {
       _fail(failure);
@@ -217,11 +238,23 @@ class UpdateController extends ChangeNotifier {
       } else {
         _fail(UpdateException(UpdateFailure.install, '$error'));
       }
+    } finally {
+      _activeDownload = null;
     }
   }
 
   void cancel() {
-    if (_stage == UpdateStage.downloading) _cancelled = true;
+    if (_stage == UpdateStage.downloading) {
+      _cancelled = true;
+      _activeDownload?.cancel();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _activeDownload?.cancel();
+    super.dispose();
   }
 
   Future<void> _apply(
@@ -265,9 +298,22 @@ class UpdateController extends ChangeNotifier {
           _set(UpdateStage.verifiedOnly);
           return;
         }
-        await WindowsInstallerUpdate.handOff(file, pid);
+        final handoff = await WindowsInstallerUpdate.handOff(
+          file,
+          pid,
+          version: release.version,
+          build: release.build,
+          sha256: plan.asset.sha256,
+          size: plan.asset.size,
+        );
         _set(UpdateStage.installing);
-        await quit();
+        try {
+          await quit();
+        } finally {
+          // Reached only if graceful shutdown returned or failed. Prevent a
+          // pending helper from installing after an unrelated later exit.
+          await handoff.cancel();
+        }
         throw const UpdateException(
           UpdateFailure.install,
           'The app did not quit',

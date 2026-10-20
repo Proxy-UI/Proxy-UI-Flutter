@@ -331,7 +331,8 @@ proxy UDP is disabled. A custom game directory with an exited launcher can
 still require an explicit executable exclusion. Native 0.6.3 or later is required.
 
 The desktop app requires the Rust `http_proxy` native library. Windows TUN mode
-also requires `wintun.dll`; the parent build scripts stage both DLLs. When developing
+also requires `wintun.dll` and `cipherrelay-updater.exe`; the parent build scripts
+stage all three native files. When developing
 from the parent repository on Windows, the recommended command builds and
 stages the DLL before starting Flutter. Run it from the parent repository root:
 
@@ -344,6 +345,15 @@ Build the complete Rust workspace and Windows UI together with:
 ```powershell
 .\scripts\windows\build.ps1 -Configuration Release
 ```
+
+Version 2.0.8 requires native 0.6.7. Downloads, integrity/signature checks,
+disk logging, subscription HTTP, blocking process/proxy control and galaxy
+computation use the shared Rust runtime on supported platforms. The Windows
+updater acknowledges its independent worker before quitting, verifies the
+installed version, and retains diagnostics on failure. A Windows installation
+with the old broken updater needs one manual installation of this release.
+See the parent repository's `docs/rust-ui-runtime.md` for the complete Dart
+audit, ABI ownership, measured layout performance and verification commands.
 
 The Windows executable normally runs without administrator privileges. Start
 the local proxy first, then use the top-level TUN switch; only that action

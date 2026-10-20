@@ -15,15 +15,21 @@ import '../models/node_model.dart';
 import '../services/android_vpn_service.dart';
 import 'proxy_ffi.dart';
 import 'native_operation_queue.dart';
+import 'native_proxy_operations.dart';
 
 /// Log entry from native library.
 class LogEntry {
   final int level;
   final String message;
   final DateTime timestamp;
+  final bool persisted;
 
-  LogEntry({required this.level, required this.message, DateTime? timestamp})
-    : timestamp = timestamp ?? DateTime.now();
+  LogEntry({
+    required this.level,
+    required this.message,
+    DateTime? timestamp,
+    this.persisted = false,
+  }) : timestamp = timestamp ?? DateTime.now();
 
   String get levelName {
     switch (level) {
@@ -232,7 +238,7 @@ class ProxyService {
     try {
       if (message == nullptr) return;
       final msg = message.toDartString();
-      _logController.add(LogEntry(level: level, message: msg));
+      _logController.add(LogEntry(level: level, message: msg, persisted: true));
     } catch (e) {
       // Ignore UTF-8 decode errors
     } finally {
@@ -276,74 +282,31 @@ class ProxyService {
     await _destroyHandle();
     if (!create()) return ProxyResult.runtimeError;
 
-    final config = calloc<ProxyConfigV8>();
-    Pointer<Utf8>? serverHostPtr;
-    Pointer<Utf8>? sessionKeyPtr;
-    Pointer<Utf8>? cacheDirPtr;
-    Pointer<Utf8>? tunBypassProcessesPtr;
-    Pointer<Utf8>? tunDnsServerPtr;
-
-    try {
-      tunDnsServerPtr = tunDnsServer.toNativeUtf8();
-      final dnsResult = _ffi.proxySetTunDnsServer(_handle!, tunDnsServerPtr);
-      if (dnsResult != ProxyResult.ok) return dnsResult;
-      serverHostPtr = serverHost.toNativeUtf8();
-      config.ref.base.base.serverHost = serverHostPtr;
-      config.ref.base.base.serverPort = serverPort;
-      config.ref.base.base.localPort = localPort;
-
-      if (sessionKey != null && sessionKey.length == 32) {
-        sessionKeyPtr = sessionKey.toNativeUtf8();
-        config.ref.base.base.sessionKey = sessionKeyPtr;
-      } else {
-        config.ref.base.base.sessionKey = nullptr;
-      }
-
-      config.ref.base.base.autoProxy = autoProxy ? 1 : 0;
-      config.ref.base.base.enableUdp = udpEnabled ? 1 : 0;
-      config.ref.base.base.tunUdpDirectFallback = udpDirectFallback ? 1 : 0;
-      config.ref.base.base.enableTun = tunEnabled ? 1 : 0;
-      config.ref.base.base.reverseGeo = reverseGeo ? 1 : 0;
-      config.ref.base.base.allowLan = allowLan ? 1 : 0;
-
-      // A stable private support directory keeps auto-proxy and virtual-DNS
-      // state across process restarts and in-place upgrades on every platform.
-      final supportDir = await getApplicationSupportDirectory();
-      cacheDirPtr = supportDir.path.toNativeUtf8();
-      config.ref.base.base.cacheDir = cacheDirPtr;
-
-      config.ref.base.base.needCodecIps = nullptr; // Reserved ABI field.
-
-      // Reserved ABI field; native sessions are always encrypted.
-      config.ref.base.base.forceCodec = 1;
-
-      // Desktop platforms: set system proxy
-      config.ref.base.base.setSystemProxy =
-          (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
-              setSystemProxy
-          ? 1
-          : 0;
-
-      if (tunBypassProcesses.isNotEmpty) {
-        tunBypassProcessesPtr = jsonEncode(tunBypassProcesses).toNativeUtf8();
-        config.ref.base.base.tunBypassProcesses = tunBypassProcessesPtr;
-      } else {
-        config.ref.base.base.tunBypassProcesses = nullptr;
-      }
-
-      config.ref.base.wireProtocol = secureTransport ? 3 : 0;
-      config.ref.tunFakeIp = tunFakeIp ? 1 : 0;
-      return _ffi.proxyStartV8(_handle!, config);
-    } finally {
-      if (tunDnsServerPtr != null) calloc.free(tunDnsServerPtr);
-      if (serverHostPtr != null) calloc.free(serverHostPtr);
-      if (sessionKeyPtr != null) calloc.free(sessionKeyPtr);
-      if (cacheDirPtr != null) calloc.free(cacheDirPtr);
-      if (tunBypassProcessesPtr != null) {
-        calloc.free(tunBypassProcessesPtr);
-      }
-      calloc.free(config);
-    }
+    final supportDir = await getApplicationSupportDirectory();
+    return _nativeCode('start', _handle!, {
+      'config': {
+        'server_host': serverHost,
+        'server_port': serverPort,
+        'local_port': localPort,
+        'session_key': sessionKey != null && sessionKey.length == 32
+            ? sessionKey
+            : null,
+        'cache_directory': supportDir.path,
+        'auto_proxy': autoProxy,
+        'udp_enabled': udpEnabled,
+        'udp_direct_fallback': udpDirectFallback,
+        'tun_enabled': tunEnabled,
+        'tun_fake_ip': tunFakeIp,
+        'tun_dns_server': tunDnsServer,
+        'tun_bypass_processes': tunBypassProcesses,
+        'reverse_geo': reverseGeo,
+        'secure_transport': secureTransport,
+        'set_system_proxy':
+            (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
+            setSystemProxy,
+        'allow_lan': allowLan,
+      },
+    });
   });
 
   /// List normalized running executable names available for TUN bypass.
@@ -360,20 +323,13 @@ class ProxyService {
   }
 
   /// List grouped process names, PIDs, and executable paths for the picker.
-  List<TunProcessInfo> listTunProcessDetails() {
-    final pointer = _ffi.proxyListTunProcessesV2();
-    if (pointer == nullptr) return const [];
-    try {
-      final decoded = jsonDecode(pointer.toDartString());
-      if (decoded is! List<dynamic>) return const [];
-      return decoded
-          .whereType<Map<String, dynamic>>()
-          .map(TunProcessInfo.fromJson)
-          .where((process) => process.name.isNotEmpty)
-          .toList(growable: false);
-    } finally {
-      _ffi.proxyFreeString(pointer);
-    }
+  Future<List<TunProcessInfo>> listTunProcessDetails() async {
+    final result = await NativeProxyOperations.shared.run('processes');
+    return (result['processes'] as List<dynamic>)
+        .whereType<Map<String, dynamic>>()
+        .map(TunProcessInfo.fromJson)
+        .where((process) => process.name.isNotEmpty)
+        .toList(growable: false);
   }
 
   /// Return the executable name native code always excludes from TUN.
@@ -428,20 +384,17 @@ class ProxyService {
 
   bool get supportsLiveTunSwitch => Platform.isWindows;
 
-  static int _switchUpstreamIsolate(Map<String, dynamic> params) {
-    final ffi = ProxyFFI();
-    final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
-    final serverHostPtr = (params['serverHost'] as String).toNativeUtf8();
-    try {
-      return ffi.proxySwitchUpstream(
-        handle,
-        serverHostPtr,
-        params['serverPort'] as int,
-      );
-    } finally {
-      calloc.free(serverHostPtr);
-    }
-  }
+  static Future<int> _nativeCode(
+    String operation,
+    Pointer<Void> handle, [
+    Map<String, Object?> arguments = const {},
+  ]) async =>
+      (await NativeProxyOperations.shared.run(
+            operation,
+            handle: handle,
+            arguments: arguments,
+          ))['code']
+          as int;
 
   /// Windows prepares the physical bypass before atomically publishing the
   /// endpoint. Route/DNS waits must not run on the UI isolate or race teardown.
@@ -450,45 +403,18 @@ class ProxyService {
     required int serverPort,
   }) => _withHandle(() async {
     if (_handle == null) return ProxyResult.notRunning;
-    return compute(_switchUpstreamIsolate, {
-      'handleAddress': _handle!.address,
-      'serverHost': serverHost,
-      'serverPort': serverPort,
+    return _nativeCode('switch_upstream', _handle!, {
+      'server_host': serverHost,
+      'server_port': serverPort,
     });
   });
-
-  static int _startTunIsolate(Map<String, dynamic> params) {
-    final ffi = ProxyFFI();
-    final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
-    final processes = (params['processes'] as List<dynamic>).cast<String>();
-    final pointer = processes.isEmpty
-        ? nullptr
-        : jsonEncode(processes).toNativeUtf8();
-    try {
-      return ffi.proxyStartTun(handle, pointer);
-    } finally {
-      if (pointer != nullptr) calloc.free(pointer);
-    }
-  }
 
   /// Enable TUN only after the local proxy listener has started. Native setup
   /// can wait for adapter and route readiness, so it runs outside the UI isolate.
   Future<int> startTun(List<String> processes) => _withHandle(() async {
     if (_handle == null) return ProxyResult.notRunning;
-    return compute(_startTunIsolate, {
-      'handleAddress': _handle!.address,
-      'processes': processes,
-    });
+    return _nativeCode('start_tun', _handle!, {'processes': processes});
   });
-
-  static int _startAndroidTunIsolate(Map<String, int> params) {
-    final ffi = ProxyFFI();
-    return ffi.proxyStartAndroidTun(
-      Pointer<Void>.fromAddress(params['handleAddress']!),
-      params['tunFd']!,
-      params['mtu']!,
-    );
-  }
 
   /// Establish Android's VpnService interface, then hand a duplicated TUN
   /// descriptor to Rust. The service retains the original descriptor.
@@ -509,9 +435,8 @@ class ProxyService {
       _logController.add(
         LogEntry(level: 2, message: '[android_vpn] ${interface.diagnostics}'),
       );
-      final result = await compute(_startAndroidTunIsolate, {
-        'handleAddress': handle.address,
-        'tunFd': interface.fileDescriptor,
+      final result = await _nativeCode('start_android_tun', handle, {
+        'tun_fd': interface.fileDescriptor,
         'mtu': interface.mtu,
       });
       if (result == ProxyResult.ok) {
@@ -526,7 +451,7 @@ class ProxyService {
           _platformLastError = appStrings.androidVpnValidationFailed(
             network.diagnostics,
           );
-          await compute(_stopTunIsolate, handle.address);
+          await _nativeCode('stop_tun', handle);
           await AndroidVpnService.instance.stopInterface();
           return ProxyResult.runtimeError;
         }
@@ -540,16 +465,11 @@ class ProxyService {
     }
   });
 
-  static int _stopTunIsolate(int handleAddress) {
-    final ffi = ProxyFFI();
-    return ffi.proxyStopTun(Pointer<Void>.fromAddress(handleAddress));
-  }
-
   /// Stop TUN capture without stopping the local HTTP/SOCKS5 listener. Route
   /// cleanup can briefly block, so it also stays outside the UI isolate.
   Future<int> stopTun() => _withHandle(() async {
     if (_handle == null) return ProxyResult.notRunning;
-    return compute(_stopTunIsolate, _handle!.address);
+    return _nativeCode('stop_tun', _handle!);
   });
 
   Future<int> stopAndroidTun() async {
@@ -613,11 +533,6 @@ class ProxyService {
     }
   }
 
-  static int _stopIsolate(int handleAddress) {
-    final ffi = ProxyFFI();
-    return ffi.proxyStop(Pointer<Void>.fromAddress(handleAddress));
-  }
-
   /// Stop the proxy, and any TUN session it owns.
   ///
   /// Native code waits for TUN teardown to restore the system routes and DNS
@@ -626,15 +541,11 @@ class ProxyService {
   Future<int> stop() => _withHandle(() async {
     if (_handle == null) return ProxyResult.notRunning;
     await stopAndroidVpnInterface();
-    return compute(_stopIsolate, _handle!.address);
+    return _nativeCode('stop', _handle!);
   });
 
   /// Destroy the handle after pending native operations have finished.
   Future<void> destroy() => _withHandle(_destroyHandle);
-
-  static void _destroyIsolate(int address) {
-    ProxyFFI().proxyDestroy(Pointer<Void>.fromAddress(address));
-  }
 
   Future<void> _destroyHandle() async {
     final handle = _handle;
@@ -642,7 +553,13 @@ class ProxyService {
     _runningSnapshot = false;
     _tunSnapshot = false;
     if (handle != null && handle != nullptr) {
-      await compute(_destroyIsolate, handle.address);
+      try {
+        await _nativeCode('destroy', handle);
+      } on NativeOperationRejected {
+        // Rejection occurs before Rust takes ownership. Retain it for retry.
+        _handle = handle;
+        rethrow;
+      }
     }
   }
 
@@ -661,10 +578,10 @@ class ProxyService {
           .close(() async {
             final handle = _handle;
             if (handle == null || handle == nullptr) return;
-            // The queue retains the pointer until every isolate has returned.
+            // The queue retains the pointer until every native operation has returned.
             try {
               await stopAndroidVpnInterface();
-              await compute(_stopIsolate, handle.address);
+              await _nativeCode('stop', handle);
             } finally {
               await _destroyHandle();
             }
@@ -675,51 +592,17 @@ class ProxyService {
     );
   }
 
-  // Isolate entry point for ping test
-  static Future<Map<String, dynamic>> _testLatencyIsolate(
-    Map<String, dynamic> params,
-  ) async {
-    final ffi = ProxyFFI();
-    final handle = Pointer<Void>.fromAddress(params['handleAddress'] as int);
-    final testUrl = params['testUrl'] as String?;
-    final timeoutMs = params['timeoutMs'] as int;
-
-    final urlPtr = testUrl != null ? testUrl.toNativeUtf8() : nullptr;
-
-    try {
-      final result = ffi.proxyTestLatency(handle, urlPtr, timeoutMs);
-
-      try {
-        if (result.success == 1) {
-          return {'success': true, 'latencyMs': result.latencyMs};
-        } else {
-          final error = result.error == nullptr
-              ? null
-              : result.error.toDartString();
-          return {'success': false, 'error': error};
-        }
-      } finally {
-        // Free the error string allocated by Rust (if any)
-        if (result.error != nullptr) {
-          ffi.proxyFreeString(result.error);
-        }
-      }
-    } finally {
-      if (urlPtr != nullptr) calloc.free(urlPtr);
-    }
-  }
-
   /// Test proxy latency (only works when proxy is running).
   /// Tests real-world latency by sending HTTPS request through local proxy.
   Future<int?> testLatency({String? testUrl, int timeoutMs = 10000}) =>
       _withHandle(() async {
         if (_handle == null) throw StateError(appStrings.proxyNotInitialized);
 
-        final result = await compute(_testLatencyIsolate, {
-          'handleAddress': _handle!.address,
-          'testUrl': testUrl,
-          'timeoutMs': timeoutMs,
-        });
+        final result = await NativeProxyOperations.shared.run(
+          'latency',
+          handle: _handle,
+          arguments: {'test_url': testUrl, 'timeout_ms': timeoutMs},
+        );
 
         if (result['success'] == true) {
           return result['latencyMs'] as int;
@@ -727,101 +610,6 @@ class ProxyService {
           throw Exception(result['error'] ?? appStrings.latencyTestFailed);
         }
       });
-
-  // Isolate entry point for node listing
-  static Future<Map<String, dynamic>> _getServerNodesIsolate(
-    Map<String, dynamic> params,
-  ) async {
-    final ffi = ProxyFFI();
-    final serverHost = params['serverHost'] as String;
-    final serverPort = params['serverPort'] as int;
-    final sessionKey = params['sessionKey'] as String?;
-    final timeoutMs = params['timeoutMs'] as int;
-
-    final hostPtr = serverHost.toNativeUtf8();
-    final keyPtr = sessionKey?.toNativeUtf8() ?? nullptr;
-
-    try {
-      final result = ffi.proxyGetServerNodes(
-        hostPtr,
-        serverPort,
-        keyPtr,
-        timeoutMs,
-      );
-
-      try {
-        if (result.success == 1) {
-          final nodes = <Map<String, dynamic>>[];
-          for (int i = 0; i < result.count; i++) {
-            final node = (result.nodes + i).ref;
-            nodes.add({
-              'nodeId': node.nodeId.toDartString(),
-              'addr': node.addr.toDartString(),
-              'lastSeenMs': node.lastSeenMs,
-              'country': node.country.toDartString(),
-              'region': node.region.toDartString(),
-            });
-          }
-          return {'success': true, 'nodes': nodes};
-        } else {
-          final error = result.error == nullptr
-              ? null
-              : result.error.toDartString();
-          return {'success': false, 'error': error};
-        }
-      } finally {
-        // Free the NodesResult allocated by Rust
-        // We need to allocate a pointer to pass to the free function
-        final resultPtr = calloc<NodesResult>();
-        resultPtr.ref.success = result.success;
-        resultPtr.ref.nodes = result.nodes;
-        resultPtr.ref.count = result.count;
-        resultPtr.ref.error = result.error;
-        ffi.proxyFreeNodesResult(resultPtr);
-        calloc.free(resultPtr);
-      }
-    } finally {
-      calloc.free(hostPtr);
-      if (keyPtr != nullptr) calloc.free(keyPtr);
-    }
-  }
-
-  /// Asks an echo service, through `serverHost`, where its traffic egresses.
-  ///
-  /// Runs off the UI isolate because it opens a real connection through the
-  /// node and waits for an answer.
-  static Future<Map<String, dynamic>> _probeNodeIsolate(
-    Map<String, dynamic> params,
-  ) async {
-    final ffi = ProxyFFI();
-    final hostPtr = (params['serverHost'] as String).toNativeUtf8();
-
-    try {
-      final result = ffi.proxyProbeNodeV3(
-        hostPtr,
-        params['serverPort'] as int,
-        1, // Reserved ABI argument; always encrypted.
-        params['timeoutMs'] as int,
-        _wireProtocol(params['secureTransport'] as bool),
-      );
-
-      try {
-        return _readProbe(result);
-      } finally {
-        final resultPtr = calloc<NodeProbeResult>();
-        resultPtr.ref
-          ..success = result.success
-          ..countryCode = result.countryCode
-          ..egressIp = result.egressIp
-          ..latencyMs = result.latencyMs
-          ..error = result.error;
-        ffi.proxyFreeNodeProbeResult(resultPtr);
-        calloc.free(resultPtr);
-      }
-    } finally {
-      calloc.free(hostPtr);
-    }
-  }
 
   static int _wireProtocol(bool secureTransport) => secureTransport ? 3 : 0;
 
@@ -867,14 +655,19 @@ class ProxyService {
     bool secureTransport = false,
     int timeoutMs = 10000,
   }) async {
-    return _nodeProbe(
-      await compute(_probeNodeIsolate, {
-        'serverHost': serverHost,
-        'serverPort': serverPort,
-        'secureTransport': secureTransport,
-        'timeoutMs': timeoutMs,
-      }),
+    final batch = _batchProbe;
+    if (batch == null) {
+      throw UnsupportedError('Native probe batch is unavailable');
+    }
+    final results = StreamController<(int, NodeProbe)>();
+    _startBatch(
+      batch,
+      [(host: serverHost, port: serverPort)],
+      results,
+      secureTransport: secureTransport,
+      timeoutMs: timeoutMs,
     );
+    return (await results.stream.first).$2;
   }
 
   /// Probes run together by the native batch. Each is a socket and a task on
@@ -1045,67 +838,6 @@ class ProxyService {
     }
   }
 
-  // Isolate entry point for group listing
-  static Future<Map<String, dynamic>> _getServerGroupsIsolate(
-    Map<String, dynamic> params,
-  ) async {
-    final ffi = ProxyFFI();
-    final serverHost = params['serverHost'] as String;
-    final serverPort = params['serverPort'] as int;
-    final sessionKey = params['sessionKey'] as String?;
-    final timeoutMs = params['timeoutMs'] as int;
-
-    final hostPtr = serverHost.toNativeUtf8();
-    final keyPtr = sessionKey?.toNativeUtf8() ?? nullptr;
-
-    try {
-      final result = ffi.proxyGetServerGroups(
-        hostPtr,
-        serverPort,
-        keyPtr,
-        timeoutMs,
-      );
-
-      try {
-        if (result.success == 1) {
-          final groups = <Map<String, dynamic>>[];
-          for (int i = 0; i < result.count; i++) {
-            final group = (result.groups + i).ref;
-            final nodeIds = <String>[];
-            for (int j = 0; j < group.nodeIdsCount; j++) {
-              final nodeIdPtr = (group.nodeIds + j).value;
-              nodeIds.add(nodeIdPtr.toDartString());
-            }
-            groups.add({
-              'groupId': group.groupId.toDartString(),
-              'name': group.name.toDartString(),
-              'nodeIds': nodeIds,
-              'createdAtMs': group.createdAtMs,
-            });
-          }
-          return {'success': true, 'groups': groups};
-        } else {
-          final error = result.error == nullptr
-              ? null
-              : result.error.toDartString();
-          return {'success': false, 'error': error};
-        }
-      } finally {
-        // Free the GroupsResult allocated by Rust
-        final resultPtr = calloc<GroupsResult>();
-        resultPtr.ref.success = result.success;
-        resultPtr.ref.groups = result.groups;
-        resultPtr.ref.count = result.count;
-        resultPtr.ref.error = result.error;
-        ffi.proxyFreeGroupsResult(resultPtr);
-        calloc.free(resultPtr);
-      }
-    } finally {
-      calloc.free(hostPtr);
-      if (keyPtr != nullptr) calloc.free(keyPtr);
-    }
-  }
-
   /// Get all nodes from server with geo location info.
   Future<List<NodeInfo>> getServerNodes({
     required String serverHost,
@@ -1113,12 +845,15 @@ class ProxyService {
     String? sessionKey,
     int timeoutMs = 10000,
   }) async {
-    final result = await compute(_getServerNodesIsolate, {
-      'serverHost': serverHost,
-      'serverPort': serverPort,
-      'sessionKey': sessionKey,
-      'timeoutMs': timeoutMs,
-    });
+    final result = await NativeProxyOperations.shared.run(
+      'nodes',
+      arguments: {
+        'server_host': serverHost,
+        'server_port': serverPort,
+        'session_key': sessionKey,
+        'timeout_ms': timeoutMs,
+      },
+    );
 
     if (result['success'] == true) {
       final nodesList = result['nodes'] as List;
@@ -1145,12 +880,15 @@ class ProxyService {
     String? sessionKey,
     int timeoutMs = 10000,
   }) async {
-    final result = await compute(_getServerGroupsIsolate, {
-      'serverHost': serverHost,
-      'serverPort': serverPort,
-      'sessionKey': sessionKey,
-      'timeoutMs': timeoutMs,
-    });
+    final result = await NativeProxyOperations.shared.run(
+      'groups',
+      arguments: {
+        'server_host': serverHost,
+        'server_port': serverPort,
+        'session_key': sessionKey,
+        'timeout_ms': timeoutMs,
+      },
+    );
 
     if (result['success'] == true) {
       final groupsList = result['groups'] as List;

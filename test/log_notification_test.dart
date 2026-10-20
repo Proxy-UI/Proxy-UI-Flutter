@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'log_backend_fixture.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proxy_ui/src/ffi/proxy_service.dart';
 import 'package:proxy_ui/src/providers/proxy_provider.dart';
@@ -22,7 +24,9 @@ void main() {
       final directory = await Directory.systemTemp.createTemp(
         'proxy-view-log-',
       );
+      final backend = RecordingLogBackend();
       final disk = DesktopLogService(
+        backend: backend,
         enabled: true,
         directoryProvider: () async => directory,
       );
@@ -41,12 +45,7 @@ void main() {
       expect(state.filteredLogs.map((entry) => entry.level), [4]);
       state.dispose();
       await disk.dispose();
-      final text = await directory
-          .list()
-          .where((file) => file is File)
-          .cast<File>()
-          .asyncMap((file) => file.readAsString())
-          .join();
+      final text = backend.entries.map((entry) => entry.message).join('\n');
       expect(text, contains('bypassing UDP game.exe via physical NIC'));
       expect(text, contains('failed destination example.test:443'));
       await directory.delete(recursive: true);

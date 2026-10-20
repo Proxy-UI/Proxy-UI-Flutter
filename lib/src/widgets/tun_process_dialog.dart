@@ -68,11 +68,16 @@ class _TunProcessDialogState extends State<TunProcessDialog> {
 
   Future<void> _loadProcesses() async {
     setState(() => _loading = true);
-    // Defer native enumeration until after the dialog's first frame so its
-    // loading state is rendered even on systems with many process icons.
-    await Future<void>.delayed(Duration.zero);
-    if (!mounted) return;
-    final options = context.read<ProxyState>().getTunProcessOptions();
+    final ({List<TunProcessInfo> processes, String? selfProcess}) options;
+    try {
+      options = await context.read<ProxyState>().getTunProcessOptions();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ToastUtils.showError(error.toString());
+      }
+      return;
+    }
     if (!mounted) return;
 
     final processes = <String, TunProcessInfo>{

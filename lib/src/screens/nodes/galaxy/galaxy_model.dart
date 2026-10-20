@@ -8,6 +8,16 @@ import 'dart:math' as math;
 import '../../../models/country_atlas.dart';
 import '../../../models/node_health.dart';
 import '../../../models/node_model.dart';
+import '../../../ffi/proxy_ffi.dart';
+import 'galaxy_layout.dart';
+
+final _nativeLayout = (() {
+  try {
+    return NativeGalaxyLayout(library: ProxyFFI().lib);
+  } catch (_) {
+    return NativeGalaxyLayout();
+  }
+})();
 
 /// A point or direction in the galaxy's world (the disk is the x–z plane,
 /// y points up out of it).
@@ -385,7 +395,7 @@ GalaxyScene buildGalaxyScene(List<GalaxyNode> nodes, {bool connected = false}) {
     seeds[''] = _unknownSeed(seeds.values.toList());
   }
 
-  final positions = _relax(codes, seeds, extents);
+  final positions = relaxGalaxyPositions(codes, seeds, extents);
   return GalaxyScene(
     connected: connected,
     systems: [
@@ -420,11 +430,24 @@ Vec3 _unknownSeed(List<Vec3> known) {
 
 /// Push overlapping systems apart while each stays close to where its
 /// country is, and keep them all clear of the home star.
-Map<String, Vec3> _relax(
+Map<String, Vec3> relaxGalaxyPositions(
   List<String> codes,
   Map<String, Vec3> seeds,
-  Map<String, double> extents,
-) {
+  Map<String, double> extents, {
+  bool useNative = true,
+  NativeGalaxyLayout? nativeLayout,
+}) {
+  final native = useNative
+      ? (nativeLayout ?? _nativeLayout).place(codes, [
+          for (final c in codes) ...[seeds[c]!.x, seeds[c]!.z, extents[c]!],
+        ])
+      : null;
+  if (native != null) {
+    return {
+      for (var i = 0; i < codes.length; i++)
+        codes[i]: Vec3(native[i * 2], 0, native[i * 2 + 1]),
+    };
+  }
   final xs = {for (final c in codes) c: seeds[c]!.x};
   final zs = {for (final c in codes) c: seeds[c]!.z};
   for (var iteration = 0; iteration < 240; iteration++) {

@@ -35,7 +35,7 @@ def collect(artifacts, output, tag, native_version, source_commit):
     by_name = {p.name: p for p in files}
     with zipfile.ZipFile(by_name[artifact_name('windows', 'x64', 'zip')]) as archive:
         names = set(archive.namelist())
-        required = {f'CipherRelay/{name}' for name in ('CipherRelay.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll')}
+        required = {f'CipherRelay/{name}' for name in ('CipherRelay.exe', 'cipherrelay-updater.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll')}
         if not required <= names or not any(name.startswith('CipherRelay/data/') for name in names):
             raise ValueError('Windows portable archive is incomplete')
         if any(not name.startswith('CipherRelay/') for name in names):

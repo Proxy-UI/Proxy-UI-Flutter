@@ -4,7 +4,7 @@ library;
 
 import 'dart:convert';
 
-import 'package:cryptography/cryptography.dart';
+import 'native_update_transport.dart';
 
 /// The repository whose releases are this app's updates.
 const String updateRepository = 'Proxy-UI/Proxy-UI-Flutter';
@@ -161,26 +161,14 @@ Future<ReleaseManifest> verifyReleaseManifest(
   List<int> manifest,
   String signature, {
   String publicKey = updatePublicKey,
+  UpdateTransport? transport,
 }) async {
-  final List<int> signatureBytes;
-  try {
-    signatureBytes = base64Decode(signature.trim());
-  } on FormatException catch (error) {
-    throw UpdateException(UpdateFailure.signature, error.message);
-  }
-  final valid =
-      signatureBytes.length == 64 &&
-      await Ed25519().verify(
-        manifest,
-        signature: Signature(
-          signatureBytes,
-          publicKey: SimplePublicKey(
-            base64Decode(publicKey),
-            type: KeyPairType.ed25519,
-          ),
-        ),
-      );
-  if (!valid) throw const UpdateException(UpdateFailure.signature);
+  await (transport ?? NativeUpdateTransport.shared).start({
+    'operation': 'verify_signature',
+    'body': base64Encode(manifest),
+    'signature': signature,
+    'public_key': publicKey,
+  }).result;
   try {
     return ReleaseManifest.parse(utf8.decode(manifest));
   } on FormatException catch (error) {
