@@ -34,7 +34,9 @@ Future<void> main() async {
   if (_desktop) {
     await windowManager.ensureInitialized();
     await windowManager.setTitle('Galaxy resource probe');
-    await windowManager.setSize(const Size(1280, 720));
+    await windowManager.setSize(
+      _suiteName == 'raster' ? const Size(800, 600) : const Size(1280, 720),
+    );
     if (_suiteName == 'raster') await _pin();
   }
   if (_suiteName == 'raster') {
