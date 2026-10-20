@@ -1,0 +1,62 @@
+name: Publish locally built Android hotfix metadata
+run-name: Android hotfix for ${{ inputs.release_tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release containing the old and replacement local APKs
+        required: true
+        type: string
+      native_source_commit:
+        description: Full proxy-everything commit used for the local native build
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Download and verify the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          NATIVE_SOURCE: ${{ inputs.native_source_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$NATIVE_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          mkdir release
+          gh release download "$RELEASE_TAG" --dir release
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --verify scripts/update_signing_key.pub.pem
+          python3 -B -m unittest discover -s scripts -p 'test_*.py'
+          VERSION=$(sed -n 's/^version: //p' pubspec.yaml)
+          [[ "${VERSION%+*}" == "${RELEASE_TAG#v}" ]]
+          [[ "${VERSION#*+}" =~ ^[0-9]+$ ]]
+          SOURCE=$(git rev-parse "$RELEASE_TAG^{commit}")
+          python3 scripts/attach_android_manifest.py release "$ANDROID_HOME/build-tools/36.0.0" "$SOURCE" \
+            --android-build "${VERSION#*+}" --android-source-commit "$GITHUB_SHA" \
+            --android-native-source-commit "$NATIVE_SOURCE"
+      - name: Sign replacement metadata
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$UPDATE_SIGNING_KEY"
+          KEY=$(mktemp)
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$KEY"
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --key "$KEY"
+          python3 scripts/sign_release_manifest.py release/release-manifest.json --verify scripts/update_signing_key.pub.pem
+      - name: Publish verified metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh release upload "$RELEASE_TAG" release/release-manifest.json release/release-manifest.json.sig release/SHA256SUMS --clobber
