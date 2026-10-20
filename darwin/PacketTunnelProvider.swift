@@ -3,14 +3,24 @@ import NetworkExtension
 import os
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
-  private static let logger = Logger(subsystem: "com.proxyui.proxyUi.store.PacketTunnel", category: "proxy-core")
-  private let stateQueue = DispatchQueue(label: "com.proxyui.packet-tunnel.state")
+  private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.proxyui.PacketTunnel", category: "proxy-core")
+  private let stateQueue = DispatchQueue(label: "com.proxyui.packet-tunnel.state", autoreleaseFrequency: .workItem)
   private let readerQueue = DispatchQueue(label: "com.proxyui.packet-tunnel.reader", qos: .userInitiated)
   private var tunnel: OpaquePointer?
   private var generation: UInt64 = 0
   private var starting: ((Error?) -> Void)?
   private var stopping = false
   private var stopCompletions: [() -> Void] = []
+  private let trafficLock = NSLock()
+  private var receivedBytes: UInt64 = 0
+  private var sentBytes: UInt64 = 0
+  private var receivedPackets: UInt64 = 0
+  private var sentPackets: UInt64 = 0
+  private var droppedPackets: UInt64 = 0
+  private var diagnosticsTimer: DispatchSourceTimer?
+  private var diagnosticsURL: URL?
+  private var peakFootprint: UInt64 = 0
+  private var startedAt = Date()
 
   override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
     stateQueue.async {
@@ -32,14 +42,27 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let cache = try FileManager.default.url(for: .applicationSupportDirectory,
           in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("ProxyUI", isDirectory: true)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        self.diagnosticsURL = cache.appendingPathComponent("packet-tunnel-status.json")
+        self.startedAt = Date()
+        self.peakFootprint = 0
+        self.trafficLock.lock()
+        self.receivedBytes = 0
+        self.sentBytes = 0
+        self.receivedPackets = 0
+        self.sentPackets = 0
+        self.droppedPackets = 0
+        self.trafficLock.unlock()
         proxy_set_log_callback { level, message in
           guard let message = message else { return }
-          let line = String(cString: message)
-          proxy_free_string(UnsafeMutablePointer(mutating: message))
-          // Endpoint metadata stays private in unified logging by default.
-          if level >= 4 { PacketTunnelProvider.logger.error("\(line, privacy: .private)") }
-          else if level >= 3 { PacketTunnelProvider.logger.warning("\(line, privacy: .private)") }
-          else { PacketTunnelProvider.logger.info("\(line, privacy: .private)") }
+          // Rust worker threads have no Cocoa run loop to drain temporary
+          // Objective-C objects created by bridging and unified logging.
+          autoreleasepool {
+            let line = String(cString: message)
+            proxy_free_string(UnsafeMutablePointer(mutating: message))
+            if level >= 4 { PacketTunnelProvider.logger.error("\(line, privacy: .private)") }
+            else if level >= 3 { PacketTunnelProvider.logger.warning("\(line, privacy: .private)") }
+            else { PacketTunnelProvider.logger.info("\(line, privacy: .private)") }
+          }
         }
         proxy_set_log_level(2)
         proxy_init_logging()
@@ -62,6 +85,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             self.startReader(handle: handle, generation: generation)
             self.readPackets(generation: generation)
+            self.startDiagnostics()
             self.finishStart(nil)
           }
         }
@@ -102,6 +126,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             proxy_packet_tunnel_write(handle, bytes.bindMemory(to: UInt8.self).baseAddress, packet.count)
           }
           if result == -1 { return }
+          self.trafficLock.lock()
+          if result == 0 {
+            self.receivedBytes += UInt64(packet.count)
+            self.receivedPackets += 1
+          } else if result == 1 { self.droppedPackets += 1 }
+          self.trafficLock.unlock()
           // A full bounded queue drops packets; TCP retransmits. Do not enqueue
           // an unbounded chain of retry callbacks while the core is congested.
         }
@@ -117,9 +147,19 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let length = proxy_packet_tunnel_read(handle, &buffer, buffer.count)
         if length < 0 { break }
         if length == 0 { continue }
-        let packet = Data(buffer.prefix(Int(length)))
-        let family: Int32 = buffer[0] >> 4 == 6 ? AF_INET6 : AF_INET
-        if !self.packetFlow.writePackets([packet], withProtocols: [NSNumber(value: family)]) { break }
+        // This dispatch block lives for the entire VPN session. Its default
+        // pool would retain bridged NSData/NSArray objects until disconnect,
+        // crossing iOS's 50 MB extension limit during ordinary downloads.
+        let written = autoreleasepool {
+          let packet = Data(buffer.prefix(Int(length)))
+          let family: Int32 = buffer[0] >> 4 == 6 ? AF_INET6 : AF_INET
+          return self.packetFlow.writePackets([packet], withProtocols: [NSNumber(value: family)])
+        }
+        if !written { break }
+        self.trafficLock.lock()
+        self.sentBytes += UInt64(length)
+        self.sentPackets += 1
+        self.trafficLock.unlock()
       }
       // This runs before the destruction barrier enqueued by stopSession.
       let errorPtr = proxy_packet_tunnel_last_error(handle)
@@ -134,7 +174,46 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
-    stateQueue.async { self.stopSession(completion: completionHandler) }
+    stateQueue.async {
+      Self.logger.notice("VPN stop reason: \(reason.rawValue, privacy: .public)")
+      self.stopSession(completion: completionHandler)
+    }
+  }
+
+  private func startDiagnostics() {
+    let timer = DispatchSource.makeTimerSource(queue: stateQueue)
+    timer.schedule(deadline: .now(), repeating: .seconds(5))
+    timer.setEventHandler { [weak self] in self?.recordDiagnostics(running: true) }
+    diagnosticsTimer = timer
+    timer.resume()
+  }
+
+  // Only aggregate counts are persisted; no destinations, credentials or packet
+  // contents. The latest snapshot remains readable after an OS memory kill.
+  private func recordDiagnostics(running: Bool) {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) {
+      $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+        task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+      }
+    }
+    let footprint = result == KERN_SUCCESS ? info.phys_footprint : 0
+    peakFootprint = max(peakFootprint, footprint)
+    trafficLock.lock()
+    let snapshot: [String: Any] = [
+      "running": running, "pid": ProcessInfo.processInfo.processIdentifier,
+      "uptimeSeconds": Date().timeIntervalSince(startedAt),
+      "receivedBytes": receivedBytes, "receivedPackets": receivedPackets,
+      "sentBytes": sentBytes, "sentPackets": sentPackets,
+      "droppedPackets": droppedPackets,
+      "footprintBytes": footprint, "peakFootprintBytes": peakFootprint,
+    ]
+    trafficLock.unlock()
+    if let url = diagnosticsURL, let data = try? JSONSerialization.data(withJSONObject: snapshot, options: .sortedKeys) {
+      try? data.write(to: url, options: .atomic)
+    }
+    Self.logger.info("VPN footprint bytes: \(footprint, privacy: .public)")
   }
 
   private func finishStart(_ error: Error?) {
@@ -147,6 +226,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     stopCompletions.append(completion)
     if stopping { return }
     stopping = true
+    diagnosticsTimer?.cancel()
+    diagnosticsTimer = nil
+    recordDiagnostics(running: false)
     generation &+= 1
     finishStart(URLError(.cancelled))
     guard let handle = tunnel else { finishStop(); return }

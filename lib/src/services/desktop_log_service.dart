@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../ffi/proxy_service.dart';
 import 'build_capabilities.dart';
-import 'macos_vpn_service.dart';
+import 'apple_vpn_service.dart';
 
 typedef LogDirectoryProvider = Future<Directory> Function();
 typedef LogDirectoryOpener = Future<void> Function(String path);
@@ -73,7 +73,7 @@ class DesktopLogService {
 
   static Future<void> _defaultDirectoryOpener(String path) async {
     if (BuildCapabilities.isMacAppStore) {
-      await MacosVpnService.openLogs(path);
+      await AppleVpnService.openLogs(path);
       return;
     }
     if (Platform.isWindows) {

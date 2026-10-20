@@ -38,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _Destination.proxy,
     _Destination.nodes,
     _Destination.logs,
-    if (!BuildCapabilities.isMacAppStore) _Destination.subscription,
+    if (!BuildCapabilities.usesPacketTunnel) _Destination.subscription,
   ];
 
   void _go(_Destination destination, {String? selection}) {

@@ -668,7 +668,7 @@ class _CaptureRow extends StatelessWidget {
               state.config.tunBypassProcesses.length.toString(),
             ),
           ),
-        if (Platform.isMacOS && !BuildCapabilities.isMacAppStore)
+        if (Platform.isMacOS && !BuildCapabilities.usesPacketTunnel)
           IconButton(
             onPressed: state.isTunBusy
                 ? null
@@ -692,7 +692,7 @@ class _CaptureRow extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           )
-        else if (!BuildCapabilities.isMacAppStore)
+        else if (!BuildCapabilities.usesPacketTunnel)
           Switch(
             value: state.isTunRunning,
             onChanged: state.isRunning

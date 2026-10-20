@@ -44,7 +44,7 @@
 		DE8DD62AF9B32B242E50561C /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FE76CE5932983D52D3262178 /* Security.framework */; };
 		E432C05C17EAA0A96D01C8CF /* TunnelConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C70B3DB17D3B07DB4D62A4F /* TunnelConfigurationStore.swift */; };
 		F0FAC15D5803C945A74A96CA /* Pods_RunnerStore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 38B93742B15B2DEA6B23DA84 /* Pods_RunnerStore.framework */; };
-		F1D8FBF6A348AE116EBE1AAD /* MacAppStoreVpnController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4794327000248E9C5AF4044E /* MacAppStoreVpnController.swift */; };
+		F1D8FBF6A348AE116EBE1AAD /* AppleVpnController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4794327000248E9C5AF4044E /* AppleVpnController.swift */; };
 		F621FD5806E5D776B2828038 /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 /* End PBXBuildFile section */
 
@@ -132,10 +132,10 @@
 		34E73F43F4F3853ED2DFB762 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		36E2F2A797A74398AAE12FDF /* Pods-RunnerTests.profile-appstore.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile-appstore.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile-appstore.xcconfig"; sourceTree = "<group>"; };
 		38B93742B15B2DEA6B23DA84 /* Pods_RunnerStore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerStore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		4794327000248E9C5AF4044E /* MacAppStoreVpnController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MacAppStoreVpnController.swift; sourceTree = "<group>"; };
-		549436F43181677503B72DB6 /* ProxyPacketTunnel.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = ProxyPacketTunnel.h; sourceTree = "<group>"; };
+		4794327000248E9C5AF4044E /* AppleVpnController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AppleVpnController.swift; path = ../darwin/AppleVpnController.swift; sourceTree = SOURCE_ROOT; };
+		549436F43181677503B72DB6 /* ProxyPacketTunnel.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = ProxyPacketTunnel.h; path = ../darwin/ProxyPacketTunnel.h; sourceTree = SOURCE_ROOT; };
 		630A24137AF9DA2E6ED63C3C /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
-		6C70B3DB17D3B07DB4D62A4F /* TunnelConfigurationStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TunnelConfigurationStore.swift; sourceTree = "<group>"; };
+		6C70B3DB17D3B07DB4D62A4F /* TunnelConfigurationStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TunnelConfigurationStore.swift; path = ../darwin/TunnelConfigurationStore.swift; sourceTree = SOURCE_ROOT; };
 		77E7BC79FDCE5731843683BA /* PacketTunnel.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = PacketTunnel.entitlements; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		7B690FE1652F33A4617AF3D0 /* Store.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Store.xcconfig; sourceTree = "<group>"; };
@@ -145,7 +145,7 @@
 		917DB924830B3ABF009DC954 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		921D7F83740BF576C57E4748 /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk/System/Library/Frameworks/NetworkExtension.framework; sourceTree = DEVELOPER_DIR; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-		9A80410977B6A73F9634E408 /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
+		9A80410977B6A73F9634E408 /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PacketTunnelProvider.swift; path = ../darwin/PacketTunnelProvider.swift; sourceTree = SOURCE_ROOT; };
 		9C5D03F5F1CE07B76EEC9EBA /* Pods-RunnerStore.release-appstore.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerStore.release-appstore.xcconfig"; path = "Target Support Files/Pods-RunnerStore/Pods-RunnerStore.release-appstore.xcconfig"; sourceTree = "<group>"; };
 		A32C38809F70952BA8D54691 /* Store.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = Store.entitlements; sourceTree = "<group>"; };
 		A847E131C7DC9B9D7133F558 /* Pods-RunnerStore.debug-appstore.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerStore.debug-appstore.xcconfig"; path = "Target Support Files/Pods-RunnerStore/Pods-RunnerStore.debug-appstore.xcconfig"; sourceTree = "<group>"; };
@@ -285,7 +285,7 @@
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
 				33BA886A226E78AF003329D5 /* Configs */,
-				4794327000248E9C5AF4044E /* MacAppStoreVpnController.swift */,
+				4794327000248E9C5AF4044E /* AppleVpnController.swift */,
 				D396296F4C9D48FDD1A3B6B1 /* Store-Info.plist */,
 				A32C38809F70952BA8D54691 /* Store.entitlements */,
 				FD6C3ED72942C8C1FE1FC38A /* StoreDebug.entitlements */,
@@ -722,7 +722,7 @@
 				663E8E881847A35631CCCB47 /* AppDelegate.swift in Sources */,
 				F621FD5806E5D776B2828038 /* GeneratedPluginRegistrant.swift in Sources */,
 				AFE3919B92A06179AF734E72 /* TunnelConfigurationStore.swift in Sources */,
-				F1D8FBF6A348AE116EBE1AAD /* MacAppStoreVpnController.swift in Sources */,
+				F1D8FBF6A348AE116EBE1AAD /* AppleVpnController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -829,7 +829,7 @@
 				PROXY_RUST_PROFILE = release;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = PacketTunnel/ProxyPacketTunnel.h;
+				SWIFT_OBJC_BRIDGING_HEADER = ../darwin/ProxyPacketTunnel.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = "Release-appstore";
@@ -883,7 +883,7 @@
 				PROXY_RUST_PROFILE = release;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = PacketTunnel/ProxyPacketTunnel.h;
+				SWIFT_OBJC_BRIDGING_HEADER = ../darwin/ProxyPacketTunnel.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -1251,7 +1251,7 @@
 				PROXY_RUST_PROFILE = debug;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = PacketTunnel/ProxyPacketTunnel.h;
+				SWIFT_OBJC_BRIDGING_HEADER = ../darwin/ProxyPacketTunnel.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -1323,7 +1323,7 @@
 				PROXY_RUST_PROFILE = release;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = PacketTunnel/ProxyPacketTunnel.h;
+				SWIFT_OBJC_BRIDGING_HEADER = ../darwin/ProxyPacketTunnel.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = "Profile-appstore";
@@ -1362,7 +1362,7 @@
 				PROXY_RUST_PROFILE = debug;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = PacketTunnel/ProxyPacketTunnel.h;
+				SWIFT_OBJC_BRIDGING_HEADER = ../darwin/ProxyPacketTunnel.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = "Debug-appstore";
@@ -1690,7 +1690,7 @@
 				PROXY_RUST_PROFILE = release;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = PacketTunnel/ProxyPacketTunnel.h;
+				SWIFT_OBJC_BRIDGING_HEADER = ../darwin/ProxyPacketTunnel.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Profile;

@@ -1,0 +1,6 @@
+// Both Xcode configurations use an optimized Rust core. Device and simulator
+// libraries must never share a staging path even though both may be arm64.
+PROXY_NATIVE_DIR = $(PROJECT_DIR)/../native/ios/$(PLATFORM_NAME)
+// Dart uses dlsym, so Release must retain exported functions that Swift never
+// calls directly. force_load alone still allows the linker to dead-strip them.
+OTHER_LDFLAGS = $(inherited) -force_load "$(PROXY_NATIVE_DIR)/libhttp_proxy.a" -Wl,-export_dynamic -lresolv -framework Security -framework SystemConfiguration

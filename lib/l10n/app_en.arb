@@ -873,7 +873,7 @@
   "tunDnsServerDescription": "TUN DNS queries use this resolver through the proxy. On desktop, DNS owned by excluded processes uses the physical interface and prefers AliDNS and Tencent DNS. Shared system DNS queries without a matching exclusion stay proxied. Existing settings are preserved. Reconnect to apply.",
   "invalidTunDnsServer": "Enter a valid IPv4 or IPv6 DNS resolver address.",
   "tunFakeIp": "TUN Fake-IP DNS",
-  "tunFakeIpDescription": "Off by default: DNS returns real addresses through the proxy. Enable to use virtual addresses for domain routing. Takes effect after reconnecting.",
+  "tunFakeIpDescription": "Use virtual addresses so the proxy server resolves hostnames. Recommended on iOS for nodes without IPv6. When off, DNS returns real addresses. Reconnect to apply.",
   "bypassWeGameFamily": "WeGame games and services use direct connections",
   "bypassWeGameFamilyDescription": "Include WeGame, its launched games, WeGameApps installations, LOL and anti-cheat services. Their TCP, UDP and owned DNS use the physical interface. Other applications keep their current routing.",
   "applyConfiguration": "Apply configuration",

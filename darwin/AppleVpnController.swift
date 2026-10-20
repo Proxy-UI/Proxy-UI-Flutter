@@ -1,10 +1,15 @@
-#if MAC_APP_STORE
+#if os(iOS) || MAC_APP_STORE
+#if os(macOS)
 import Cocoa
 import FlutterMacOS
+#else
+import Flutter
+#endif
+import Foundation
 import NetworkExtension
 
 /// All state and Flutter completions are serialized on the main queue.
-final class MacAppStoreVpnController: NSObject, FlutterStreamHandler {
+final class AppleVpnController: NSObject, FlutterStreamHandler {
   private var manager: NETunnelProviderManager?
   private var eventSink: FlutterEventSink?
   private var pendingResult: FlutterResult?
@@ -13,23 +18,35 @@ final class MacAppStoreVpnController: NSObject, FlutterStreamHandler {
   private var sawConnecting = false
   private var timeout: Timer?
   private var observer: NSObjectProtocol?
+  private var foregroundObserver: NSObjectProtocol?
   private var lastError: String?
+  private var previousStatus: NEVPNStatus = .invalid
   private let extensionIdentifier = Bundle.main.bundleIdentifier! + ".PacketTunnel"
 
-  func register(with controller: FlutterViewController) {
-    let methods = FlutterMethodChannel(name: "com.proxyui/macos_vpn", binaryMessenger: controller.engine.binaryMessenger)
+  func register(with messenger: FlutterBinaryMessenger) {
+    let methods = FlutterMethodChannel(name: "com.proxyui/apple_vpn", binaryMessenger: messenger)
     methods.setMethodCallHandler { [weak self] call, result in self?.handle(call, result: result) }
-    FlutterEventChannel(name: "com.proxyui/macos_vpn/events", binaryMessenger: controller.engine.binaryMessenger)
+    FlutterEventChannel(name: "com.proxyui/apple_vpn/events", binaryMessenger: messenger)
       .setStreamHandler(self)
     observer = NotificationCenter.default.addObserver(forName: .NEVPNStatusDidChange, object: nil, queue: .main) { [weak self] note in
       guard let self = self, let connection = note.object as? NEVPNConnection,
         connection === self.manager?.connection else { return }
       self.statusChanged()
     }
+    #if os(iOS)
+    foregroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+      guard let self = self, self.pendingResult == nil else { return }
+      self.loadManager { error in
+        if let error = error { self.lastError = error.localizedDescription }
+        self.statusChanged()
+      }
+    }
+    #endif
   }
 
   deinit {
     if let observer = observer { NotificationCenter.default.removeObserver(observer) }
+    if let observer = foregroundObserver { NotificationCenter.default.removeObserver(observer) }
     timeout?.invalidate()
   }
 
@@ -52,6 +69,7 @@ final class MacAppStoreVpnController: NSObject, FlutterStreamHandler {
       }
     case "start": start(call.arguments, result: result)
     case "stop": stop(result: result)
+    #if os(macOS)
     case "openLogs":
       guard let path = call.arguments as? String else { result(FlutterError(code: "invalid_path", message: "Missing log folder.", details: nil)); return }
       // Only reveal this app's own support directory; the Dart caller cannot
@@ -62,11 +80,15 @@ final class MacAppStoreVpnController: NSObject, FlutterStreamHandler {
       else { result(FlutterError(code: "invalid_path", message: "Log folder is outside the application container.", details: nil)); return }
       NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
       result(nil)
+    #endif
     default: result(FlutterMethodNotImplemented)
     }
   }
 
   private func loadManager(_ completion: @escaping (Error?) -> Void) {
+    #if targetEnvironment(simulator)
+    completion(nil)
+    #else
     NETunnelProviderManager.loadAllFromPreferences { managers, error in
       DispatchQueue.main.async {
         if let error = error { completion(error); return }
@@ -76,9 +98,16 @@ final class MacAppStoreVpnController: NSObject, FlutterStreamHandler {
         completion(nil)
       }
     }
+    #endif
   }
 
   private func start(_ arguments: Any?, result: @escaping FlutterResult) {
+    #if targetEnvironment(simulator)
+    result(FlutterError(code: "vpn_requires_device",
+      message: "VPN requires a physical iPhone or iPad. The simulator can only test the app interface and configuration.",
+      details: nil))
+    return
+    #else
     guard pendingResult == nil else { result(busyError()); return }
     guard let config = arguments as? [String: Any],
       let host = config["serverHost"] as? String, !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -127,6 +156,7 @@ final class MacAppStoreVpnController: NSObject, FlutterStreamHandler {
         }
       } catch { self.finish(error: error) }
     }
+    #endif
   }
 
   private func stop(result: @escaping FlutterResult) {
@@ -155,18 +185,43 @@ final class MacAppStoreVpnController: NSObject, FlutterStreamHandler {
 
   private func statusChanged() {
     let status = manager?.connection.status ?? .invalid
+    let previous = previousStatus
+    previousStatus = status
     if status == .connecting { sawConnecting = true }
     eventSink?(snapshot())
-    guard pendingResult != nil else { return }
+    guard pendingResult != nil else {
+      if (status == .disconnected || status == .invalid),
+        previous != .disconnected, previous != .invalid,
+        let connection = manager?.connection {
+        let disconnectedOperation = operation
+        if #available(iOS 16.0, macOS 13.0, *) {
+          connection.fetchLastDisconnectError { error in
+            DispatchQueue.main.async {
+              guard self.operation == disconnectedOperation,
+                connection === self.manager?.connection,
+                connection.status == .disconnected || connection.status == .invalid else { return }
+              self.lastError = error?.localizedDescription
+              self.eventSink?(self.snapshot())
+            }
+          }
+        }
+      }
+      return
+    }
     if pendingStart && status == .connected { finish(error: nil) }
     else if !pendingStart && (status == .disconnected || status == .invalid) { finish(error: nil) }
     else if pendingStart && sawConnecting && (status == .disconnected || status == .invalid) {
       let failedOperation = operation
-      manager?.connection.fetchLastDisconnectError { error in
+      let disconnected: (Error?) -> Void = { error in
         DispatchQueue.main.async {
           guard self.operation == failedOperation, self.pendingResult != nil, self.pendingStart else { return }
           self.finish(error: error ?? TunnelConfigurationStore.failure("The VPN extension could not connect. Check the app and extension signing profiles."))
         }
+      }
+      if #available(iOS 16.0, macOS 13.0, *) {
+        manager?.connection.fetchLastDisconnectError(completionHandler: disconnected)
+      } else {
+        disconnected(nil)
       }
     }
   }

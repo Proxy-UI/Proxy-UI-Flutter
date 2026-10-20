@@ -154,7 +154,7 @@ class _HomeDetails extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final current = scene.current;
     final capture = state.isTunRunning
-        ? (Platform.isAndroid || BuildCapabilities.isMacAppStore
+        ? (Platform.isAndroid || BuildCapabilities.usesPacketTunnel
               ? 'VPN'
               : 'TUN')
         : 'SOCKS5';

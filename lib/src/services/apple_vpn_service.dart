@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-class MacosVpnService {
-  static const _channel = MethodChannel('com.proxyui/macos_vpn');
-  static const _events = EventChannel('com.proxyui/macos_vpn/events');
+class AppleVpnService {
+  static const _channel = MethodChannel('com.proxyui/apple_vpn');
+  static const _events = EventChannel('com.proxyui/apple_vpn/events');
   final _changes = StreamController<void>.broadcast();
   StreamSubscription<dynamic>? _subscription;
   bool _disposed = false;
