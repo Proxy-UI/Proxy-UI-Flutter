@@ -134,8 +134,23 @@ jobs:
             $request | ConvertTo-Json | Set-Content -LiteralPath $requestPath -Encoding utf8
             # Require an actual installer repair, not only an already matching version.
             Remove-Item -LiteralPath $native
-            & $helper --prepare $requestPath
-            if ($LASTEXITCODE -ne 0) { throw 'Updater did not acknowledge readiness' }
+            # PowerShell does not wait for a GUI-subsystem executable invoked
+            # with &, and LASTEXITCODE can still belong to an earlier command.
+            $prepare = [Diagnostics.Process]::new()
+            try {
+              $prepare.StartInfo.FileName = $helper
+              $prepare.StartInfo.UseShellExecute = $false
+              $prepare.StartInfo.CreateNoWindow = $true
+              $prepare.StartInfo.ArgumentList.Add('--prepare')
+              $prepare.StartInfo.ArgumentList.Add($requestPath)
+              if (-not $prepare.Start()) { throw 'Updater did not start' }
+              if (-not $prepare.WaitForExit(60000)) { throw 'Updater preparation timed out' }
+              if ($prepare.ExitCode -ne 0) {
+                throw "Updater preparation failed with exit code $($prepare.ExitCode)"
+              }
+            } finally {
+              $prepare.Dispose()
+            }
             $statusPath = Join-Path $work 'install-status.json'
             $status = Get-Content -LiteralPath $statusPath | ConvertFrom-Json
             if ($status.stage -ne 'ready' -or (Test-Path -LiteralPath $native)) {

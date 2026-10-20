@@ -28,7 +28,11 @@ def collect(artifacts, output, tag, native_version, source_commit):
         artifact_name('windows', 'x64-setup', 'exe'),
         artifact_name('linux', 'x64', 'tar.gz'),
     }
+    # Native build inputs include helper executables that are embedded inside
+    # desktop packages. They are not independently published installers.
+    native_inputs = artifacts / 'native-libs'
     files = [p for p in artifacts.rglob('*') if p.is_file() and
+             not p.is_relative_to(native_inputs) and
              (p.suffix in ('.dmg', '.zip', '.exe', '.apk', '.ipa') or p.name.endswith('.tar.gz'))]
     if len(files) != len(expected) or {p.name for p in files} != expected:
         raise ValueError(f'Desktop matrix mismatch: expected {sorted(expected)}, found {sorted(p.name for p in files)}')

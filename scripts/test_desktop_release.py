@@ -61,6 +61,20 @@ class DesktopReleaseTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'macOS report'):
             self.run_collect()
 
+    def test_native_helpers_are_inputs_not_extra_release_installers(self):
+        for arch in ('x64', 'arm64'):
+            helper = self.artifacts / f'native-libs/windows/{arch}/cipherrelay-updater.exe'
+            helper.parent.mkdir(parents=True)
+            helper.write_bytes(b'MZhelper')
+        manifest = self.run_collect()
+        self.assertEqual(len(manifest['assets']), 4)
+        self.assertFalse((self.root / 'release/cipherrelay-updater.exe').exists())
+
+    def test_extra_executable_outside_native_inputs_prevents_publication(self):
+        (self.artifacts / 'cipherrelay-updater.exe').write_bytes(b'MZunexpected')
+        with self.assertRaisesRegex(ValueError, 'matrix mismatch'):
+            self.run_collect()
+
     def test_missing_installer_prevents_publication(self):
         self.exe.unlink()
         with self.assertRaisesRegex(ValueError, 'matrix mismatch'):
