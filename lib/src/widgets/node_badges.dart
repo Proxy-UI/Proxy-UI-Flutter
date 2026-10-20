@@ -58,6 +58,41 @@ String healthLabel(BuildContext context, NodeHealth health) => switch (health) {
   NodeHealth.untested => context.l10n.healthUntested,
 };
 
+/// A test in progress, drawn still.
+///
+/// A spinner repaints every frame, and any animation makes the engine raster
+/// the whole window again — the galaxy included — for as long as the slowest
+/// node takes to time out. A run shows the share answered; a single node
+/// shows a fixed arc.
+class TestingRing extends StatelessWidget {
+  const TestingRing({
+    super.key,
+    required this.size,
+    this.progress,
+    this.strokeWidth = 2,
+    this.color,
+  });
+
+  final double size;
+  final double? progress;
+  final double strokeWidth;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = this.color ?? Theme.of(context).colorScheme.primary;
+    return SizedBox.square(
+      dimension: size,
+      child: CircularProgressIndicator(
+        value: progress ?? 0.3,
+        strokeWidth: strokeWidth,
+        color: color,
+        backgroundColor: color.withValues(alpha: 0.22),
+      ),
+    );
+  }
+}
+
 /// A node's health as a small tonal chip, with its latency when it answered.
 class HealthChip extends StatelessWidget {
   const HealthChip({super.key, required this.health, this.latencyMs});
@@ -82,10 +117,7 @@ class HealthChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (health == NodeHealth.testing)
-            SizedBox.square(
-              dimension: 12,
-              child: CircularProgressIndicator(strokeWidth: 1.6, color: color),
-            )
+            TestingRing(size: 12, strokeWidth: 1.6, color: color)
           else
             PlanetGlyph(color: color, size: 14),
           const SizedBox(width: 5),

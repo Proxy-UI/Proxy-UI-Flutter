@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -25,7 +27,7 @@ Future<ProxyState> _state(WidgetTester tester, FakeProxyService service) async {
   return state;
 }
 
-Widget _app(ProxyState state) => ToastificationWrapper(
+Widget _app(ProxyState state, {String? selection}) => ToastificationWrapper(
   child: ChangeNotifierProvider.value(
     value: state,
     child: MaterialApp(
@@ -33,7 +35,7 @@ Widget _app(ProxyState state) => ToastificationWrapper(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: buildAppTheme(Colors.indigo, Brightness.dark),
-      home: const Scaffold(body: NodesPage()),
+      home: Scaffold(body: NodesPage(initialSelection: selection)),
     ),
   ),
 );
@@ -129,4 +131,58 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('a country waiting on its probes stops drawing frames', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final service = _WaitingService();
+    final state = await _state(tester, service);
+    final us = [
+      for (final node in state.nodes)
+        if (state.effectiveCountry(node) == 'US') node,
+    ];
+
+    await tester.pumpWidget(_app(state, selection: systemIdFor('US')));
+    await _drawFor(tester, const Duration(seconds: 12));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    await tester.tap(find.text('Test these nodes'));
+    // Entering the testing state ripples once, and then nothing moves: any
+    // animation would raster the whole window for the full probe timeout.
+    await _drawFor(tester, const Duration(seconds: 3));
+    expect(us.every(state.isVerifyingNode), isTrue);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    service.answer.complete();
+    await tester.pumpAndSettle();
+    expect(us.any(state.isVerifyingNode), isFalse);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
+Future<void> _drawFor(WidgetTester tester, Duration duration) async {
+  const frame = Duration(microseconds: 16667);
+  for (var t = Duration.zero; t < duration; t += frame) {
+    await tester.pump(frame);
+  }
+}
+
+/// Holds every probe until [answer] completes.
+class _WaitingService extends FakeProxyService {
+  final answer = Completer<void>();
+
+  @override
+  Future<NodeProbe> probeNode({
+    required String serverHost,
+    required int serverPort,
+    bool secureTransport = false,
+    int timeoutMs = 10000,
+  }) async {
+    await answer.future;
+    return super.probeNode(serverHost: serverHost, serverPort: serverPort);
+  }
 }

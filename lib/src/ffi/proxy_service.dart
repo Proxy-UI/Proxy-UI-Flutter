@@ -61,6 +61,17 @@ class NodeProbe {
   });
 }
 
+/// A node to probe, by address.
+typedef NodeProbeTarget = ({String host, int port});
+
+/// A native probe batch still delivering results.
+class _ProbeBatch {
+  _ProbeBatch(this.results, this.remaining);
+
+  final StreamController<(int, NodeProbe)> results;
+  int remaining;
+}
+
 /// One live process instance used to reconstruct application parent/child trees.
 class TunProcessInstance {
   final int pid;
@@ -791,27 +802,11 @@ class ProxyService {
         params['serverPort'] as int,
         1, // Reserved ABI argument; always encrypted.
         params['timeoutMs'] as int,
-        (params['secureTransport'] as bool) ? 3 : 0,
+        _wireProtocol(params['secureTransport'] as bool),
       );
 
       try {
-        if (result.success == 1) {
-          return {
-            'success': true,
-            'countryCode': result.countryCode == nullptr
-                ? ''
-                : result.countryCode.toDartString(),
-            'egressIp': result.egressIp == nullptr
-                ? ''
-                : result.egressIp.toDartString(),
-            'latencyMs': result.latencyMs,
-          };
-        }
-        return {
-          'success': false,
-          'latencyMs': result.latencyMs,
-          'error': result.error == nullptr ? null : result.error.toDartString(),
-        };
+        return _readProbe(result);
       } finally {
         final resultPtr = calloc<NodeProbeResult>();
         resultPtr.ref
@@ -828,20 +823,29 @@ class ProxyService {
     }
   }
 
-  /// Verifies a node's real egress country.
-  Future<NodeProbe> probeNode({
-    required String serverHost,
-    required int serverPort,
-    bool secureTransport = false,
-    int timeoutMs = 10000,
-  }) async {
-    final result = await compute(_probeNodeIsolate, {
-      'serverHost': serverHost,
-      'serverPort': serverPort,
-      'secureTransport': secureTransport,
-      'timeoutMs': timeoutMs,
-    });
+  static int _wireProtocol(bool secureTransport) => secureTransport ? 3 : 0;
 
+  static Map<String, dynamic> _readProbe(NodeProbeResult result) {
+    if (result.success == 1) {
+      return {
+        'success': true,
+        'countryCode': result.countryCode == nullptr
+            ? ''
+            : result.countryCode.toDartString(),
+        'egressIp': result.egressIp == nullptr
+            ? ''
+            : result.egressIp.toDartString(),
+        'latencyMs': result.latencyMs,
+      };
+    }
+    return {
+      'success': false,
+      'latencyMs': result.latencyMs,
+      'error': result.error == nullptr ? null : result.error.toDartString(),
+    };
+  }
+
+  static NodeProbe _nodeProbe(Map<String, dynamic> result) {
     final latency = result['latencyMs'];
     return NodeProbe(
       success: result['success'] == true,
@@ -854,6 +858,191 @@ class ProxyService {
               ? null
               : appStrings.nodeVerificationFailed),
     );
+  }
+
+  /// Verifies a node's real egress country.
+  Future<NodeProbe> probeNode({
+    required String serverHost,
+    required int serverPort,
+    bool secureTransport = false,
+    int timeoutMs = 10000,
+  }) async {
+    return _nodeProbe(
+      await compute(_probeNodeIsolate, {
+        'serverHost': serverHost,
+        'serverPort': serverPort,
+        'secureTransport': secureTransport,
+        'timeoutMs': timeoutMs,
+      }),
+    );
+  }
+
+  /// Probes run together by the native batch. Each is a socket and a task on
+  /// one shared runtime, so this bounds the burst through the upstream rather
+  /// than threads.
+  static const int batchProbeConcurrency = 16;
+
+  /// Probes run together one isolate each, on a native library without the
+  /// batch. Each holds a blocked thread for as long as its node takes.
+  static const int isolateProbeConcurrency = 8;
+
+  /// Probes [targets] together and reports each as `(index, probe)` when it
+  /// finishes, in completion order. The stream closes after the last one.
+  ///
+  /// The native batch runs every probe on the shared runtime and posts each
+  /// result back as a message. Probing node by node instead costs an isolate
+  /// and a blocked thread per node, for the whole timeout of a dead one; that
+  /// path remains for native libraries that predate the batch.
+  Stream<(int, NodeProbe)> probeNodes(
+    List<NodeProbeTarget> targets, {
+    bool secureTransport = false,
+    int timeoutMs = 10000,
+  }) {
+    final batch = _batchProbe;
+    if (batch == null) {
+      return _probeEach(
+        targets,
+        secureTransport: secureTransport,
+        timeoutMs: timeoutMs,
+      );
+    }
+    late final StreamController<(int, NodeProbe)> results;
+    results = StreamController(
+      onListen: () => _startBatch(
+        batch,
+        targets,
+        results,
+        secureTransport: secureTransport,
+        timeoutMs: timeoutMs,
+      ),
+    );
+    return results.stream;
+  }
+
+  Stream<(int, NodeProbe)> _probeEach(
+    List<NodeProbeTarget> targets, {
+    required bool secureTransport,
+    required int timeoutMs,
+  }) {
+    late final StreamController<(int, NodeProbe)> results;
+    results = StreamController(
+      onListen: () {
+        var next = 0;
+        Future<void> worker() async {
+          while (next < targets.length) {
+            final index = next++;
+            final target = targets[index];
+            NodeProbe probe;
+            try {
+              probe = await probeNode(
+                serverHost: target.host,
+                serverPort: target.port,
+                secureTransport: secureTransport,
+                timeoutMs: timeoutMs,
+              );
+            } catch (error) {
+              probe = NodeProbe(success: false, error: error.toString());
+            }
+            results.add((index, probe));
+          }
+        }
+
+        final workers = targets.length < isolateProbeConcurrency
+            ? targets.length
+            : isolateProbeConcurrency;
+        Future.wait([for (var i = 0; i < workers; i++) worker()])
+            .whenComplete(results.close);
+      },
+    );
+    return results.stream;
+  }
+
+  static final ProxyProbeNodesDart? _batchProbe = () {
+    try {
+      return ProxyFFI().proxyProbeNodes;
+    } catch (_) {
+      // No native library at all, as under unit tests.
+      return null;
+    }
+  }();
+
+  /// Batches awaiting results, by the id handed to native code.
+  static final Map<int, _ProbeBatch> _probeBatches = {};
+  static int _lastProbeBatch = 0;
+
+  /// One callback for every batch, kept for the isolate's lifetime like the
+  /// log callback: native code may still deliver into it after its batch's
+  /// listener has gone away.
+  static NativeCallable<NodeProbeCallbackNative>? _probeCallback;
+
+  static void _startBatch(
+    ProxyProbeNodesDart start,
+    List<NodeProbeTarget> targets,
+    StreamController<(int, NodeProbe)> results, {
+    required bool secureTransport,
+    required int timeoutMs,
+  }) {
+    if (targets.isEmpty) {
+      results.close();
+      return;
+    }
+    final id = ++_lastProbeBatch;
+    _probeBatches[id] = _ProbeBatch(results, targets.length);
+    final callback = _probeCallback ??=
+        NativeCallable<NodeProbeCallbackNative>.listener(_onProbeResult)
+          ..keepIsolateAlive = false;
+    final hosts = calloc<Pointer<Utf8>>(targets.length);
+    final ports = calloc<Uint16>(targets.length);
+    try {
+      for (var i = 0; i < targets.length; i++) {
+        hosts[i] = targets[i].host.toNativeUtf8();
+        ports[i] = targets[i].port;
+      }
+      final code = start(
+        hosts,
+        ports,
+        targets.length,
+        batchProbeConcurrency,
+        timeoutMs,
+        _wireProtocol(secureTransport),
+        callback.nativeFunction,
+        id,
+      );
+      if (code != ProxyResult.ok) {
+        _probeBatches.remove(id);
+        results
+          ..addError(StateError(ProxyResult.message(code)))
+          ..close();
+      }
+    } finally {
+      // Native code copied everything it needs before returning.
+      for (var i = 0; i < targets.length; i++) {
+        if (hosts[i] != nullptr) calloc.free(hosts[i]);
+      }
+      calloc
+        ..free(hosts)
+        ..free(ports);
+    }
+  }
+
+  static void _onProbeResult(
+    int batch,
+    int index,
+    Pointer<NodeProbeResult> result,
+  ) {
+    final Map<String, dynamic> fields;
+    try {
+      fields = _readProbe(result.ref);
+    } finally {
+      ProxyFFI().proxyReleaseNodeProbeResult(result);
+    }
+    final pending = _probeBatches[batch];
+    if (pending == null) return;
+    pending.results.add((index, _nodeProbe(fields)));
+    if (--pending.remaining == 0) {
+      _probeBatches.remove(batch);
+      pending.results.close();
+    }
   }
 
   // Isolate entry point for group listing
