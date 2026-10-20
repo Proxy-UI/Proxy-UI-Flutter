@@ -225,6 +225,59 @@ The compute-only Rust benchmark measured about 49 µs for 4,096 segments and
 140 µs for 16,384 on this host. This explains why GPU batching and cached lighting
 made a larger end-to-end difference than introducing geometry worker threads.
 
+## Testing many nodes
+
+Testing a country used to keep the whole window drawing at display rate until
+its slowest node timed out. Three things did it: the galaxy counted a probe in
+flight as an animation and spun an arc around every node under test, each row
+in the country panel and both test buttons showed an indeterminate spinner,
+and every answer notified the provider and wrote the whole catalogue to
+preferences on its own. Any animation makes the engine raster the entire
+window again, galaxy included, so a test of 30 nodes with dead ones among them
+rastered continuously for over twenty seconds.
+
+Now nothing moves while probes wait. In-flight marks are still: a fixed arc
+per planet, a fixed ring per row, and the share answered on the test buttons.
+`ProxyState.verifyNodes` puts every node into the testing state in one update,
+applies answers that arrive within 150 ms of each other as one more, and saves
+the catalogue once per run. Starting and answering still ripple, so the
+galaxy draws briefly when something changes. `ProxyService.probeNodes` uses the
+native batch (`proxy_probe_nodes_v1`, 16 at a time) when the library exports
+it; otherwise it probes eight at a time, one isolate each, as before. See the
+parent repository's `docs/node-probe-batch.md` for the native contract.
+
+`tool/node_test_burst_probe.dart` tests 30 nodes in one country of a 56-node
+synthetic catalogue, with that country's panel open. Half answer within a
+second and half run to the 10 s timeout. It changes no settings, and its
+window stays on top with pointer input ignored inside, so a stray scroll
+cannot start an interaction. `BURST_PATH` selects `isolate` (no native batch),
+`batch` (a model of it) or `real` (the native batch against local ports that
+refuse or never answer, which needs a freshly staged library):
+
+```sh
+fvm flutter run --profile -d macos -t tool/node_test_burst_probe.dart --dart-define=BURST_PATH=real
+```
+
+Measured on macOS (Apple silicon, 1440×900 at 2×), profile mode:
+
+| Measure | Before | After, native batch |
+| --- | ---: | ---: |
+| Time until every node answered | 22.1 s | 10.0 s |
+| Frames drawn | 2,839 | 360 |
+| Frames drawn while only waiting | every vsync | 0 |
+| Cumulative raster duration | 18.1 s | 3.3 s |
+| Process CPU time | 32.4 s | 5.2 s |
+| Provider notifications | 60 | 3 |
+| Longest UI isolate stall | 124 ms | 12.7 ms |
+
+Without the native batch, the same UI keeps the old timing (22.1 s, answers
+in three waves) but draws only while answers arrive. Its 124 ms stall
+coincides with the first wave of timed-out isolates returning together; no
+run without isolates stalled for more than 31 ms. The figures are
+single runs on one machine, not frame-rate guarantees; the ratio is what
+carries over. `test/nodes_page_test.dart` checks that a country waiting on its
+probes schedules no frames.
+
 ## Connection lifetime verification
 
 Build 2.0.5+69 was also exercised with the real Android native library and VPN

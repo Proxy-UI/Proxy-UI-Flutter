@@ -40,6 +40,14 @@ class NodeActions extends ChangeNotifier {
 
   bool get testingMany => _testingMany;
 
+  /// The share of a [testMany] run that has answered.
+  ///
+  /// Determinate on purpose: an indeterminate spinner animates every frame,
+  /// and any animation makes the engine raster the whole window again — the
+  /// galaxy included — for as long as the slowest node takes to time out.
+  double get testProgress => _testProgress;
+  double _testProgress = 0;
+
   /// Whether [connect] can run for [node] right now.
   bool canConnect(NodeInfo node) =>
       !(state.isCurrentNode(node) && state.isRunning) &&
@@ -87,30 +95,29 @@ class NodeActions extends ChangeNotifier {
     }
   }
 
-  /// Test [nodes] eight at a time and report how many answered.
+  /// Test [nodes] together and report how many answered.
   Future<void> testMany(BuildContext context, List<NodeInfo> nodes) async {
     if (_testingMany || nodes.isEmpty) return;
     final strings = context.l10n;
     _testingMany = true;
+    _testProgress = 0;
     notifyListeners();
-    var next = 0;
-    var failures = 0;
-    Future<void> worker() async {
-      while (next < nodes.length) {
-        final node = nodes[next++];
-        final verification = await state.verifyNode(node);
-        if (verification == null || !verification.isVerified) failures++;
-      }
-    }
-
+    final List<NodeVerification?> results;
     try {
-      await Future.wait(
-        List.generate(nodes.length < 8 ? nodes.length : 8, (_) => worker()),
+      results = await state.verifyNodes(
+        nodes,
+        onProgress: (answered, total) {
+          _testProgress = answered / total;
+          notifyListeners();
+        },
       );
     } finally {
       _testingMany = false;
       notifyListeners();
     }
+    final failures = results
+        .where((verification) => verification?.isVerified != true)
+        .length;
     if (failures == 0) {
       ToastUtils.showSuccess(strings.testedNodes(nodes.length.toString()));
     } else {

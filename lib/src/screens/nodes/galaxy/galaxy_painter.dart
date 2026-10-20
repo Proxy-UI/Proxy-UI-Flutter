@@ -611,10 +611,11 @@ class _Frame {
     }
     _sphere(c, radius, color, opacity, batch: true);
     if (node.health == NodeHealth.testing) {
-      final spin = view.still ? 0.0 : view.time * 4;
+      // Still, and turned per node so a country under test does not show a
+      // row of identical marks.
       canvas.drawArc(
         Rect.fromCircle(center: c, radius: radius * 1.9),
-        spin,
+        unitOf(stableHash(planet.id)) * math.pi * 2,
         math.pi * 1.2,
         false,
         Paint()

@@ -1010,8 +1010,18 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   bool isVerifyingNode(NodeInfo node) =>
       _verifyingNodes.contains(node.storageKey);
 
-  /// Test a node: how long a real round trip through it takes, and where that
-  /// traffic leaves from.
+  /// How long answers wait so they are shown together.
+  ///
+  /// Dead nodes time out together, and each separate update rebuilds every
+  /// screen that shows the catalogue and lays the galaxy out again.
+  static const Duration verificationBatchWindow = Duration(milliseconds: 150);
+
+  /// Test one node; see [verifyNodes]. Null when it is already under test.
+  Future<NodeVerification?> verifyNode(NodeInfo node) async =>
+      (await verifyNodes([node])).single;
+
+  /// Test [nodes]: how long a real round trip through each takes, and where
+  /// that traffic leaves from.
   ///
   /// One request answers both, because both need the same thing — bytes that
   /// actually travelled through the node.
@@ -1023,61 +1033,106 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// the same reason: it is where the server registered, not where its traffic
   /// leaves from.
   ///
-  /// The answer is persisted, including a failure, because "this node did not
-  /// answer" is worth remembering too.
-  Future<NodeVerification?> verifyNode(NodeInfo node) async {
-    final key = node.storageKey;
-    if (_verifyingNodes.contains(key)) return null;
-    _verifyingNodes.add(key);
+  /// All of them enter the testing state in one update. Answers that arrive
+  /// within [verificationBatchWindow] of each other are applied as one more,
+  /// and the catalogue is persisted when the last arrives — including
+  /// failures, because "this node did not answer" is worth remembering too.
+  ///
+  /// Returns each node's answer in order; null for a node that was already
+  /// under test. [onProgress] reports how many have answered so far.
+  Future<List<NodeVerification?>> verifyNodes(
+    List<NodeInfo> nodes, {
+    void Function(int answered, int total)? onProgress,
+  }) async {
+    final results = List<NodeVerification?>.filled(nodes.length, null);
+    final testing = [
+      for (var i = 0; i < nodes.length; i++)
+        if (_verifyingNodes.add(nodes[i].storageKey)) i,
+    ];
+    if (testing.isEmpty) return results;
     _safeNotifyListeners();
 
-    try {
-      final probe = await _service.probeNode(
-        serverHost: node.host,
-        serverPort: node.port,
-        secureTransport: _config.secureTransport,
-      );
-      final verification = NodeVerification(
-        status: probe.success
-            ? NodeVerificationStatus.verified
-            : NodeVerificationStatus.unreachable,
-        checkedAt: DateTime.now(),
-        countryCode: probe.countryCode,
-        egressIp: probe.egressIp,
-        latencyMs: probe.latencyMs,
-        error: probe.error,
-      );
-      _nodeCatalogPreferences = _nodeCatalogPreferences.withVerification(
-        node,
-        verification,
-      );
-      // A failed test leaves the previous latency alone rather than replacing
-      // it with a number that measured nothing.
-      if (probe.success && probe.latencyMs != null) {
-        node.latencyMs = probe.latencyMs;
-        _nodeCatalogPreferences = _nodeCatalogPreferences.withLatency(
-          node,
-          probe.latencyMs!,
-        );
+    final pending = <(NodeInfo, NodeVerification)>[];
+    var answered = 0;
+    Timer? flush;
+    void apply() {
+      flush?.cancel();
+      flush = null;
+      if (pending.isEmpty) return;
+      _nodeCatalogPreferences = _nodeCatalogPreferences.withResults(pending);
+      for (final (node, verification) in pending) {
+        if (verification.isVerified && verification.latencyMs != null) {
+          node.latencyMs = verification.latencyMs;
+        }
+        _verifyingNodes.remove(node.storageKey);
       }
-      await _saveNodeCatalogPreferences();
-      return verification;
-    } catch (error) {
-      final verification = NodeVerification(
-        status: NodeVerificationStatus.unreachable,
-        checkedAt: DateTime.now(),
-        error: error.toString(),
-      );
-      _nodeCatalogPreferences = _nodeCatalogPreferences.withVerification(
-        node,
-        verification,
-      );
-      await _saveNodeCatalogPreferences();
-      return verification;
-    } finally {
-      _verifyingNodes.remove(key);
+      answered += pending.length;
+      pending.clear();
+      onProgress?.call(answered, testing.length);
+      _scheduleNodeCatalogSave();
       _safeNotifyListeners();
     }
+
+    void record(int index, NodeVerification verification) {
+      results[index] = verification;
+      pending.add((nodes[index], verification));
+      flush ??= Timer(verificationBatchWindow, apply);
+    }
+
+    NodeVerification unreachable(String error) => NodeVerification(
+      status: NodeVerificationStatus.unreachable,
+      checkedAt: DateTime.now(),
+      error: error,
+    );
+
+    final probed = <int>[];
+    final targets = <NodeProbeTarget>[];
+    for (final index in testing) {
+      final node = nodes[index];
+      try {
+        targets.add((host: node.host, port: node.port));
+        probed.add(index);
+      } on FormatException catch (error) {
+        record(index, unreachable(error.message));
+      }
+    }
+
+    String? failure;
+    try {
+      await for (final (target, probe) in _service.probeNodes(
+        targets,
+        secureTransport: _config.secureTransport,
+      )) {
+        record(
+          probed[target],
+          NodeVerification(
+            status: probe.success
+                ? NodeVerificationStatus.verified
+                : NodeVerificationStatus.unreachable,
+            checkedAt: DateTime.now(),
+            countryCode: probe.countryCode,
+            egressIp: probe.egressIp,
+            latencyMs: probe.latencyMs,
+            error: probe.error,
+          ),
+        );
+      }
+    } catch (error) {
+      failure = error.toString();
+    }
+    // Every node answers once; any left over means the batch broke off.
+    for (final index in probed) {
+      if (results[index] == null) {
+        record(
+          index,
+          unreachable(failure ?? appStrings.nodeVerificationFailed),
+        );
+      }
+    }
+    apply();
+    _nodeCatalogSaveTimer?.cancel();
+    await _saveNodeCatalogPreferences();
+    return results;
   }
 
   // Export node config to clipboard (reuse existing export logic)

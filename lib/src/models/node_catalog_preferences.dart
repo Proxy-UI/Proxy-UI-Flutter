@@ -154,15 +154,26 @@ class NodeCatalogPreferences {
   NodeVerification? verificationFor(NodeInfo node) =>
       verifications[node.storageKey];
 
-  NodeCatalogPreferences withVerification(
-    NodeInfo node,
-    NodeVerification verification,
+  /// Records how each node in [results] answered, copying the stores once
+  /// for the whole batch.
+  ///
+  /// A failed test leaves a node's previous latency alone rather than
+  /// replacing it with a number that measured nothing.
+  NodeCatalogPreferences withResults(
+    Iterable<(NodeInfo, NodeVerification)> results,
   ) {
+    final verifications = {...this.verifications};
+    final latencies = {...this.latencies};
+    for (final (node, verification) in results) {
+      verifications[node.storageKey] = verification;
+      final latency = verification.latencyMs;
+      if (verification.isVerified && latency != null) {
+        latencies[_latencyKey(node)] = latency;
+      }
+    }
     return copyWith(
-      verifications: Map.unmodifiable({
-        ...verifications,
-        node.storageKey: verification,
-      }),
+      verifications: Map.unmodifiable(verifications),
+      latencies: Map.unmodifiable(latencies),
     );
   }
 
@@ -180,12 +191,6 @@ class NodeCatalogPreferences {
       byAddress[address] = entry.value;
     }
     return byAddress;
-  }
-
-  NodeCatalogPreferences withLatency(NodeInfo node, int latencyMs) {
-    return copyWith(
-      latencies: Map.unmodifiable({...latencies, _latencyKey(node): latencyMs}),
-    );
   }
 
   static String _latencyKey(NodeInfo node) =>
