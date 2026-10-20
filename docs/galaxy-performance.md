@@ -14,10 +14,11 @@ or generating dashes. Older native libraries use a tested Dart fallback. Dart
 owns and frees the buffers; there is no proxy runtime dependency or worker thread.
 The real-library test compares Rust and Dart across 2,001 segments and 12 cameras.
 
-The renderer batches visible lines and equal-texture planets, caches flag sphere
-lighting and halos, culls offscreen bodies, and avoids per-frame blur passes.
-All canvas drawing is clipped to its viewport. These changes apply to every
-platform, including Windows; GPU submission and CPU geometry are both reduced.
+The renderer batches visible lines, draws glows, shadows and spheres from one
+cached sprite atlas ([below](#sprite-atlas)), culls offscreen bodies, and runs
+no blur pass per frame. All canvas drawing is clipped to its viewport. These
+changes apply to every platform, including Windows; GPU submission and CPU
+geometry are both reduced.
 
 Application lifecycle and desktop focus/minimize events mute decorative work.
 Desktop show/hide calls also publish explicit visibility through
@@ -25,10 +26,12 @@ Desktop show/hide calls also publish explicit visibility through
 They do not stop the proxy or VPN. The connected power button pulses once,
 instead of animating for the entire connection lifetime.
 
-Each canvas owns its backdrop and planet textures. Flags are shared only while
-at least one visible canvas uses them. Late asynchronous rasterizations discard
-their images after visibility or theme changes. Labels dispose unused native
-paragraphs. Background canvases cannot start new backdrop or texture loads.
+Each canvas owns its backdrop and sprite atlas. Flags are shared only while
+at least one visible canvas uses them. A late backdrop or flag rasterization
+discards its image after a visibility or theme change; the atlas renders
+synchronously while painting, so it has no late completions, and a theme
+change or hiding releases it. Labels dispose unused native paragraphs.
+Background canvases cannot start new backdrop, flag or sprite renders.
 Stable localized text and cached scenes prevent unrelated provider updates
 from invalidating the map.
 
@@ -37,13 +40,14 @@ from invalidating the map.
 From `ui/flutter`:
 
 ```sh
-fvm flutter test test/galaxy_geometry_test.dart test/app_render_activity_test.dart test/galaxy_render_lifecycle_test.dart test/galaxy_cache_test.dart test/home_render_lifecycle_test.dart
+fvm flutter test test/galaxy_geometry_test.dart test/app_render_activity_test.dart test/galaxy_render_lifecycle_test.dart test/galaxy_cache_test.dart test/planet_atlas_test.dart test/home_render_lifecycle_test.dart
 fvm flutter test tool/render_galaxy_test.dart
 ```
 
 The tests cover a populated connected map at rest, vsync interaction repaint
 frequency, background/detached engines, desktop minimize/focus, page disposal,
-late texture completions, concurrent differently sized canvases, and unrelated
+sprite release on hiding and theme change, sprites against vectors, the
+atlas's memory bound, concurrent differently sized canvases, and unrelated
 provider notifications. The render harness writes desktop/phone and dark/light
 screenshots to `build/ui-shots/`.
 
@@ -117,6 +121,80 @@ and controls so manual input cannot contaminate the automatic sequence. The
 probe neither initializes the proxy service nor changes connection settings.
 Sample the probe PID's `TotalProcessorTime` independently; sum across all its
 threads and compare timestamps with each phase's `utc_ms` boundaries.
+
+## Sprite atlas
+
+`PlanetAtlas` (`planet_atlas.dart`) renders each layer of a sphere once into
+one atlas image and draws the layers with `drawRawAtlas`, in the order the
+painter issues them:
+
+- `paintSphere` (`widgets/planet_glyph.dart`) builds a sphere from layers
+  through `SphereLayers`: a blurred glow (dark) or contact shadow (light), the
+  lit body, the rim light and the blurred specular point. `paintFlagSphere`
+  builds a country's star the same way, with the flag's face and its shading
+  in place of the body. `CanvasSphereLayers` draws the layers as vectors (list
+  rows, legends, the first frame) and also paints the atlas cells, so each
+  layer is defined once.
+- Opacity stays per layer. A faded planet is four sprites, each at its own
+  alpha, as translucent as the vector sphere; the earlier cache baked a whole
+  sphere into one 256 px texture per colour and faded it as one image, so a
+  faded planet hid its glow behind its body.
+- Glows, shadows, rims, specular points and flag shading are white or fixed
+  coverage images coloured when drawn (`BlendMode.modulate`). Bodies are
+  rendered per colour, flags per country.
+- Sharp layers are rendered per size bucket, four per octave of on-screen
+  pixels, and drawn at most 16 % smaller than rendered (the earlier texture
+  was drawn up to ten times smaller). Soft layers use two buckets per octave
+  and are scaled up above 16 px (32 px for shadows).
+- Glows are the blurred discs the vector painter defines, rendered once per
+  bucket and relative blur (±2 %), not the radial-gradient ovals that stood in
+  for them. The disk plane's glow is again the blurred oval: one image of its
+  shape relative to its blur, stretched over the frame's oval, re-rendered
+  only when that shape changes.
+- Sprites are submitted in runs between vector draws (orbits, rings, arcs,
+  ripples, glyphs, labels): the painter's canvas getter flushes queued sprites
+  before any direct draw, so overlaps keep their order. The earlier batch
+  grouped equal textures per flush, which drew a planet's glow over the
+  testing arc and current-node ring drawn before it.
+- A layer is painted as vectors in the frame that first asks for it; the end
+  of that frame renders the atlas again with `toImageSync` (the previous image
+  as it was plus the new cells, packed bottom-left on a skyline). There is no
+  placeholder frame.
+
+Memory: one atlas per visible canvas, at most 512×2048 pixels (4 MB), plus the
+plane's small image. Image heights are rounded up to 64 rows (16 px for the
+plane), so a replaced image leaves one the GPU can reuse. A full atlas starts
+afresh at most every 600 frames and paints what does not fit as vectors in
+between, so it never rebuilds every frame. The earlier cache kept one 256 KB
+texture per colour, theme, glow and flag without a bound: the probe's busy
+scene held 22 of them (5.5 MB). `PlanetAtlas.liveBytes` reports the current
+total.
+
+Look: `test/planet_atlas_test.dart` compares sprite-drawn spheres, flags and a
+large glow with the vector layers at radii 2.4–26, opacities 1, 0.62 and 0.3,
+overlapping a vector stroke, in both themes at 2×. The first frame is
+identical; afterwards 0.15–0.19 % of channels differ by more than 8/255, on
+anti-aliased edges and the stripes inside flags. Bodies that ignore their
+opacity differ in about 3 %, and the test checks that this is caught.
+Compared with build 2.0.6, glows and the plane's glow return to the blurred
+shapes the gradients approximated; faded planets regain per-layer translucency.
+
+Not measured: frame times and process footprint after this change. The probe's
+raster suite (below) measured the earlier renderer once on macOS (Impeller on
+Metal, 1280×720 at 2×, 120 Hz): raster 2.3–4.0 ms per frame typical and
+4.1–8.0 ms busy, footprint 512–642 MB of which 129–167 MB GPU.
+
+```sh
+fvm flutter build macos --profile -t tool/galaxy_resource_probe.dart --dart-define=GALAXY_PROBE_SUITE=raster
+```
+
+The raster suite pins an 800×600 window on top of the main display (macOS
+stops drawing a covered window, and another display may differ in pixel ratio
+and refresh rate), retakes a sample drawn elsewhere or at a reduced rate, and
+keeps focus changes from muting the galaxy. Each `GALAXY_PROBE` result reports
+pixel ratio, refresh rate, frames, build/raster percentiles, RSS,
+`sprite_bytes` and its window (`started_ms`–`utc_ms`) for an outside
+`footprint -p <pid>` sampler, which also counts GPU (IOAccelerator) memory.
 
 ## Local measurements, 2026-10-20
 

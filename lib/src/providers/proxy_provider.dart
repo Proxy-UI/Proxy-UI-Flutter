@@ -13,7 +13,7 @@ import '../constants.dart';
 
 import '../ffi/proxy_ffi.dart';
 import '../ffi/proxy_service.dart';
-import '../ffi/macos_store_proxy_service.dart';
+import '../ffi/apple_packet_tunnel_proxy_service.dart';
 import '../services/build_capabilities.dart';
 import '../models/node_catalog_preferences.dart';
 import '../models/node_group_model.dart';
@@ -90,8 +90,8 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }) : _enableTunOnStartup = enableTunOnStartup,
        _service =
            service ??
-           (BuildCapabilities.isMacAppStore
-               ? MacosStoreProxyService()
+           (BuildCapabilities.usesPacketTunnel
+               ? ApplePacketTunnelProxyService()
                : ProxyService()),
        _desktopLogService = desktopLogService ?? DesktopLogService() {
     WidgetsBinding.instance.addObserver(this);
@@ -420,7 +420,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       if (started != ProxyResult.ok) {
         throw StateError(_service.lastError ?? ProxyResult.message(started));
       }
-      if (wasTunRunning && !BuildCapabilities.isMacAppStore) {
+      if (wasTunRunning && !BuildCapabilities.usesPacketTunnel) {
         final capture = await _startConfiguredTun(config);
         if (capture != ProxyResult.ok) {
           throw StateError(_service.lastError ?? ProxyResult.message(capture));
@@ -476,12 +476,17 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   bool _isValidPort(int port) => port >= 1 && port <= 65535;
 
   ProxyConfigModel _supportedConfig(ProxyConfigModel config) =>
-      BuildCapabilities.isMacAppStore
+      BuildCapabilities.usesPacketTunnel
       ? config.copyWith(
           setSystemProxy: false,
           allowLan: false,
-          autoProxy: false,
-          reverseGeo: false,
+          udpDirectFallback:
+              BuildCapabilities.supportsUdpDirectFallback &&
+              config.udpDirectFallback,
+          autoProxy: BuildCapabilities.isMacAppStore ? false : config.autoProxy,
+          reverseGeo: BuildCapabilities.isMacAppStore
+              ? false
+              : config.reverseGeo,
           tunBypassProcesses: const [],
           tunBypassWeGame: false,
         )
@@ -537,7 +542,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
 
       if (result == ProxyResult.ok) {
         _isRunning = true;
-        if (BuildCapabilities.isMacAppStore) {
+        if (BuildCapabilities.usesPacketTunnel) {
           _isTunRunning = _service.isTunRunning;
         }
         return true;
@@ -714,7 +719,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// its elevated replacement. The caller should then close the old window.
   Future<bool?> setTunEnabled(bool enabled) async {
     if (_isDisposed || _isProxyTransitioning) return false;
-    if (BuildCapabilities.isMacAppStore) return enabled ? start() : stop();
+    if (BuildCapabilities.usesPacketTunnel) return enabled ? start() : stop();
     if (_isTunBusy) return false;
     if (enabled == _isTunRunning) return true;
     if (enabled && !_isRunning) {
@@ -841,9 +846,9 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> startSubscriptionService({int port = 8080}) async {
-    if (BuildCapabilities.isMacAppStore) {
+    if (BuildCapabilities.usesPacketTunnel) {
       throw UnsupportedError(
-        'LAN configuration sharing is unavailable in the Store edition.',
+        'LAN configuration sharing is unavailable with a system packet tunnel.',
       );
     }
     if (_subscriptionServiceRunning || _subscriptionServiceBusy) return;
@@ -1193,15 +1198,15 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       setSystemProxy: _config.setSystemProxy,
     );
 
-    if (_isRunning && _isTunRunning && !BuildCapabilities.isMacAppStore) {
+    if (_isRunning && _isTunRunning && !BuildCapabilities.usesPacketTunnel) {
       if (_service.supportsLiveTunSwitch) {
         return _switchLiveTunNode(node, newConfig);
       }
       return _hotSwitchTunNode(node, newConfig);
     }
 
-    if (BuildCapabilities.isMacAppStore) {
-      return _switchStoreNode(node, _supportedConfig(newConfig));
+    if (BuildCapabilities.usesPacketTunnel) {
+      return _switchPacketTunnelNode(node, _supportedConfig(newConfig));
     }
 
     await _ensureNodeReachable(node);
@@ -1231,7 +1236,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// A provider owns both capture and the listener, so a node change replaces
   /// the whole VPN session. Probe after disconnecting to avoid routing the new
   /// endpoint through the old node. Keep the operation locked through rollback.
-  Future<bool> _switchStoreNode(
+  Future<bool> _switchPacketTunnelNode(
     NodeInfo node,
     ProxyConfigModel newConfig,
   ) async {

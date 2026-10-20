@@ -1,6 +1,6 @@
-import '../services/build_capabilities.dart';
-
 import 'dart:io';
+
+import '../services/build_capabilities.dart';
 
 enum AndroidVpnRoutingMode {
   all('all'),
@@ -52,9 +52,9 @@ class ProxyConfigModel {
     this.sessionKey,
     bool? autoProxy,
     this.udpEnabled = false,
-    this.udpDirectFallback = true,
+    bool? udpDirectFallback,
     this.tunEnabled = false,
-    this.tunFakeIp = false,
+    bool? tunFakeIp,
     this.tunDnsServer = '223.5.5.5',
     List<String> tunBypassProcesses = const [],
     bool? tunBypassWeGame,
@@ -64,6 +64,11 @@ class ProxyConfigModel {
     this.secureTransport = false,
     bool? setSystemProxy,
   }) : autoProxy = autoProxy ?? !BuildCapabilities.isMacAppStore,
+       // Preserve the hostname for upstream resolution. Advertising real AAAA
+       // answers makes iOS prefer IPv6 even when the selected node lacks it.
+       tunFakeIp = tunFakeIp ?? BuildCapabilities.isIOS,
+       udpDirectFallback =
+           udpDirectFallback ?? BuildCapabilities.supportsUdpDirectFallback,
        tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
        tunBypassWeGame =
            tunBypassWeGame ?? suggestsWeGameBypass(tunBypassProcesses),
@@ -72,7 +77,7 @@ class ProxyConfigModel {
            setSystemProxy ??
            (isDesktop &&
                !BuildCapabilities
-                   .isMacAppStore); // default true only for desktop
+                   .usesPacketTunnel); // default true only for desktop
 
   Map<String, dynamic> toJson() => {
     'serverHost': serverHost,
@@ -137,7 +142,7 @@ class ProxyConfigModel {
         // TUN is opt-in so legacy configurations never start changing system
         // routes after an application upgrade.
         tunEnabled: _parseBool(json['tunEnabled'], false),
-        tunFakeIp: _parseBool(json['tunFakeIp'], false),
+        tunFakeIp: _parseBool(json['tunFakeIp'], BuildCapabilities.isIOS),
         tunDnsServer: (json['tunDnsServer'] ?? '223.5.5.5').toString().trim(),
         tunBypassProcesses: _parseStringList(json['tunBypassProcesses']),
         tunBypassWeGame: _parseBool(

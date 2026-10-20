@@ -1,5 +1,4 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
 
-// Native library linking
-OTHER_LDFLAGS=$(inherited) -L$(PROJECT_DIR)/../native/ios -lhttp_proxy
+#include "Native.xcconfig"
