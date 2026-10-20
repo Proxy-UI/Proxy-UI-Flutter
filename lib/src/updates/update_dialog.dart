@@ -126,6 +126,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
             strings.updateDownloadSize(_size(plan.asset.size)),
             style: muted,
           ),
+          Text(plan.asset.name, style: muted),
           const SizedBox(height: 12),
           Text(switch (plan.method) {
             UpdateMethod.replaceBundle => strings.updateNoteReplace,
@@ -151,6 +152,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
           LinearProgressIndicator(value: _update.progress),
           const SizedBox(height: 12),
           Text(strings.updateDownloading((_update.progress * 100).floor())),
+          const SizedBox(height: 4),
+          Text(
+            '${_size(_update.receivedBytes)} / ${_size(_update.plan!.asset.size)}'
+            ' · ${_size(_update.bytesPerSecond.round())}/s',
+            style: muted,
+          ),
         ]);
       case UpdateStage.verifying:
         children.addAll([

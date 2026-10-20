@@ -7,117 +7,69 @@
 /// system proxy, routes and DNS are restored before anything is swapped.
 library;
 
-import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 
 import 'release_manifest.dart';
+import 'native_update_transport.dart';
+
+export 'windows_installer_update.dart';
 
 /// Fetches update files, through the local proxy while it runs: GitHub is
 /// often unreachable directly where this app is used.
 class UpdateDownloader {
-  UpdateDownloader({this.proxyPort});
+  UpdateDownloader({this.proxyPort, UpdateTransport? transport})
+    : transport = transport ?? NativeUpdateTransport.shared;
 
   final int? proxyPort;
+  final UpdateTransport transport;
+  UpdateOperation? _active;
 
-  HttpClient _client() {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 15)
-      ..userAgent = 'CipherRelay-updater';
-    final port = proxyPort;
-    if (port != null) {
-      client.findProxy = (_) => 'PROXY 127.0.0.1:$port; DIRECT';
-    }
-    return client;
-  }
-
-  /// A small text file, at most [limit] bytes.
   Future<List<int>> bytes(Uri url, {int limit = 1 << 20}) async {
-    final client = _client();
-    try {
-      final response = await _get(client, url);
-      final body = <int>[];
-      await for (final chunk in response) {
-        body.addAll(chunk);
-        if (body.length > limit) {
-          throw UpdateException(UpdateFailure.network, '$url is too large');
-        }
-      }
-      return body;
-    } on UpdateException {
-      rethrow;
-    } catch (error) {
-      throw UpdateException(UpdateFailure.network, '$error');
-    } finally {
-      client.close(force: true);
-    }
+    final result = await transport.start({
+      'operation': 'fetch',
+      'url': '$url',
+      'limit': limit,
+      'proxy_port': proxyPort,
+    }).result;
+    return base64Decode(result['body'] as String);
   }
 
-  /// [url] into [target], reporting progress from 0 to 1. Stops, and
-  /// removes the partial file, when [cancelled] turns true.
   Future<void> file(
     Uri url,
     File target, {
-    required int expectedSize,
-    required void Function(double progress) onProgress,
-    required bool Function() cancelled,
+    required ReleaseAsset asset,
+    required void Function(int received, int total, double speed) onProgress,
   }) async {
-    final client = _client();
-    final sink = target.openWrite();
-    var received = 0;
+    final operation = transport.start(
+      {
+        'operation': 'download',
+        'url': '$url',
+        'target': target.path,
+        'size': asset.size,
+        'sha256': asset.sha256,
+        'proxy_port': proxyPort,
+      },
+      onProgress: (event) => onProgress(
+        event['received'] as int,
+        event['total'] as int,
+        (event['bytes_per_second'] as num).toDouble(),
+      ),
+    );
+    _active = operation;
     try {
-      final response = await _get(client, url);
-      await for (final chunk in response) {
-        if (cancelled()) throw const _Cancelled();
-        received += chunk.length;
-        if (received > expectedSize) {
-          throw const UpdateException(UpdateFailure.checksum);
-        }
-        sink.add(chunk);
-        onProgress(received / expectedSize);
-      }
-      await sink.flush();
-    } on _Cancelled {
-      await sink.close();
-      await _delete(target);
-      rethrow;
-    } on UpdateException {
-      await sink.close();
-      await _delete(target);
-      rethrow;
-    } catch (error) {
-      await sink.close();
-      await _delete(target);
-      throw UpdateException(UpdateFailure.network, '$error');
+      await operation.result;
     } finally {
-      await sink.close();
-      client.close(force: true);
+      _active = null;
     }
   }
 
-  Future<HttpClientResponse> _get(HttpClient client, Uri url) async {
-    final request = await client.getUrl(url);
-    final response = await request.close().timeout(const Duration(seconds: 30));
-    if (response.statusCode != HttpStatus.ok) {
-      await response.drain<void>();
-      throw UpdateException(
-        UpdateFailure.network,
-        'HTTP ${response.statusCode} for $url',
-      );
-    }
-    return response;
-  }
+  void cancel() => _active?.cancel();
 }
 
-/// Thrown inside a download the user cancelled.
-class _Cancelled implements Exception {
-  const _Cancelled();
-}
-
-/// Whether [error] is a download the user cancelled.
-bool isCancellation(Object error) => error is _Cancelled;
+bool isCancellation(Object error) => error is UpdateCancelled;
 
 Future<void> _delete(File file) async {
   try {
@@ -127,13 +79,21 @@ Future<void> _delete(File file) async {
   }
 }
 
-/// Keep [file] only if it is exactly the file [asset] describes.
-Future<void> verifyChecksum(File file, ReleaseAsset asset) async {
-  final size = await file.length();
-  final digest = await sha256.bind(file.openRead()).first;
-  if (size != asset.size || digest.toString() != asset.sha256) {
+Future<void> verifyChecksum(
+  File file,
+  ReleaseAsset asset, {
+  UpdateTransport? transport,
+}) async {
+  try {
+    await (transport ?? NativeUpdateTransport.shared).start({
+      'operation': 'verify',
+      'target': file.path,
+      'size': asset.size,
+      'sha256': asset.sha256,
+    }).result;
+  } on UpdateException {
     await _delete(file);
-    throw const UpdateException(UpdateFailure.checksum);
+    rethrow;
   }
 }
 
@@ -305,49 +265,6 @@ if mv "$target" "$previous"; then
 fi
 [ "$reopen" = 1 ] && open "$target"
 rm -f "$0"
-''';
-}
-
-/// Windows: the installer runs quietly once the app has quit, then the app
-/// is opened again, updated or not.
-abstract final class WindowsInstallerUpdate {
-  /// Whether the running app was set up by the installer, which leaves its
-  /// uninstaller beside the executable; the portable archive does not.
-  static bool isInstalled() =>
-      File('${File(Platform.resolvedExecutable).parent.path}\\unins000.exe')
-          .existsSync();
-
-  static Future<void> handOff(File installer, int pid) async {
-    final script = File('${installer.parent.path}\\install-update.ps1');
-    await script.writeAsString(_script);
-    await Process.start('powershell.exe', [
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-WindowStyle',
-      'Hidden',
-      '-File',
-      script.path,
-      '-ProcessId',
-      '$pid',
-      '-Installer',
-      installer.path,
-      '-App',
-      Platform.resolvedExecutable,
-    ], mode: ProcessStartMode.detached);
-  }
-
-  static const String _script = r'''
-param([int]$ProcessId, [string]$Installer, [string]$App)
-try { Wait-Process -Id $ProcessId -Timeout 120 -ErrorAction Stop } catch { }
-if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) { exit 1 }
-try {
-  Start-Process -FilePath $Installer -Verb RunAs -Wait `
-    -ArgumentList '/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS'
-} catch { }
-Start-Process -FilePath $App
-Remove-Item -LiteralPath $Installer -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $PSCommandPath -ErrorAction SilentlyContinue
 ''';
 }
 

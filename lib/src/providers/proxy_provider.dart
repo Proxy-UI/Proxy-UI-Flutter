@@ -180,11 +180,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   void _onLog(LogEntry entry) {
     _logs.addLast(entry);
     _filteredLogs = null;
-    unawaited(_persistLog(entry));
+    if (!entry.persisted) unawaited(_persistLog(entry));
     if (_logs.length > maxLogs) {
       _logs.removeFirst();
     }
-    _reconcileConnection();
+    if (entry.level >= 3) _reconcileConnection();
 
     // A new log line is neither. Native traffic can produce hundreds per
     // second, so announce it on a separate channel at a human-visible cadence;
@@ -581,10 +581,10 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Retrieve process candidates and the executable that native code protects
   /// from removal. Process enumeration is only exposed by the Windows UI.
-  ({List<TunProcessInfo> processes, String? selfProcess})
-  getTunProcessOptions() {
+  Future<({List<TunProcessInfo> processes, String? selfProcess})>
+  getTunProcessOptions() async {
     return (
-      processes: _service.listTunProcessDetails(),
+      processes: await _service.listTunProcessDetails(),
       selfProcess: _service.tunSelfProcess,
     );
   }
@@ -867,6 +867,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       _clashUrl = await _subscriptionService!.getClashUrl();
       _shadowrocketUrl = await _subscriptionService!.getShadowrocketUrl();
     } catch (_) {
+      await _subscriptionService?.stop();
       _subscriptionService = null;
       _subscriptionServiceRunning = false;
       _clashUrl = null;

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -7,6 +6,7 @@ import '../services/apple_vpn_service.dart';
 import '../services/build_capabilities.dart';
 import 'proxy_ffi.dart';
 import 'proxy_service.dart';
+import 'native_proxy_operations.dart';
 
 /// Apple VPN builds run forwarding inside the packet provider. Inherited FFI
 /// methods still handle the node catalogue and probes in the containing app.
@@ -103,30 +103,20 @@ class ApplePacketTunnelProxyService extends ProxyService {
   @override
   List<String> listTunProcesses() => const [];
   @override
-  List<TunProcessInfo> listTunProcessDetails() => const [];
+  Future<List<TunProcessInfo>> listTunProcessDetails() async => const [];
 
   @override
   Future<int?> testLatency({String? testUrl, int timeoutMs = 10000}) async {
     if (!isRunning) throw StateError('VPN is not connected.');
-    final client = HttpClient()
-      ..connectionTimeout = Duration(milliseconds: timeoutMs)
-      ..findProxy = (_) => 'PROXY 127.0.0.1:$_localPort';
-    final watch = Stopwatch()..start();
-    try {
-      return await (() async {
-        final request = await client.getUrl(
-          Uri.parse(testUrl ?? 'https://www.gstatic.com/generate_204'),
-        );
-        final response = await request.close();
-        await response.drain<void>();
-        if (response.statusCode >= 400) {
-          throw HttpException('HTTP ${response.statusCode}');
-        }
-        return watch.elapsedMilliseconds;
-      })().timeout(Duration(milliseconds: timeoutMs));
-    } finally {
-      client.close(force: true);
-    }
+    final result = await NativeProxyOperations.shared.run(
+      'http_latency',
+      arguments: {
+        'proxy_port': _localPort,
+        'test_url': testUrl ?? 'https://www.gstatic.com/generate_204',
+        'timeout_ms': timeoutMs,
+      },
+    );
+    return result['latencyMs'] as int;
   }
 
   @override

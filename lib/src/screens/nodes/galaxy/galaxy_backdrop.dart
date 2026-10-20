@@ -8,6 +8,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'galaxy_native.dart';
+
 /// The nebula program, loaded once; null where shaders are unavailable.
 final Future<ui.FragmentProgram?> _program = ui.FragmentProgram.fromAsset(
   'shaders/nebula.frag',
@@ -203,7 +205,22 @@ class _StarLayer {
 
 /// Three layers of stars, far to near, with a slow twinkle.
 class Starfield {
-  Starfield() : _layers = _generate();
+  Starfield() : _layers = _generate() {
+    _native = NativeStarBatch([
+      for (final layer in _layers)
+        for (final points in layer.points) (points, layer.parallax),
+    ]);
+    if (_native.usesNative) {
+      var index = 0;
+      for (final layer in _layers) {
+        for (var bucket = 0; bucket < layer.points.length; bucket++) {
+          layer.points[bucket] = _native.points[index++];
+        }
+      }
+    }
+  }
+  late final NativeStarBatch _native;
+  void dispose() => _native.dispose();
 
   final List<_StarLayer> _layers;
   final Float32List _scratch = Float32List(2 * 400);
@@ -238,6 +255,7 @@ class Starfield {
     required bool dark,
     required bool still,
   }) {
+    _native.project(size, yaw, tilt);
     final base = dark ? Colors.white : const Color(0xFF2A2A2E);
     for (final layer in _layers) {
       final shiftX = (yaw / (math.pi * 2)) * size.width * layer.parallax * 2.2;
@@ -245,10 +263,12 @@ class Starfield {
       for (var b = 0; b < layer.points.length; b++) {
         final source = layer.points[b];
         final count = source.length ~/ 2;
-        final out = count * 2 <= _scratch.length
+        final out = _native.usesNative
+            ? source
+            : count * 2 <= _scratch.length
             ? Float32List.sublistView(_scratch, 0, count * 2)
             : Float32List(count * 2);
-        for (var i = 0; i < count; i++) {
+        for (var i = 0; !_native.usesNative && i < count; i++) {
           final x = (source[i * 2] * size.width + shiftX) % size.width;
           final y = (source[i * 2 + 1] * size.height + shiftY) % size.height;
           out[i * 2] = x < 0 ? x + size.width : x;

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'update_transport_fixture.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/material.dart';
@@ -55,17 +57,27 @@ void main() {
         bytes,
         signature,
         publicKey: public,
+        transport: TestUpdateTransport(),
       );
       expect(release.build, 66);
 
       final tampered = utf8.encode(utf8.decode(bytes).replaceAll('66', '67'));
       await expectLater(
-        verifyReleaseManifest(tampered, signature, publicKey: public),
+        verifyReleaseManifest(
+          tampered,
+          signature,
+          publicKey: public,
+          transport: TestUpdateTransport(),
+        ),
         throwsA(isA<UpdateException>()),
       );
       // Signed, but not by the release key.
       await expectLater(
-        verifyReleaseManifest(bytes, signature),
+        verifyReleaseManifest(
+          bytes,
+          signature,
+          transport: TestUpdateTransport(),
+        ),
         throwsA(isA<UpdateException>()),
       );
     },
@@ -187,6 +199,7 @@ void main() {
       quit: () async {},
       feed: Uri.parse('http://127.0.0.1:${server.port}/'),
       publicKey: public,
+      transport: TestUpdateTransport(),
       loadInstalled: () async => InstalledVersion(
         version: '2.0.$build',
         build: build,
@@ -298,6 +311,7 @@ void main() {
           await tester.pump();
         }
         expect(done(), isTrue);
+        await tester.pump();
       }
 
       await settleOn(() => update.stage == UpdateStage.available);

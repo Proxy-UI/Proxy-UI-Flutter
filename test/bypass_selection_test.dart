@@ -110,7 +110,7 @@ class _Service extends ProxyService {
   @override
   String? get tunSelfProcess => 'cipherrelay';
   @override
-  List<TunProcessInfo> listTunProcessDetails() => [
+  Future<List<TunProcessInfo>> listTunProcessDetails() async => [
     if (parentAlive)
       const TunProcessInfo(
         name: 'wegame',

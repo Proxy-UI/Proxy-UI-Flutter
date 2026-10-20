@@ -79,6 +79,7 @@ jobs:
               aarch64-pc-windows-msvc) dest="arm64" ;;
             esac
             cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/http_proxy.dll" "native/windows/$dest/"
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/cipherrelay-updater.exe" "native/windows/$dest/"
             cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/wintun.dll" "native/windows/$dest/"
           done
 
@@ -307,7 +308,7 @@ jobs:
         shell: pwsh
         run: |
           $bundle = 'build/windows/x64/runner/Release'
-          foreach ($required in @('CipherRelay.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
+          foreach ($required in @('CipherRelay.exe', 'cipherrelay-updater.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
             if (-not (Test-Path -LiteralPath (Join-Path $bundle $required))) {
               throw "Windows release bundle is missing $required"
             }
