@@ -3,7 +3,7 @@ import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
   #if MAC_APP_STORE
-  private let vpnController = MacAppStoreVpnController()
+  private let vpnController = AppleVpnController()
   #endif
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -13,7 +13,7 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     #if MAC_APP_STORE
-    vpnController.register(with: flutterViewController)
+    vpnController.register(with: flutterViewController.engine.binaryMessenger)
     #endif
 
     super.awakeFromNib()

@@ -19,15 +19,16 @@ import '../widgets/tun_process_dialog.dart';
 /// Whether this platform can pick processes to keep out of the tunnel.
 ///
 /// Windows and macOS both resolve a captured session back to its owning process
-/// and can relay it directly through the physical interface. Android and iOS
-/// leave per-application routing to the platform VPN API, which has its own
-/// picker, and Linux has no process enumeration wired up.
+/// and can relay it directly through the physical interface. Android has a
+/// separate VPN app picker. iOS per-app VPN requires MDM-managed apps, and Linux
+/// has no process enumeration wired up.
 final bool supportsTunProcessBypass =
-    !BuildCapabilities.isMacAppStore &&
+    !BuildCapabilities.usesPacketTunnel &&
     (Platform.isWindows || Platform.isMacOS);
 
 /// Whether traffic capture is the platform's VPN rather than a TUN device.
-bool get captureIsVpn => Platform.isAndroid || BuildCapabilities.isMacAppStore;
+bool get captureIsVpn =>
+    Platform.isAndroid || BuildCapabilities.usesPacketTunnel;
 
 /// Start or stop the proxy, with the outcome as a toast.
 Future<void> toggleProxy(BuildContext context) async {
@@ -90,7 +91,7 @@ Future<void> toggleTun(BuildContext context, bool enabled) async {
     return;
   }
   final error = state.lastError ?? strings.failedToChangeTunMode;
-  if (Platform.isMacOS && !BuildCapabilities.isMacAppStore) {
+  if (Platform.isMacOS && !BuildCapabilities.usesPacketTunnel) {
     await showTunDiagnostics(context, error: error, allowRetry: enabled);
   } else {
     await showDialog<void>(

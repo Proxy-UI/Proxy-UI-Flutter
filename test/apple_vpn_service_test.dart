@@ -2,22 +2,23 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:proxy_ui/src/screens/dashboard_page.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:proxy_ui/src/ffi/macos_store_proxy_service.dart';
+import 'package:proxy_ui/src/ffi/apple_packet_tunnel_proxy_service.dart';
 import 'package:proxy_ui/src/ffi/proxy_ffi.dart';
 import 'package:proxy_ui/src/models/node_model.dart';
 import 'package:proxy_ui/src/models/proxy_config.dart';
 import 'package:proxy_ui/src/providers/proxy_provider.dart';
+import 'package:proxy_ui/src/services/apple_vpn_service.dart';
 import 'package:proxy_ui/src/services/build_capabilities.dart';
-import 'package:proxy_ui/src/services/macos_vpn_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const methods = MethodChannel('com.proxyui/macos_vpn');
-const events = MethodChannel('com.proxyui/macos_vpn/events');
+const methods = MethodChannel('com.proxyui/apple_vpn');
+const events = MethodChannel('com.proxyui/apple_vpn/events');
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -54,13 +55,12 @@ void main() {
     });
   });
   tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
     messenger.setMockMethodCallHandler(methods, null);
     messenger.setMockMethodCallHandler(events, null);
   });
 
-  testWidgets('store VPN page hides helper diagnostics and process controls', (
-    tester,
-  ) async {
+  testWidgets('iOS VPN page has one system connection control', (tester) async {
     late ProxyState state;
     await tester.runAsync(() async {
       state = ProxyState(service: _QuietStoreService());
@@ -93,12 +93,13 @@ void main() {
       expect(find.textContaining('Android'), findsNothing);
       expect(tester.takeException(), isNull);
     }
-  }, skip: !BuildCapabilities.isMacAppStore);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   test(
     'waits for system connection and sends only provider configuration',
     () async {
-      final service = MacosStoreProxyService();
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final service = ApplePacketTunnelProxyService();
       addTearDown(service.dispose);
       await service.initializePlatform();
       pendingStart = Completer<void>();
@@ -109,13 +110,16 @@ void main() {
         setSystemProxy: true,
         allowLan: true,
         tunBypassProcesses: ['browser'],
+        autoProxy: true,
+        reverseGeo: true,
       );
       await Future<void>.delayed(Duration.zero);
       expect(service.isRunning, isFalse);
       final config = calls.last.arguments as Map;
       expect(config['serverHost'], 'node.example');
-      expect(config['autoProxy'], isFalse);
-      expect(config['reverseGeo'], isFalse);
+      expect(config['autoProxy'], !BuildCapabilities.isMacAppStore);
+      expect(config['reverseGeo'], !BuildCapabilities.isMacAppStore);
+      expect(config['udpDirectFallback'], isFalse);
       expect(config.containsKey('setSystemProxy'), isFalse);
       expect(config.containsKey('allowLan'), isFalse);
       expect(config.containsKey('tunBypassProcesses'), isFalse);
@@ -138,7 +142,7 @@ void main() {
   test(
     'reports system denial instead of a successful local listener',
     () async {
-      final service = MacosStoreProxyService();
+      final service = ApplePacketTunnelProxyService();
       addTearDown(service.dispose);
       await service.initializePlatform();
       failStart = true;
@@ -155,7 +159,7 @@ void main() {
     'restores the existing connection and follows an external disconnect',
     () async {
       connected = true;
-      final vpn = MacosVpnService();
+      final vpn = AppleVpnService();
       addTearDown(vpn.dispose);
       await vpn.initialize();
       expect(vpn.running, isTrue);
@@ -175,8 +179,9 @@ void main() {
   );
 
   test(
-    'store node failure restores prior VPN and config without a hot FFI switch',
+    'iOS node failure restores prior VPN and config without a hot FFI switch',
     () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       final service = _QuietStoreService();
       final state = ProxyState(service: service);
       addTearDown(state.dispose);
@@ -189,12 +194,16 @@ void main() {
           setSystemProxy: true,
           allowLan: true,
           tunBypassProcesses: ['browser'],
+          autoProxy: true,
+          reverseGeo: true,
         ),
       );
       expect(state.config.setSystemProxy, isFalse);
       expect(state.config.allowLan, isFalse);
-      expect(state.config.autoProxy, isFalse);
-      expect(state.config.reverseGeo, isFalse);
+      expect(state.config.autoProxy, !BuildCapabilities.isMacAppStore);
+      expect(state.config.reverseGeo, !BuildCapabilities.isMacAppStore);
+      expect(state.config.udpDirectFallback, isFalse);
+      expect(state.config.tunFakeIp, isTrue);
       expect(state.config.tunBypassProcesses, isEmpty);
       expect(await state.start(), isTrue);
       calls.clear();
@@ -227,7 +236,6 @@ void main() {
       expect(state.isProxyOperationInProgress, isFalse);
       expect(state.lastError, contains('restored'));
     },
-    skip: !BuildCapabilities.isMacAppStore,
   );
 }
 
@@ -238,7 +246,7 @@ Future<void> waitForState(ProxyState state) async {
   expect(state.isInitialized, isTrue);
 }
 
-class _QuietStoreService extends MacosStoreProxyService {
+class _QuietStoreService extends ApplePacketTunnelProxyService {
   @override
   void initLogging() {}
   @override

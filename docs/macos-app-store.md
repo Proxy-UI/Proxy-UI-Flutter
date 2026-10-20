@@ -52,7 +52,7 @@ Run the normal FVM tests and the store-specific suite:
 ```bash
 fvm flutter analyze --no-fatal-infos
 fvm flutter test
-fvm flutter test test/macos_vpn_service_test.dart test/store_demo_test.dart test/store_privacy_test.dart --dart-define=MAC_APP_STORE=true
+fvm flutter test test/apple_vpn_service_test.dart test/store_demo_test.dart test/store_privacy_test.dart --dart-define=MAC_APP_STORE=true
 ```
 
 The full implementation and runtime acceptance procedure are documented in

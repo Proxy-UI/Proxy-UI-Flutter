@@ -60,10 +60,11 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _sessionKeyController = TextEditingController(
       text: config.sessionKey ?? '',
     );
-    _allowLan = !BuildCapabilities.isMacAppStore && config.allowLan;
+    _allowLan = !BuildCapabilities.usesPacketTunnel && config.allowLan;
     _autoProxy = !BuildCapabilities.isMacAppStore && config.autoProxy;
     _udpEnabled = config.udpEnabled;
-    _udpDirectFallback = config.udpDirectFallback;
+    _udpDirectFallback =
+        BuildCapabilities.supportsUdpDirectFallback && config.udpDirectFallback;
     _tunFakeIp = config.tunFakeIp;
     _tunDnsController = TextEditingController(text: config.tunDnsServer);
     _reverseGeo = !BuildCapabilities.isMacAppStore && config.reverseGeo;
@@ -190,7 +191,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
                     Text(context.l10n.configurationApplyReconnects),
                   const SizedBox(height: 12),
                   if (ProxyConfigModel.isDesktop &&
-                      !BuildCapabilities.isMacAppStore)
+                      !BuildCapabilities.usesPacketTunnel)
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(context.l10n.systemProxy),
@@ -274,7 +275,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   ),
-                  if (!BuildCapabilities.isMacAppStore)
+                  if (!BuildCapabilities.usesPacketTunnel)
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       secondary: const Icon(Icons.lan_outlined),
@@ -332,12 +333,15 @@ class _ConfigDialogState extends State<ConfigDialog> {
                       helperMaxLines: 3,
                     ),
                   ),
-                  SwitchListTile(
-                    title: Text(context.l10n.directUdpFallback),
-                    subtitle: Text(context.l10n.whenSocksUdpIsOffSendVpnTunUdp),
-                    value: _udpDirectFallback,
-                    onChanged: (v) => setState(() => _udpDirectFallback = v),
-                  ),
+                  if (BuildCapabilities.supportsUdpDirectFallback)
+                    SwitchListTile(
+                      title: Text(context.l10n.directUdpFallback),
+                      subtitle: Text(
+                        context.l10n.whenSocksUdpIsOffSendVpnTunUdp,
+                      ),
+                      value: _udpDirectFallback,
+                      onChanged: (v) => setState(() => _udpDirectFallback = v),
+                    ),
                   if (!BuildCapabilities.isMacAppStore)
                     SwitchListTile(
                       title: Text(context.l10n.reverseGeo),

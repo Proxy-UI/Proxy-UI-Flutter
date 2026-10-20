@@ -3,19 +3,20 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-import '../services/macos_vpn_service.dart';
+import '../services/apple_vpn_service.dart';
+import '../services/build_capabilities.dart';
 import 'proxy_ffi.dart';
 import 'proxy_service.dart';
 
-/// Store builds run forwarding inside the packet provider. Inherited FFI
+/// Apple VPN builds run forwarding inside the packet provider. Inherited FFI
 /// methods still handle the node catalogue and probes in the containing app.
-class MacosStoreProxyService extends ProxyService {
-  final MacosVpnService _vpn;
+class ApplePacketTunnelProxyService extends ProxyService {
+  final AppleVpnService _vpn;
   String? _error;
   int _localPort = 10801;
 
-  MacosStoreProxyService({MacosVpnService? vpn})
-    : _vpn = vpn ?? MacosVpnService();
+  ApplePacketTunnelProxyService({AppleVpnService? vpn})
+    : _vpn = vpn ?? AppleVpnService();
 
   @override
   Stream<void> get connectionChanges => _vpn.changes;
@@ -59,12 +60,13 @@ class MacosStoreProxyService extends ProxyService {
         'serverPort': serverPort,
         'localPort': localPort,
         'sessionKey': sessionKey,
-        'autoProxy': false,
+        'autoProxy': !BuildCapabilities.isMacAppStore && autoProxy,
         'udpEnabled': udpEnabled,
         'tunFakeIp': tunFakeIp,
         'tunDnsServer': tunDnsServer,
-        'udpDirectFallback': udpDirectFallback,
-        'reverseGeo': false,
+        'udpDirectFallback':
+            BuildCapabilities.supportsUdpDirectFallback && udpDirectFallback,
+        'reverseGeo': !BuildCapabilities.isMacAppStore && reverseGeo,
       });
       _localPort = localPort;
       return isRunning ? ProxyResult.ok : ProxyResult.runtimeError;

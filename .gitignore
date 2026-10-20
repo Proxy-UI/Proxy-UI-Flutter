@@ -51,7 +51,6 @@ app.*.map.json
 # CocoaPods
 **/ios/Pods/
 **/macos/Pods/
-**/ios/Podfile
 **/ios/Podfile.lock
 **/macos/Podfile.lock
 

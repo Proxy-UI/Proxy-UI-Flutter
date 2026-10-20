@@ -1,0 +1,4 @@
+#include "../Flutter/Generated.xcconfig"
+
+LIBRARY_SEARCH_PATHS = $(inherited) "$(PROJECT_DIR)/../native/ios/$(PLATFORM_NAME)"
+OTHER_LDFLAGS = $(inherited) -lhttp_proxy -lresolv -framework Security -framework SystemConfiguration

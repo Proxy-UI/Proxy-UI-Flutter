@@ -14,7 +14,7 @@ void main() {
   ) async {
     SharedPreferences.setMockInitialValues({'sentinel': 'unchanged'});
     final calls = <MethodCall>[];
-    const channel = MethodChannel('com.proxyui/macos_vpn');
+    const channel = MethodChannel('com.proxyui/apple_vpn');
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(channel, (call) async {
