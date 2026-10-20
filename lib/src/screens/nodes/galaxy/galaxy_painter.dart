@@ -1,17 +1,18 @@
 /// Paints one frame of the galaxy: sky, the circles of latitude, the home
 /// star, country systems far to near with their orbits split around each
 /// star, the connection to the current node as an arc of light, and labels
-/// that keep out of each other's way.
+/// that keep out of each other's way. Glows, shadows and spheres come from
+/// the canvas's [PlanetAtlas], in the order they are painted here.
 library;
 
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
 import '../../../models/node_health.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/planet_glyph.dart';
 import 'flag_atlas.dart';
 import 'galaxy_backdrop.dart';
 import 'galaxy_camera.dart';
@@ -183,6 +184,7 @@ class GalaxyPainter extends CustomPainter {
     final projection = camera.project(size);
     geometry.project(view.scene, projection, size);
     final frame = _Frame(this, canvas, projection, size);
+    planets.begin(canvas, ratio: palette.ratio);
     frame.plane();
     final ordered = [
       for (final system in view.scene.systems)
@@ -202,6 +204,7 @@ class GalaxyPainter extends CustomPainter {
     frame.link();
     frame.ghosts();
     frame.labels();
+    planets.end();
     view.hits = frame.hits;
     labels.endFrame();
     canvas.restore();
@@ -227,26 +230,32 @@ class _Label {
 
 /// One frame's drawing state.
 class _Frame {
-  _Frame(this.painter, this.canvas, this.projection, this.size);
+  _Frame(this.painter, this._canvas, this.projection, this.size);
 
   final GalaxyPainter painter;
-  final Canvas canvas;
+  final Canvas _canvas;
   final Projection projection;
   final Size size;
   final List<Hit> hits = [];
   final List<_Label> pending = [];
   final List<Rect> obstacles = [];
-  final _sprites = _SpriteBatch();
 
   GalaxyView get view => painter.view;
   GalaxyPalette get palette => painter.palette;
   bool get dark => palette.dark;
+  PlanetAtlas get planets => painter.planets;
 
-  /// A reusable texture avoids re-evaluating a large radial shader per halo.
-  void _glow(Offset center, double radius, Color color) {
-    if (!_visible(center, radius * 2.5)) return;
-    final image = painter.planets.glowFor(color, painter.onBackdrop);
-    if (image != null) _sprite(image, center, radius, color.a);
+  /// The canvas, for drawing directly: the sprites queued so far go first,
+  /// so everything keeps the order it is painted in.
+  Canvas get canvas {
+    planets.flush();
+    return _canvas;
+  }
+
+  /// A disc of [radius] blurred by [sigma]: a glow or a halo.
+  void _glow(Offset center, double radius, double sigma, Color color) {
+    if (!_visible(center, radius + sigma * 3)) return;
+    planets.softDisc(center, radius, sigma, color);
   }
 
   /// Whether [id] (of [system]) stays bright while something is selected.
@@ -280,16 +289,11 @@ class _Frame {
       for (final point in rim) {
         bounds = bounds.expandToInclude(Rect.fromPoints(point, point));
       }
-      // A radial falloff needs one draw, unlike a canvas-sized blur pass.
-      canvas.drawOval(
-        bounds,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [
-              palette.signal.withValues(alpha: dark ? 0.05 : 0.035),
-              palette.signal.withValues(alpha: 0),
-            ],
-          ).createShader(bounds),
+      // One image of the blurred oval, stretched: no canvas-sized blur pass.
+      planets.softOval(
+        bounds.deflate(bounds.shortestSide * 0.1),
+        bounds.shortestSide * 0.2,
+        palette.signal.withValues(alpha: dark ? 0.05 : 0.035),
       );
     }
     const latitudes = [60.0, 30.0, 0.0, -30.0, -60.0];
@@ -331,10 +335,19 @@ class _Frame {
       _glow(
         c,
         radius * scale,
+        radius * scale * 0.5,
         color.withValues(alpha: alpha * opacity * (dark ? 1 : 0.7)),
       );
     }
-    _sphere(c, radius, color, opacity, glow: 0);
+    paintSphere(
+      planets,
+      c,
+      radius,
+      color,
+      dark: dark,
+      glow: 0,
+      opacity: opacity,
+    );
     _focusRings(homeId, c, radius);
     hits.add(Hit(homeId, c, radius * 1.5, core.depth));
     obstacles.add(Rect.fromCircle(center: c, radius: radius));
@@ -364,7 +377,6 @@ class _Frame {
         _planet(system, planet, projected, appear, base);
       }
     }
-    _sprites.draw(canvas);
     _star(system, core, base);
     _strokeOrbit(orbit.front, base);
     for (final (planet, projected, appear) in placed) {
@@ -372,7 +384,6 @@ class _Frame {
         _planet(system, planet, projected, appear, base);
       }
     }
-    _sprites.draw(canvas);
   }
 
   void _strokeOrbit(GalaxyLines lines, double opacity) {
@@ -438,6 +449,7 @@ class _Frame {
         _glow(
           c,
           radius * scale,
+          radius * scale * 0.5,
           Color.lerp(
             Colors.white,
             glow,
@@ -446,23 +458,27 @@ class _Frame {
         );
       }
     } else {
-      _glow(c, radius * 2.2, glow.withValues(alpha: 0.12 * opacity));
+      _glow(
+        c,
+        radius * 2.2,
+        radius * 1.2,
+        glow.withValues(alpha: 0.12 * opacity),
+      );
     }
     final flag = system.unknown
         ? null
         : FlagAtlas.instance.imageFor(system.code);
-    final sprite = flag == null
-        ? null
-        : painter.planets.flagFor(system.code, flag, dark, painter.onBackdrop);
-    if (sprite == null) {
-      _sphere(
+    if (flag == null) {
+      paintSphere(
+        planets,
         c,
         radius,
         system.unknown
             ? palette.scheme.outline
             : Color.lerp(palette.scheme.surfaceContainerHighest, glow, 0.3)!,
-        opacity,
+        dark: dark,
         glow: 0,
+        opacity: opacity,
       );
       final mark = system.unknown ? '?' : system.code;
       final glyph = _text(
@@ -484,7 +500,15 @@ class _Frame {
       glyph.paint(canvas, c - Offset(glyph.width / 2, glyph.height / 2));
       canvas.restore();
     } else {
-      _sprite(sprite, c, radius, opacity);
+      paintFlagSphere(
+        planets,
+        system.code,
+        flag,
+        c,
+        radius,
+        dark: dark,
+        opacity: opacity,
+      );
     }
     _statusRing(system, c, radius * 1.42, opacity);
     _focusRings(system.id, c, radius * 1.42);
@@ -598,6 +622,7 @@ class _Frame {
       _glow(
         c,
         radius * (2.0 + pulse * 0.5),
+        radius,
         palette.signal.withValues(alpha: (live ? 0.18 : 0.08) * opacity),
       );
       canvas.drawCircle(
@@ -609,7 +634,15 @@ class _Frame {
           ..color = palette.signal.withValues(alpha: 0.9 * opacity),
       );
     }
-    _sphere(c, radius, color, opacity, batch: true);
+    paintSphere(
+      planets,
+      c,
+      radius,
+      color,
+      dark: dark,
+      glow: 0.9,
+      opacity: opacity,
+    );
     if (node.health == NodeHealth.testing) {
       // Still, and turned per node so a country under test does not show a
       // row of identical marks.
@@ -659,50 +692,6 @@ class _Frame {
           ),
         ),
       ),
-    );
-  }
-
-  void _sphere(
-    Offset c,
-    double radius,
-    Color color,
-    double opacity, {
-    double glow = 0.9,
-    bool batch = false,
-  }) {
-    final image = painter.planets.imageFor(
-      color,
-      dark,
-      painter.onBackdrop,
-      glow: glow,
-    );
-    if (image == null) {
-      // A cheap placeholder while the full-quality texture is rasterized once.
-      canvas.drawCircle(
-        c,
-        radius,
-        Paint()..color = color.withValues(alpha: opacity),
-      );
-    } else {
-      if (batch) {
-        _sprites.add(image, c, radius, opacity);
-      } else {
-        _sprite(image, c, radius, opacity);
-      }
-    }
-  }
-
-  void _sprite(ui.Image image, Offset c, double radius, double opacity) {
-    canvas.drawImageRect(
-      image,
-      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-      Rect.fromCircle(
-        center: c,
-        radius: radius * PlanetAtlas.edge / (2 * PlanetAtlas.radius),
-      ),
-      Paint()
-        ..filterQuality = FilterQuality.low
-        ..color = Colors.white.withValues(alpha: opacity),
     );
   }
 
@@ -814,7 +803,12 @@ class _Frame {
       final t = view.still ? (k + 1) / 5 : (view.time * 0.25 + k / 4) % 1.0;
       final p = projection.at(at(t));
       if (p == null || !_visible(p.point, 16)) continue;
-      _glow(p.point, dark ? 2.3 : 1.9, light.withValues(alpha: 0.9 * dim));
+      _glow(
+        p.point,
+        dark ? 2.3 : 1.9,
+        dark ? 2.2 : 1.2,
+        light.withValues(alpha: 0.9 * dim),
+      );
     }
   }
 
@@ -825,11 +819,14 @@ class _Frame {
       if (p == null) continue;
       final t = (view.time - ghost.since).clamp(0.0, 1.0);
       if (!_visible(p.point, 140)) continue;
-      _sphere(
+      paintSphere(
+        planets,
         p.point,
         (ghost.size * p.scale).clamp(2.0, 14.0) * (1 + t * 0.4),
         palette.scheme.outline,
-        1 - t,
+        dark: dark,
+        glow: 0.9,
+        opacity: 1 - t,
       );
     }
   }
@@ -891,47 +888,5 @@ class _Frame {
       text.paint(canvas, offset);
       shown++;
     }
-  }
-}
-
-/// Submit equal-texture planets together while retaining each system's depth
-/// order. The per-sprite colour carries opacity without offscreen layers.
-class _SpriteBatch {
-  final _groups =
-      <
-        ui.Image,
-        ({List<double> transforms, List<double> rects, List<int> colors})
-      >{};
-
-  void add(ui.Image image, Offset center, double radius, double opacity) {
-    final group = _groups.putIfAbsent(
-      image,
-      () => (transforms: [], rects: [], colors: []),
-    );
-    final scale = radius / PlanetAtlas.radius;
-    group.transforms.addAll([
-      scale,
-      0,
-      center.dx - image.width * scale / 2,
-      center.dy - image.height * scale / 2,
-    ]);
-    group.rects.addAll([0, 0, image.width.toDouble(), image.height.toDouble()]);
-    group.colors.add(Colors.white.withValues(alpha: opacity).toARGB32());
-  }
-
-  void draw(Canvas canvas) {
-    for (final entry in _groups.entries) {
-      final group = entry.value;
-      canvas.drawRawAtlas(
-        entry.key,
-        Float32List.fromList(group.transforms),
-        Float32List.fromList(group.rects),
-        Int32List.fromList(group.colors),
-        BlendMode.modulate,
-        null,
-        Paint()..filterQuality = FilterQuality.low,
-      );
-    }
-    _groups.clear();
   }
 }

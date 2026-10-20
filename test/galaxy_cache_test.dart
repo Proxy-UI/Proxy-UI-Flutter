@@ -1,46 +1,48 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/flag_atlas.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_backdrop.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_painter.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/planet_atlas.dart';
+import 'package:proxy_ui/src/widgets/planet_glyph.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'planet textures are reused and released on background or theme change',
-    (tester) async {
-      final atlas = PlanetAtlas();
-      addTearDown(atlas.dispose);
-      final scheme = ColorScheme.fromSeed(seedColor: Colors.indigo);
-      atlas.palette(scheme);
-      var ready = 0;
-      void loaded() => ready++;
-      expect(atlas.imageFor(Colors.green, true, loaded), isNull);
-      atlas.enabled = true;
-      await tester.runAsync(() async {
-        atlas.imageFor(Colors.green, true, loaded);
-        for (var i = 0; i < 200 && ready == 0; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
-      });
-      final image = atlas.imageFor(Colors.green, true, loaded);
-      expect(image, isNotNull);
-      expect(atlas.imageFor(Colors.green, true, loaded), same(image));
-      atlas.enabled = false;
-      expect(image!.debugDisposed, isTrue);
-      expect(atlas.imageFor(Colors.green, true, loaded), isNull);
-      atlas.enabled = true;
-      await tester.runAsync(() async {
-        atlas.imageFor(Colors.green, true, loaded);
-        // A theme change invalidates even an in-flight rasterization.
-        atlas.palette(ColorScheme.fromSeed(seedColor: Colors.red));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      expect(ready, 1);
-    },
-  );
+  test('planet sprites are reused and released on background or theme '
+      'change', () {
+    final atlas = PlanetAtlas();
+    addTearDown(atlas.dispose);
+    atlas.palette(ColorScheme.fromSeed(seedColor: Colors.indigo));
+    void frame() {
+      final recorder = ui.PictureRecorder();
+      atlas.begin(Canvas(recorder), ratio: 2);
+      paintSphere(atlas, const Offset(20, 20), 8, Colors.green, dark: true);
+      atlas.end();
+      recorder.endRecording().dispose();
+    }
+
+    // A background canvas paints vectors and creates no image.
+    frame();
+    expect(atlas.debugImage, isNull);
+    atlas.enabled = true;
+    frame();
+    final image = atlas.debugImage;
+    expect(image, isNotNull);
+    frame();
+    expect(atlas.debugImage, same(image));
+    atlas.enabled = false;
+    expect(image!.debugDisposed, isTrue);
+    expect(atlas.debugImage, isNull);
+    atlas.enabled = true;
+    frame();
+    final themed = atlas.debugImage!;
+    atlas.palette(ColorScheme.fromSeed(seedColor: Colors.red));
+    expect(themed.debugDisposed, isTrue);
+    expect(PlanetAtlas.liveBytes, 0);
+  });
 
   test('different visible canvases keep independent backdrop caches', () {
     final dashboard = BackdropCache();
