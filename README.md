@@ -355,9 +355,10 @@ Build the complete Rust workspace and Windows UI together with:
 .\scripts\windows\build.ps1 -Configuration Release
 ```
 
-Version 2.0.8 requires native 0.6.7. Downloads, integrity/signature checks,
-disk logging, subscription HTTP, blocking process/proxy control and galaxy
-computation use the shared Rust runtime on supported platforms. The Windows
+Version 2.0.9 requires native 0.6.8. Downloads, integrity/signature checks,
+disk logging, subscription HTTP, blocking process/proxy control, galaxy
+computation and desktop app proxies use the shared Rust runtime on supported
+platforms. The Windows
 updater acknowledges its independent worker before quitting, verifies the
 installed version, and retains diagnostics on failure. A Windows installation
 with the old broken updater needs one manual installation of this release.
