@@ -82,7 +82,7 @@ class WindowsLaunchers(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             found = json.loads(result.stdout)
             self.assertEqual(len(found), 1)
-            self.assertEqual(Path(found[0]["appPath"]), folder / "app-2.0" / "Claude.exe")
+            self.assertTrue(Path(found[0]["appPath"]).samefile(folder / "app-2.0" / "Claude.exe"))
             self.assertEqual(found[0]["mode"], "chromium")
 
     @unittest.skipUnless(sys.platform == "win32", "Requires Windows shell/COM")
