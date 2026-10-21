@@ -101,6 +101,7 @@ def audit_bundle(app):
     info = plistlib.loads(info_path.read_bytes())
     executable = "Contents/MacOS/" + info["CFBundleExecutable"]
     for name in (executable, "Contents/MacOS/http-proxy-tun-helper",
+                 "Contents/MacOS/cipherrelay-app-launcher",
                  "Contents/Frameworks/libhttp_proxy.dylib"):
         if not (app / name).is_file():
             raise RuntimeError(f"Missing release component: {name}")

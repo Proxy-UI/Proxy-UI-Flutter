@@ -158,7 +158,6 @@ class _LauncherPageState extends State<LauncherPage> {
     await _run(
       () async => saved = await _service.setUp(
         app,
-        entries: _launchers,
         port: widget.defaultPort,
         suffix: suffix,
       ),

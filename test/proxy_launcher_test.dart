@@ -28,12 +28,7 @@ class FakeLaunchers extends ProxyLauncherService {
   final iconRequests = <List<String>>[];
 
   @override
-  Future<Object?> invokePlatform(
-    String action, [
-    Map<String, Object>? input,
-  ]) async {
-    if (action != 'icons') throw UnimplementedError(action);
-    final paths = input!['paths'] as List<String>;
+  Future<Map<Object?, Object?>> fetchIcons(List<String> paths) async {
     iconRequests.add(paths);
     // A 1x1 transparent PNG for every installed app.
     return {
@@ -41,6 +36,25 @@ class FakeLaunchers extends ProxyLauncherService {
         if (path.startsWith('/Applications/')) path: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
     };
   }
+
+  /// Stands in for the native one-click setup: defaults for a new app.
+  @override
+  Future<ProxyLauncher> setUp(
+    LauncherApplication app, {
+    required int port,
+    required String suffix,
+  }) => save(
+    ProxyLauncher(
+      name: app.mode == LauncherMode.claudeNative
+          ? app.name
+          : '${app.name} $suffix',
+      appPath: app.path,
+      applicationId: app.id,
+      mode: app.mode,
+      port: port,
+      bypassRules: ProxyLauncher.defaultBypassRules,
+    ),
+  );
 
   @override
   Future<List<LauncherApplication>> discoverApplications() async => discovered;
@@ -119,46 +133,29 @@ void main() {
   });
 
   test(
-    'setting up keeps existing settings and moves Claude to native',
-    () async {
-      final service = FakeLaunchers()
-        ..entries.addAll(const [
-          ProxyLauncher(
-            id: 'legacy',
-            name: 'My Claude',
-            appPath: '/Applications/Claude.app',
-            applicationId: 'com.anthropic.claudefordesktop',
-            mode: LauncherMode.chromium,
-            port: 19765,
-            bypassRules: ['*internal*'],
-          ),
-          ProxyLauncher(
-            id: 'codex',
-            name: 'My Codex',
-            appPath: '/Applications/Codex.app',
-            applicationId: 'com.openai.codex',
-            mode: LauncherMode.chromium,
-            port: 18080,
-            bypassRules: [],
-          ),
-        ]);
-      // A configured Codex is done; a launcher-based Claude can still upgrade.
-      expect(ProxyLauncherService.pending([_claude, _codex], service.entries), [
+    'detected apps exclude configured ones but offer Claude on a launcher',
+    () {
+      const legacy = ProxyLauncher(
+        id: 'legacy',
+        name: 'My Claude',
+        appPath: '/Applications/Claude.app',
+        applicationId: 'com.anthropic.claudefordesktop',
+        mode: LauncherMode.chromium,
+        port: 19765,
+        bypassRules: [],
+      );
+      const codex = ProxyLauncher(
+        id: 'codex',
+        name: 'My Codex',
+        appPath: '/Applications/Codex.app',
+        applicationId: 'com.openai.codex',
+        mode: LauncherMode.chromium,
+        port: 18080,
+        bypassRules: [],
+      );
+      expect(ProxyLauncherService.pending([_claude, _codex], [legacy, codex]), [
         _claude,
       ]);
-      final claude = await service.setUp(
-        _claude,
-        entries: service.entries,
-        port: 18765,
-        suffix: 'Proxy',
-      );
-      expect(claude.isNative, isTrue);
-      expect(claude.port, 19765);
-      expect(claude.bypassRules, ['*internal*']);
-      expect(
-        ProxyLauncherService.pending([_claude, _codex], service.entries),
-        isEmpty,
-      );
     },
   );
 

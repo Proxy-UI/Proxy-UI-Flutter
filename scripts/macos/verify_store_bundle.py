@@ -32,6 +32,7 @@ def main():
     for key in ['CFBundleShortVersionString', 'CFBundleVersion']:
         require(main_info[key] == extension_info[key], f'app and extension {key} differ')
     require(not list(app.rglob('http-proxy-tun-helper')), 'privileged helper in store bundle')
+    require(not list(app.rglob('cipherrelay-app-launcher')), 'app-proxy launcher in store bundle')
     library = app / 'Contents/Frameworks/libhttp_proxy.dylib'
     require(b'_proxy_packet_tunnel_create' in run('nm', '-gU', library), 'wrong native library feature')
     binaries = [app / 'Contents/MacOS' / main_info['CFBundleExecutable'], extension / 'Contents/MacOS' / extension_info['CFBundleExecutable'], library]

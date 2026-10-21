@@ -3,6 +3,13 @@
 macOS 直装版和 Windows 的侧边栏提供 **应用代理 / App proxies**。
 先连接 CipherRelay，无需 TUN。Claude 优先使用原生配置，Codex 及其他应用使用启动器。
 
+全部逻辑和持久化都在 Rust 核心 `proxy-ui-services::app_proxies`（父仓库）：
+应用检测、规则校验与匹配、Claude 配置合并与恢复、规则入口、启动器生成，
+以及每个启动器运行的 `cipherrelay-app-launcher`。界面通过
+`proxy_operation_start_v1` 的 `app_proxies` 操作调用它；Flutter 只负责界面、
+用 `file_selector` 选择应用，以及在 macOS 上用 `NSWorkspace` 绘制图标。
+Android、iOS、Linux 和 Mac App Store 版本不编译这部分。
+
 页面上方是已配置的应用，下方 **检测到的应用** 列出已安装、尚未配置的 Claude 和 Codex，
 每个应用都显示它自己的图标（macOS 取自 `NSWorkspace`，Windows 取自系统 Shell 图标）：
 
@@ -102,14 +109,15 @@ Chromium / Electron 模式同时传递 `--proxy-server`、
 
 ## 文件和生命周期 / Files and lifecycle
 
-- macOS：`~/Applications/CipherRelay Launchers/` 下的独立 `.app`。
-  Xcode 构建时编译辅助程序并随 CipherRelay 分发，生成时复制、签名并校验；
-  用户电脑不需要 Swift 编译器。配置在生成包的 `Contents/Resources/launcher.json`。
+- macOS：`~/Applications/CipherRelay Launchers/` 下的独立 `.app`。可执行文件是
+  随 CipherRelay 分发的 `cipherrelay-app-launcher` 副本，生成时复制、签名并校验。
+  配置在生成包的 `Contents/Resources/launcher.json`。
   在同一目录暂存后替换，保存失败时保留原包。
-- Windows：`%LOCALAPPDATA%\CipherRelay\ProxyLaunchers\<id>\` 保存 JSON、
-  PowerShell 辅助脚本和 `.lnk`。无需额外安装 PowerShell。
-  快捷方式通过系统 Windows PowerShell 启动；不修改系统或用户环境变量。
-  企业策略若禁止 PowerShell 或 COM，此功能可能无法使用。
+- Windows：`%LOCALAPPDATA%\CipherRelay\ProxyLaunchers\<id>\` 保存 `launcher.json`、
+  `CipherRelayLauncher.exe`（同一启动器的副本）和 `.lnk`。快捷方式由系统 Shell
+  接口创建，不依赖 PowerShell；不修改系统或用户环境变量。
+- 文件格式与第一版相同，已有配置和启动器无需迁移；第一版生成的启动器保留原来的
+  可执行文件，编辑保存后换成新的启动器。
 - 保存后必须完全退出并重开目标应用。Windows 对运行中的应用提示退出；
   macOS 对 Chromium 启动参数匹配的运行实例直接激活，否则提示退出。
   启动器不终止用户进程。
@@ -121,26 +129,28 @@ Chromium / Electron 模式同时传递 `--proxy-server`、
 
 ## 开发验证 / Development verification
 
-从 Flutter 子仓库运行：
+在父仓库运行 Rust 测试；macOS 和 Windows 各自运行本平台的启动器集成测试：
+
+```sh
+cargo test -p proxy-ui-services
+cargo test -p proxy-ffi app_proxies
+```
+
+macOS 集成测试用真实的 `cipherrelay-app-launcher` 生成签名启动器，通过
+LaunchServices 打开一个只记录收到的环境变量和参数的测试应用，并验证路径转义、
+独立配置、原位更新和失败保留。Windows 集成测试创建真实的 Shell 快捷方式并检查
+启动参数，不实际启动应用。规则入口与 Claude 配置的测试在两个平台都运行。
+
+在 Flutter 子仓库运行：
 
 ```sh
 fvm flutter analyze --no-fatal-infos
 fvm flutter test
-fvm flutter build macos --debug
-python3 scripts/macos/test_proxy_launcher.py
-python3 scripts/test_windows_proxy_launcher.py
 ```
 
-macOS 原生测试生成临时签名启动器，实际启动无界面的测试应用，验证路径转义、
-环境变量、浏览器参数、独立配置、原位更新和失败保留；结束后清理测试文件。
-Windows 脚本测试在 Windows 上验证真实 COM 快捷方式创建和编辑，并把自己的
-测试启动器移到回收站。在其他系统上需设置 `POWERSHELL=/path/to/pwsh`，
-验证语法、参数与规则转换（原生配置文件和本机路由由跨平台 Dart 测试覆盖），Win32 进程枚举被测试替身替换，COM 测试明确跳过。
-这不能替代 Windows 桌面端到端验收。
-
-Windows CI 会运行真实 COM 快捷方式测试、跨平台配置与路由测试；仓库内 PR
-还会使用校验过 SHA-256 的原生发布库构建桌面应用，并检查 DLL 和启动器脚本齐全。
-CI 构建仅用于验证，不发布安装包，也不替代 Claude / Codex 的交互式实机验收。
+Flutter CI 使用校验过 SHA-256 的原生发布库构建 Windows 桌面应用，并检查
+`cipherrelay-app-launcher.exe` 等文件齐全。这些不替代 Claude / Codex 的交互式实机验收。
 
 完整 Windows 构建从父仓库使用 `scripts/windows/build.ps1`，
-确认 `CipherRelay.exe`、`http_proxy.dll`、`wintun.dll` 和 `data` 完整。
+确认 `CipherRelay.exe`、`http_proxy.dll`、`wintun.dll`、`cipherrelay-app-launcher.exe`
+和 `data` 完整。
