@@ -1088,48 +1088,68 @@
   "updateFailedPermission": "Allow CipherRelay to install apps in the settings that just opened, then try again.",
   "updateOpenReleasePage": "Open release page",
   "appLaunchers": "App proxies",
-  "launchersHint": "Configure proxy ports and direct rules per app without TUN. Claude uses native settings; Codex uses a launcher. Keep CipherRelay running and connected.",
-  "createLauncher": "Add application",
+  "createLauncher": "Add app",
   "proxyLauncherSuffix": "Proxy Launcher",
-  "launcherOperationFailed": "Could not complete the operation.",
-  "noLaunchers": "No apps configured yet. Add an application or use automatic setup.",
-  "openLauncher": "Launch",
-  "editLauncher": "Edit settings",
+  "noLaunchers": "Send a single app through CipherRelay, without TUN.",
+  "detectedApps": "Detected",
+  "setUpApp": "Add",
+  "openLauncher": "Open",
+  "editLauncher": "Edit",
   "revealLauncher": "Show in folder",
-  "trashLauncher": "Move to Trash / Recycle Bin",
-  "trashLauncherHint": "Only this generated launcher will be moved. The target application and its data are preserved.",
-  "launcherPlacementHint": "Claude native settings: open the original app icon. Launchers: use Show in folder, then add to the Dock on macOS or copy the shortcut to the Windows desktop.",
-  "launcherName": "Configuration name",
-  "invalidLauncherName": "Enter a name without path characters, up to 80 characters.",
-  "targetApplication": "Target application",
-  "chooseApplication": "Choose application",
-  "launchMode": "Launch mode",
-  "chromiumMode": "Chromium / Electron app",
-  "environmentMode": "Proxy environment only",
-  "launchModeHint": "Chromium / Electron mode supplies browser proxy flags and backend environment variables for apps such as Codex, Chrome and Edge. Other apps can use environment-only mode; the app must support proxy variables. This does not capture all traffic.",
-  "invalidLauncherPort": "Port must be between 1 and 65535.",
-  "directRules": "Direct rules (bypass proxy)",
-  "loopbackAlwaysDirect": "Loopback always direct",
-  "directRulesHint": "One host rule per line. *oa* matches page hostnames containing oa; .example.com matches the domain and its subdomains. Enter hosts, IPv4 addresses or host globs, not URL paths. An empty list keeps only loopback bypasses.",
-  "environmentRulesHint": "Arbitrary globs such as *oa* apply only to Chromium / Electron pages. Backend NO_PROXY receives compatible hosts and domain suffixes; defaults also include .oa.com and .woa.com. Environment-only mode does not apply *oa*.",
-  "invalidLauncherRules": "Invalid rules: one host or glob per line, up to 200 rules. URLs, ports and commands are not supported.",
-  "resetLauncherRules": "Restore default bypass rules",
-  "launcherRestartHint": "Fully quit the target app, then reopen it through the launcher to apply saved changes. Each launcher saves its own port; update it if the local proxy port changes.",
-  "saveLauncher": "Save and generate",
-  "refreshLaunchers": "Refresh",
-  "generateKnownLaunchers": "Set up common apps",
-  "knownLaunchersHint": "Detect Claude and Codex. New entries use the current Proxy configuration port and OA direct rules. Existing settings are preserved; supported Claude launchers are migrated to native settings.",
-  "noKnownLauncherApps": "No installed Claude or Codex apps found. Add another app manually.",
-  "launchersCreated": "Configured",
-  "launchersKept": "Already exists; settings preserved",
-  "claudeNativeMode": "Claude native configuration",
-  "claudeNativeHint": "Use Claude’s original icon. CipherRelay routes the app and its agent through the selected local proxy, applying the same direct rules to both. Requires Claude 1.44121.1 or later; managed policies are preserved.",
-  "nativeRulesHint": "These rules apply to both Claude’s app requests and its agent, including *oa*. Matching is case-insensitive and uses only the destination hostname.",
-  "nativeRestartHint": "After saving, fully quit and reopen Claude from its original icon. Keep CipherRelay running. Each app keeps its saved port; use the current Proxy port button after changing the proxy configuration.",
-  "saveNativeProxy": "Save and apply",
-  "removeNativeProxy": "Remove proxy configuration",
-  "removeNativeProxyHint": "Restore the proxy keys present before CipherRelay configured Claude. Preserve later external edits and all other Claude settings. Restart Claude afterward.",
-  "currentProxyPort": "Current Proxy port",
-  "useCurrentProxyPort": "Use current Proxy port",
-  "nativeRoutingUnavailable": "Native routing could not start. Check for another CipherRelay instance, or edit and save this configuration to repair it."
+  "removeAppProxy": "Remove",
+  "removeAppProxyTitle": "Remove {name}?",
+  "@removeAppProxyTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "trashLauncherHint": "The launcher moves to the Trash. The app itself is untouched.",
+  "removeNativeProxyHint": "Claude's previous proxy settings are restored.",
+  "launcherName": "Launcher name",
+  "invalidLauncherName": "Up to 80 characters, without path symbols",
+  "chooseApplication": "Change",
+  "chromiumMode": "Chromium / Electron",
+  "environmentMode": "Environment variables",
+  "invalidLauncherPort": "Use a port from 1 to 65535",
+  "directRules": "Direct rules",
+  "addDirectRule": "Add host",
+  "directRuleCount": "{count, plural, =0{No direct rules} =1{1 direct rule} other{{count} direct rules}}",
+  "@directRuleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invalidLauncherRules": "Enter a host, domain or pattern such as *oa*",
+  "tooManyLauncherRules": "Up to 200 rules",
+  "ruleSkippedByEnvironment": "Patterns apply in Chromium / Electron mode only",
+  "resetLauncherRules": "Restore defaults",
+  "useCurrentProxyPort": "Use proxy port {port}",
+  "@useCurrentProxyPort": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "appProxyReopen": "Quit {app} and reopen it to apply.",
+  "@appProxyReopen": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "appProxyReopenLauncher": "Quit {app}, then open it here to apply.",
+  "@appProxyReopenLauncher": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "nativeRoutingUnavailable": "Routing stopped. Open and save to repair."
 }

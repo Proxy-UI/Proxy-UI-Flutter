@@ -26,12 +26,12 @@ class ProxyLauncher {
 
   bool get isNative => mode == LauncherMode.claudeNative;
 
-  ProxyLauncher withMode(LauncherMode value, {String? newId}) => ProxyLauncher(
-    id: newId ?? id,
+  ProxyLauncher copyWith({LauncherMode? mode, int? port}) => ProxyLauncher(
+    id: id,
     name: name,
     appPath: appPath,
-    mode: value,
-    port: port,
+    mode: mode ?? this.mode,
+    port: port ?? this.port,
     bypassRules: bypassRules,
     applicationId: applicationId,
     launcherPath: launcherPath,
@@ -60,12 +60,21 @@ class ProxyLauncher {
     'applicationId': ?applicationId,
   };
 
+  /// Accepts pasted lists separated by lines, spaces or commas.
   static List<String> parseRules(String text) => text
-      .split('\n')
-      .map((line) => line.trim().toLowerCase())
-      .where((line) => line.isNotEmpty)
+      .split(RegExp(r'[\s,;]+'))
+      .map((rule) => rule.trim().toLowerCase())
+      .where((rule) => rule.isNotEmpty)
       .toSet()
       .toList();
+
+  /// Whether a launcher passes [rule] to backend NO_PROXY as well as to
+  /// Chromium. NO_PROXY has no portable arbitrary glob, so environment-only
+  /// launchers drop patterns such as `*oa*`; native Claude routing keeps them.
+  static bool appliesToEnvironment(String rule) =>
+      !rule.contains('*') ||
+      rule == '*' ||
+      (rule.startsWith('*.') && !rule.substring(1).contains('*'));
 
   static bool validRules(List<String> rules) =>
       rules.length <= 200 &&

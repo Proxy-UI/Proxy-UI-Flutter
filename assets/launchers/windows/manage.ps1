@@ -1,4 +1,4 @@
-﻿param([Parameter(Mandatory = $true)][ValidateSet('List', 'Discover', 'Choose', 'Save', 'Open', 'Reveal', 'Trash', 'ValidateNative', 'OpenNative', 'RevealNative')][string]$Action)
+﻿param([Parameter(Mandatory = $true)][ValidateSet('List', 'Discover', 'Icons', 'Choose', 'Save', 'Open', 'Reveal', 'Trash', 'ValidateNative', 'OpenNative', 'RevealNative')][string]$Action)
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -47,6 +47,24 @@ try {
             Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') -ArgumentList ('/select,"' + $inputData.path + '"')
         }
         'Discover' { Output-Json @(Find-LauncherApplications) }
+        'Icons' {
+            # The shell's large icon, as the TUN process picker shows it.
+            Add-Type -AssemblyName System.Drawing
+            $icons = @{}
+            foreach ($path in @($inputData.paths)) {
+                try {
+                    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+                    $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($path)
+                    $bitmap = $icon.ToBitmap()
+                    $stream = [IO.MemoryStream]::new()
+                    try {
+                        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+                        $icons[$path] = [Convert]::ToBase64String($stream.ToArray())
+                    } finally { $stream.Dispose(); $bitmap.Dispose(); $icon.Dispose() }
+                } catch { }
+            }
+            Output-Json $icons
+        }
         'List' {
             $items = @()
             if (Test-Path -LiteralPath $root) {

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -29,13 +30,6 @@ class LauncherApplication {
           : path == launcher.appPath);
 }
 
-class LauncherGenerationResult {
-  const LauncherGenerationResult(this.created, this.existing, this.failures);
-  final List<String> created;
-  final List<String> existing;
-  final Map<String, Object> failures;
-}
-
 class ProxyLauncherService {
   static const channel = MethodChannel('proxy_ui/launchers');
 
@@ -60,6 +54,8 @@ class ProxyLauncherService {
           : '${Platform.environment['HOME']}/Library/Application Support/Claude-3p/configLibrary',
     ),
   );
+
+  final _icons = <String, Uint8List?>{};
 
   Future<Object?> invokePlatform(String action, [Map<String, Object>? input]) =>
       channel.invokeMethod<Object?>(action, input);
@@ -90,46 +86,53 @@ class ProxyLauncherService {
           .map((item) => LauncherApplication.fromJson(item as Map))
           .toList();
 
-  /// Preserve existing settings, including after an installed app moves or
-  /// updates. A failed app must not prevent the other apps from being added.
-  Future<LauncherGenerationResult> generateKnownApplications({
+  /// Detected apps still to set up: those without an entry, and Claude when
+  /// it can move from a generated launcher to native settings.
+  static List<LauncherApplication> pending(
+    List<LauncherApplication> apps,
+    List<ProxyLauncher> entries,
+  ) => apps.where((app) {
+    final previous = entries.where(app.hasLauncher).firstOrNull;
+    return previous == null ||
+        (app.mode == LauncherMode.claudeNative && !previous.isNative);
+  }).toList();
+
+  /// Preserve an existing entry's port and rules, including after an
+  /// installed app moves or updates.
+  Future<ProxyLauncher> setUp(
+    LauncherApplication app, {
+    required List<ProxyLauncher> entries,
     required int port,
     required String suffix,
-  }) async {
-    final apps = await discoverApplications();
-    final entries = await list();
-    final created = <String>[];
-    final existing = <String>[];
-    final failures = <String, Object>{};
-    for (final app in apps) {
-      final previous = entries.where(app.hasLauncher).firstOrNull;
-      if (previous != null &&
-          !(app.mode == LauncherMode.claudeNative && !previous.isNative)) {
-        existing.add(app.name);
-        continue;
-      }
-      try {
-        entries.add(
-          await save(
-            previous?.withMode(app.mode) ??
-                ProxyLauncher(
-                  name: app.mode == LauncherMode.claudeNative
-                      ? app.name
-                      : '${app.name} $suffix',
-                  appPath: app.path,
-                  applicationId: app.id,
-                  mode: app.mode,
-                  port: port,
-                  bypassRules: ProxyLauncher.defaultBypassRules,
-                ),
-          ),
-        );
-        created.add(app.name);
-      } catch (error) {
-        failures[app.name] = error;
+  }) => save(
+    entries.where(app.hasLauncher).firstOrNull?.copyWith(mode: app.mode) ??
+        ProxyLauncher(
+          name: app.mode == LauncherMode.claudeNative
+              ? app.name
+              : '${app.name} $suffix',
+          appPath: app.path,
+          applicationId: app.id,
+          mode: app.mode,
+          port: port,
+          bypassRules: ProxyLauncher.defaultBypassRules,
+        ),
+  );
+
+  /// Application icons by path, fetched from the platform once per path.
+  /// Paths without an icon are left out.
+  Future<Map<String, Uint8List>> icons(Iterable<String> paths) async {
+    final missing = paths.where((path) => !_icons.containsKey(path)).toSet();
+    if (missing.isNotEmpty) {
+      final found =
+          (await invokePlatform('icons', {'paths': missing.toList()})
+              as Map?) ??
+          const {};
+      for (final path in missing) {
+        final encoded = found[path];
+        _icons[path] = encoded is String ? base64Decode(encoded) : null;
       }
     }
-    return LauncherGenerationResult(created, existing, failures);
+    return {for (final path in paths) path: ?_icons[path]};
   }
 
   Future<ProxyLauncher> save(ProxyLauncher launcher) async {

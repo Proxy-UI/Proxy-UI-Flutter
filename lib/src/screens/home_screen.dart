@@ -77,8 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
       label: context.l10n.subscription,
     ),
     _Destination.launchers => (
-      icon: Icons.rocket_launch_outlined,
-      selected: Icons.rocket_launch,
+      icon: Icons.apps_outlined,
+      selected: Icons.apps,
       label: context.l10n.appLaunchers,
     ),
   };

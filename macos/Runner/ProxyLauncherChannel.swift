@@ -24,6 +24,10 @@ final class ProxyLauncherChannel {
                     switch call.method {
                     case "discover":
                         value = LauncherApplication.discover().map(\.dictionary)
+                    case "icons":
+                        let paths = args["paths"] as? [String] ?? []
+                        DispatchQueue.main.async { reply(Self.icons(paths)) }
+                        return
                     case "validateNative":
                         guard let path = args["appPath"] as? String,
                               let application = LauncherApplication(URL(fileURLWithPath: path)),
@@ -135,6 +139,27 @@ final class ProxyLauncherChannel {
             }
             reply(application.dictionary)
         }
+    }
+
+    /// Finder's icon for each existing path as base64 PNG, drawn at twice the
+    /// size the page shows so it stays sharp on Retina displays.
+    private static func icons(_ paths: [String]) -> [String: String] {
+        let side = 96
+        var result: [String: String] = [:]
+        for path in paths where FileManager.default.fileExists(atPath: path) {
+            guard let bitmap = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side,
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+            ) else { continue }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+            NSWorkspace.shared.icon(forFile: path)
+                .draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+            NSGraphicsContext.restoreGraphicsState()
+            result[path] = bitmap.representation(using: .png, properties: [:])?.base64EncodedString()
+        }
+        return result
     }
 
     private static func id(_ args: [String: Any]) throws -> String {

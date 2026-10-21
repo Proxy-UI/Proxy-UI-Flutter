@@ -5,6 +5,7 @@ and the Windows runtime's argument/environment generation; Win32 process lookup
 is stubbed only in that non-Windows check. Windows additionally exercises real
 COM shortcut creation, reload, independent edits, and failed-save preservation.
 """
+import base64
 import json
 import os
 from pathlib import Path
@@ -111,6 +112,9 @@ class WindowsLaunchers(unittest.TestCase):
             entries = {item["id"]: item for item in call("List", {})}
             self.assertEqual(entries[first["id"]]["bypassRules"], [])
             self.assertEqual(entries[second["id"]]["bypassRules"], [".example.test"])
+            icons = call("Icons", dict(paths=[sys.executable, "C:\\missing-test-app.exe"]))
+            self.assertEqual(list(icons), [sys.executable])
+            self.assertTrue(base64.b64decode(icons[sys.executable]).startswith(b"\x89PNG"))
         finally:
             for identifier in created:
                 call("Trash", dict(id=identifier))

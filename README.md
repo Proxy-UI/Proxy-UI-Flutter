@@ -55,8 +55,9 @@ Android retains `com.proxyui.proxy_ui`, Apple direct apps retain
 
 The **App proxies** sidebar configures Claude natively and creates per-app
 launchers for Codex and other apps on macOS (direct download) and Windows.
-New entries use the current Proxy configuration's local port, with editable
-ports and host bypass rules; `*oa*` is direct by default.
+Installed apps are listed with their own icons and set up in one click with
+the current Proxy port; ports and host bypass rules stay editable per app, and
+`*oa*` is direct by default.
 See [setup, matching semantics and limitations](docs/app-launchers.md).
 
 ## Interface language
