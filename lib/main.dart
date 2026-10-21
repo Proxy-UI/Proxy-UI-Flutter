@@ -26,6 +26,7 @@ import 'src/services/desktop_settings.dart';
 import 'src/services/single_instance_service.dart';
 import 'src/services/tray_service.dart';
 import 'src/services/window_state_service.dart';
+import 'src/services/proxy_launcher_service.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,6 +56,15 @@ void main(List<String> arguments) async {
     return;
   }
   await AppLanguage.instance.load();
+  if (ProxyLauncherService.isSupported) {
+    try {
+      // Restore native app routing before an app is opened from its usual icon.
+      await ProxyLauncherService.forPlatform().initialize();
+    } catch (error) {
+      debugPrint('App proxy routing could not start: $error');
+      // The app proxy page retries and presents the actionable error.
+    }
+  }
   final enableTunOnStartup =
       arguments.contains('--enable-tun') && !BuildCapabilities.isMacAppStore;
   final desktopLogService = DesktopLogService();

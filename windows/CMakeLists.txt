@@ -131,3 +131,10 @@ if(EXISTS "${PROXY_LIB_DIR}/cipherrelay-updater.exe")
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# Each generated app-proxy launcher runs a copy of this executable.
+if(EXISTS "${PROXY_LIB_DIR}/cipherrelay-app-launcher.exe")
+  install(FILES "${PROXY_LIB_DIR}/cipherrelay-app-launcher.exe"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()

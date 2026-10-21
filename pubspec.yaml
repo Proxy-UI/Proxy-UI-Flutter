@@ -58,6 +58,11 @@ dependencies:
   package_info_plus: ^10.2.2
   # Opens a release's page from the update dialog.
   url_launcher: ^6.3.3
+  # Picks an app for App proxies. Only the desktop implementations are listed,
+  # so mobile builds carry no file-picker plugin for a feature they lack.
+  file_selector_platform_interface: ^2.7.0
+  file_selector_macos: ^0.9.5
+  file_selector_windows: ^0.9.3
 
 dev_dependencies:
   # Independent reference implementations for native crypto integration tests.

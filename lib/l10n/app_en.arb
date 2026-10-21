@@ -1086,5 +1086,72 @@
   "updateFailedVerification": "The new version failed its signature check, so nothing was replaced.",
   "updateFailedInstall": "The update could not be installed.",
   "updateFailedPermission": "Allow CipherRelay to install apps in the settings that just opened, then try again.",
-  "updateOpenReleasePage": "Open release page"
+  "updateOpenReleasePage": "Open release page",
+  "appLaunchers": "App proxies",
+  "createLauncher": "Add app",
+  "proxyLauncherSuffix": "Proxy Launcher",
+  "noLaunchers": "Send a single app through CipherRelay, without TUN.",
+  "detectedApps": "Detected",
+  "detectApps": "Detect installed apps",
+  "detectingApps": "Detecting apps…",
+  "setUpApp": "Add",
+  "openLauncher": "Open",
+  "editLauncher": "Edit",
+  "revealLauncher": "Show in folder",
+  "removeAppProxy": "Remove",
+  "removeAppProxyTitle": "Remove {name}?",
+  "@removeAppProxyTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "trashLauncherHint": "The launcher moves to the Trash. The app itself is untouched.",
+  "removeNativeProxyHint": "Claude's previous proxy settings are restored.",
+  "launcherName": "Launcher name",
+  "invalidLauncherName": "Up to 80 characters, without path symbols",
+  "chooseApplication": "Change",
+  "chromiumMode": "Chromium / Electron",
+  "environmentMode": "Environment variables",
+  "invalidLauncherPort": "Use a port from 1 to 65535",
+  "directRules": "Direct rules",
+  "addDirectRule": "Add host",
+  "directRuleCount": "{count, plural, =0{No direct rules} =1{1 direct rule} other{{count} direct rules}}",
+  "@directRuleCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "invalidLauncherRules": "Enter a host, domain or pattern such as *oa*",
+  "tooManyLauncherRules": "Up to 200 rules",
+  "ruleSkippedByEnvironment": "Patterns apply in Chromium / Electron mode only",
+  "resetLauncherRules": "Restore defaults",
+  "useCurrentProxyPort": "Use proxy port {port}",
+  "@useCurrentProxyPort": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "appProxyReopen": "Quit {app} and reopen it to apply.",
+  "@appProxyReopen": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "appProxyReopenLauncher": "Quit {app}, then open it here to apply.",
+  "@appProxyReopenLauncher": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "nativeRoutingUnavailable": "Routing stopped. Open and save to repair."
 }

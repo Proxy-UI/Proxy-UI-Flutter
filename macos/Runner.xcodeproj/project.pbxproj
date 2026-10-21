@@ -21,6 +21,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		A17C00000000000000000013 /* ProxyLauncherChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17C00000000000000000003 /* ProxyLauncherChannel.swift */; };
 		281804BBE7A73E8A146C9546 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 917DB924830B3ABF009DC954 /* Pods_RunnerTests.framework */; };
 		2BB09162F088F934352C382C /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 09E5894E16A431B4C2B904EA /* Pods_Runner.framework */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
@@ -104,6 +105,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A17C00000000000000000003 /* ProxyLauncherChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProxyLauncherChannel.swift; path = "ProxyLauncherChannel.swift"; sourceTree = "<group>"; };
 		055D9D8A5ED433A5F94B29AB /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		08DEC60F98F3E398F7C6680C /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		09E5894E16A431B4C2B904EA /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -280,6 +282,7 @@
 			isa = PBXGroup;
 			children = (
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
+				A17C00000000000000000003 /* ProxyLauncherChannel.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
@@ -574,7 +577,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed && cp \"$PROJECT_DIR/../native/macos/libhttp_proxy.dylib\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Frameworks/\" 2>/dev/null || true\n# The privileged TUN helper goes next to the main executable so native code can\n# find it relative to its own path. macOS needs root to create a utun device and\n# cannot elevate a running app, so without this the TUN switch only ever reports\n# a missing helper.\ncp \"$PROJECT_DIR/../native/macos/http-proxy-tun-helper\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/MacOS/\" 2>/dev/null || true\n";
+			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed && cp \"$PROJECT_DIR/../native/macos/libhttp_proxy.dylib\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Frameworks/\" 2>/dev/null || true\n# The privileged TUN helper goes next to the main executable so native code can\n# find it relative to its own path. macOS needs root to create a utun device and\n# cannot elevate a running app, so without this the TUN switch only ever reports\n# a missing helper.\ncp \"$PROJECT_DIR/../native/macos/http-proxy-tun-helper\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/MacOS/\" 2>/dev/null || true\n# Each generated app-proxy launcher runs a copy of this executable.\ncp \"$PROJECT_DIR/../native/macos/cipherrelay-app-launcher\" \"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/MacOS/\" 2>/dev/null || true\n";
 		};
 		33CC111E2044C6BF0003C045 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -693,6 +696,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
+
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -710,6 +714,7 @@
 			files = (
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
+				A17C00000000000000000013 /* ProxyLauncherChannel.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

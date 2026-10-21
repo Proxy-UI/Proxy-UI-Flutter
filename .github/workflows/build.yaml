@@ -63,6 +63,8 @@ jobs:
             # macOS needs root to create a utun device and cannot elevate a
             # running app, so TUN mode runs in this separately authorized helper.
             cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/http-proxy-tun-helper" "native/macos/http-proxy-tun-helper-${target}"
+            # Each generated app-proxy launcher runs a copy of this executable.
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/cipherrelay-app-launcher" "native/macos/cipherrelay-app-launcher-${target}"
           done
 
           # Windows
@@ -80,6 +82,7 @@ jobs:
             esac
             cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/http_proxy.dll" "native/windows/$dest/"
             cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/cipherrelay-updater.exe" "native/windows/$dest/"
+            cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/cipherrelay-app-launcher.exe" "native/windows/$dest/"
             cp "$WORK_DIR/libhttp_proxy-${LIB_VERSION}-${target}/wintun.dll" "native/windows/$dest/"
           done
 
@@ -152,8 +155,11 @@ jobs:
             libhttp_proxy-aarch64-apple-darwin.dylib -output libhttp_proxy.dylib
           lipo -create http-proxy-tun-helper-x86_64-apple-darwin \
             http-proxy-tun-helper-aarch64-apple-darwin -output http-proxy-tun-helper
+          lipo -create cipherrelay-app-launcher-x86_64-apple-darwin \
+            cipherrelay-app-launcher-aarch64-apple-darwin -output cipherrelay-app-launcher
           lipo libhttp_proxy.dylib -verify_arch arm64 x86_64
           lipo http-proxy-tun-helper -verify_arch arm64 x86_64
+          lipo cipherrelay-app-launcher -verify_arch arm64 x86_64
           # The Runner links -lhttp_proxy (see macos/Runner/Configs/Release.xcconfig),
           # and the linker copies whatever install name the dylib carries at that
           # moment into the executable's load command. Rust publishes it with the
@@ -168,6 +174,8 @@ jobs:
             chmod +x http-proxy-tun-helper
             codesign --force --sign - http-proxy-tun-helper
           fi
+          chmod +x cipherrelay-app-launcher
+          codesign --force --sign - cipherrelay-app-launcher
           ls -la
 
       - uses: subosito/flutter-action@v2.23.0
@@ -229,6 +237,13 @@ jobs:
             chmod +x "$APP_DIR/Contents/MacOS/http-proxy-tun-helper"
           else
             echo "::error::http-proxy-tun-helper is missing; macOS TUN mode would not work"
+            exit 1
+          fi
+          if [ -f native/macos/cipherrelay-app-launcher ]; then
+            cp native/macos/cipherrelay-app-launcher "$APP_DIR/Contents/MacOS/cipherrelay-app-launcher"
+            chmod +x "$APP_DIR/Contents/MacOS/cipherrelay-app-launcher"
+          else
+            echo "::error::cipherrelay-app-launcher is missing; app proxies could not create launchers"
             exit 1
           fi
       - name: Sign, notarize and verify macOS release
@@ -308,7 +323,7 @@ jobs:
         shell: pwsh
         run: |
           $bundle = 'build/windows/x64/runner/Release'
-          foreach ($required in @('CipherRelay.exe', 'cipherrelay-updater.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
+          foreach ($required in @('CipherRelay.exe', 'cipherrelay-updater.exe', 'cipherrelay-app-launcher.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')) {
             if (-not (Test-Path -LiteralPath (Join-Path $bundle $required))) {
               throw "Windows release bundle is missing $required"
             }

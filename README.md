@@ -51,6 +51,15 @@ Android retains `com.proxyui.proxy_ui`, Apple direct apps retain
 `com.proxyui.proxyUi`, and the Mac App Store edition retains
 `com.proxyui.proxyUi.store`.
 
+## App proxies
+
+The **App proxies** sidebar configures Claude natively and creates per-app
+launchers for Codex and other apps on macOS (direct download) and Windows.
+Installed apps are listed with their own icons and set up in one click with
+the current Proxy port; ports and host bypass rules stay editable per app, and
+`*oa*` is direct by default.
+See [setup, matching semantics and limitations](docs/app-launchers.md).
+
 ## Interface language
 
 The translate button in the global title bar selects **System default**,
