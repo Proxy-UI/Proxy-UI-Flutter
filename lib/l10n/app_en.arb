@@ -1092,6 +1092,8 @@
   "proxyLauncherSuffix": "Proxy Launcher",
   "noLaunchers": "Send a single app through CipherRelay, without TUN.",
   "detectedApps": "Detected",
+  "detectApps": "Detect installed apps",
+  "detectingApps": "Detecting apps…",
   "setUpApp": "Add",
   "openLauncher": "Open",
   "editLauncher": "Edit",

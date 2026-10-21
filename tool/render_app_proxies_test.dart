@@ -128,8 +128,9 @@ void main() {
       Size size,
       Brightness brightness,
       String language,
-      ProxyLauncherService service,
-    ) async {
+      ProxyLauncherService service, {
+      bool settle = true,
+    }) async {
       tester.view.physicalSize = size;
       await tester.pumpWidget(
         RepaintBoundary(
@@ -149,12 +150,15 @@ void main() {
           ),
         ),
       );
-      // Icons decode outside the fake clock.
+      // Icons decode outside the fake clock. Without settling, the page stays
+      // mid-scan: detection shows for at least 600 ms.
       for (var i = 0; i < 3; i++) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
         );
-        await tester.pumpAndSettle();
+        settle
+            ? await tester.pumpAndSettle()
+            : await tester.pump(const Duration(milliseconds: 150));
       }
     }
 
@@ -242,6 +246,25 @@ void main() {
     );
     await open(configuredZh[1].name);
     await capture('09-min-window-edit-dark-zh');
+
+    await show(
+      fullScreen,
+      Brightness.dark,
+      'zh',
+      _SampleLaunchers(configuredZh.sublist(1), [_claude, _codex]),
+      settle: false,
+    );
+    await capture('10-detecting-wide-dark-zh');
+    await tester.pumpAndSettle();
+    await show(
+      minimum,
+      Brightness.light,
+      'en',
+      _SampleLaunchers([], [_claude, _codex]),
+      settle: false,
+    );
+    await capture('11-detecting-min-window-light-en');
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(const SizedBox());
     tester.view.resetPhysicalSize();

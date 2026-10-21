@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/proxy_launcher.dart';
@@ -33,9 +34,13 @@ class LauncherApplication {
 class ProxyLauncherService {
   static const channel = MethodChannel('proxy_ui/launchers');
 
-  static bool get isSupported =>
-      (Platform.isMacOS && !BuildCapabilities.isMacAppStore) ||
-      Platform.isWindows;
+  /// Desktop only: Android, iOS, Linux and the sandboxed Mac App Store build
+  /// never show or start app proxies.
+  static bool get isSupported => switch (defaultTargetPlatform) {
+    TargetPlatform.windows => true,
+    TargetPlatform.macOS => !BuildCapabilities.isMacAppStore,
+    _ => false,
+  };
 
   static final ProxyLauncherService _instance = Platform.isWindows
       ? WindowsProxyLauncherService()
@@ -55,7 +60,7 @@ class ProxyLauncherService {
     ),
   );
 
-  final _icons = <String, Uint8List?>{};
+  final _icons = <String, Future<Uint8List?>>{};
 
   Future<Object?> invokePlatform(String action, [Map<String, Object>? input]) =>
       channel.invokeMethod<Object?>(action, input);
@@ -118,21 +123,27 @@ class ProxyLauncherService {
         ),
   );
 
-  /// Application icons by path, fetched from the platform once per path.
-  /// Paths without an icon are left out.
+  /// Application icons by path, fetched from the platform once per path,
+  /// including while an earlier request for it is still running. Paths
+  /// without an icon are left out; a failed request is retried next time.
   Future<Map<String, Uint8List>> icons(Iterable<String> paths) async {
     final missing = paths.where((path) => !_icons.containsKey(path)).toSet();
     if (missing.isNotEmpty) {
-      final found =
-          (await invokePlatform('icons', {'paths': missing.toList()})
-              as Map?) ??
-          const {};
+      final request = invokePlatform('icons', {'paths': missing.toList()});
       for (final path in missing) {
-        final encoded = found[path];
-        _icons[path] = encoded is String ? base64Decode(encoded) : null;
+        _icons[path] = request.then(
+          (found) => switch ((found as Map?)?[path]) {
+            final String encoded => base64Decode(encoded),
+            _ => null,
+          },
+          onError: (Object _) {
+            _icons.remove(path);
+            return null;
+          },
+        );
       }
     }
-    return {for (final path in paths) path: ?_icons[path]};
+    return {for (final path in paths) path: ?await _icons[path]};
   }
 
   Future<ProxyLauncher> save(ProxyLauncher launcher) async {

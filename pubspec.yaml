@@ -90,7 +90,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/tray/
-    - assets/launchers/windows/
+    - path: assets/launchers/windows/
+      platforms: [windows]
     # Load through FontLoader: font declarations cannot be platform-scoped.
     - path: assets/fonts/NotoSansSC-Variable.ttf
       platforms: [windows]

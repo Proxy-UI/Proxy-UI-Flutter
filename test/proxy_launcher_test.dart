@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,6 +105,18 @@ Future<FakeLaunchers> _pumpPage(WidgetTester tester, Size size) async {
 
 void main() {
   final strings = lookupAppLocalizations(const Locale('en'));
+
+  test('app proxies exist only on desktop builds', () {
+    for (final platform in TargetPlatform.values) {
+      debugDefaultTargetPlatformOverride = platform;
+      expect(
+        ProxyLauncherService.isSupported,
+        platform == TargetPlatform.macOS || platform == TargetPlatform.windows,
+        reason: '$platform',
+      );
+    }
+    debugDefaultTargetPlatformOverride = null;
+  });
 
   test(
     'setting up keeps existing settings and moves Claude to native',

@@ -458,6 +458,8 @@
   "proxyLauncherSuffix": "代理启动器",
   "noLaunchers": "让单个应用走 CipherRelay，无需 TUN。",
   "detectedApps": "检测到的应用",
+  "detectApps": "检测已安装的应用",
+  "detectingApps": "正在检测应用…",
   "setUpApp": "添加",
   "openLauncher": "打开",
   "editLauncher": "编辑",

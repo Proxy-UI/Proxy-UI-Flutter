@@ -36,6 +36,7 @@ class _LauncherPageState extends State<LauncherPage> {
   Map<String, Uint8List> _icons = {};
   bool _loaded = false;
   bool _busy = false;
+  bool _detecting = false;
   String? _error;
 
   /// The app shown beside the list on a wide window.
@@ -50,25 +51,31 @@ class _LauncherPageState extends State<LauncherPage> {
   @override
   void initState() {
     super.initState();
-    _run(() async {
-      // Detection only adds suggestions; it must not hide configured apps.
-      final detected = _service.discoverApplications().then(
-        (apps) => apps,
-        onError: (Object _) => <LauncherApplication>[],
-      );
-      try {
-        await _reload();
-      } finally {
-        final apps = await detected;
-        if (mounted) {
-          setState(() {
-            _detected = apps;
-            _loaded = true;
-          });
-        }
-        unawaited(_loadIcons());
-      }
+    // Configured apps show as soon as they load; detection runs beside them.
+    Future.wait([
+      _run(_reload).then((_) => _loadIcons()),
+      _detect().then((_) => _loadIcons()),
+    ]).whenComplete(() {
+      if (mounted) setState(() => _loaded = true);
     });
+  }
+
+  /// Detection only adds suggestions, so a failure leaves the page usable.
+  /// The scan stays visible briefly even when it returns at once, rather
+  /// than flashing.
+  Future<void> _detect() async {
+    setState(() => _detecting = true);
+    try {
+      final (apps, _) = await (
+        _service.discoverApplications(),
+        Future<void>.delayed(const Duration(milliseconds: 600)),
+      ).wait;
+      if (mounted) setState(() => _detected = apps);
+    } catch (_) {
+      // Keep the previous suggestions.
+    } finally {
+      if (mounted) setState(() => _detecting = false);
+    }
   }
 
   ProxyLauncher? get _selected =>
@@ -372,7 +379,14 @@ class _LauncherPageState extends State<LauncherPage> {
               ?.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
-      if (add) _addButton(wide: wide),
+      IconButton(
+        onPressed: _detecting
+            ? null
+            : () => _detect().then((_) => _loadIcons()),
+        tooltip: context.l10n.detectApps,
+        icon: const Icon(Icons.radar),
+      ),
+      if (add) ...[const SizedBox(width: 4), _addButton(wide: wide)],
     ],
   );
 
@@ -402,11 +416,11 @@ class _LauncherPageState extends State<LauncherPage> {
               ),
           ],
         ),
-      if (pending.isNotEmpty) ...[
+      if (_detecting || pending.isNotEmpty) ...[
         Padding(
           padding: EdgeInsets.fromLTRB(4, _launchers.isEmpty ? 0 : 28, 4, 10),
           child: Text(
-            strings.detectedApps,
+            _detecting ? strings.detectingApps : strings.detectedApps,
             style: theme.textTheme.titleSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -414,17 +428,20 @@ class _LauncherPageState extends State<LauncherPage> {
         ),
         _Group(
           children: [
-            for (final app in pending)
-              _AppRow(
-                key: ValueKey(app.path),
-                icon: _icons[app.path],
-                title: app.name,
-                trailing: FilledButton.icon(
-                  onPressed: _busy ? null : () => _setUp(app),
-                  icon: const Icon(Icons.add),
-                  label: Text(strings.setUpApp),
+            if (_detecting)
+              for (var i = 0; i < 2; i++) const _DetectingRow()
+            else
+              for (final app in pending)
+                _AppRow(
+                  key: ValueKey(app.path),
+                  icon: _icons[app.path],
+                  title: app.name,
+                  trailing: FilledButton.icon(
+                    onPressed: _busy ? null : () => _setUp(app),
+                    icon: const Icon(Icons.add),
+                    label: Text(strings.setUpApp),
+                  ),
                 ),
-              ),
           ],
         ),
       ],
@@ -646,6 +663,93 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A placeholder row while installed apps are being detected. The shimmer
+/// lives only as long as a scan and repaints only itself.
+class _DetectingRow extends StatefulWidget {
+  const _DetectingRow();
+
+  @override
+  State<_DetectingRow> createState() => _DetectingRowState();
+}
+
+class _DetectingRowState extends State<_DetectingRow>
+    with SingleTickerProviderStateMixin {
+  late final _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    MediaQuery.disableAnimationsOf(context) ? _sweep.stop() : _sweep.repeat();
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final base = scheme.surfaceContainerHighest;
+    // A lighter band in both themes.
+    final glow = scheme.brightness == Brightness.dark
+        ? Color.alphaBlend(scheme.onSurface.withValues(alpha: 0.14), base)
+        : Color.alphaBlend(scheme.surface.withValues(alpha: 0.75), base);
+    Widget block(double width, double height) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: base,
+        borderRadius: BorderRadius.circular(height / 2.5),
+      ),
+    );
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _sweep,
+        builder: (context, child) => ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) => LinearGradient(
+            colors: [base, glow, base],
+            stops: const [0.3, 0.5, 0.7],
+            transform: _Slide(_sweep.value * 2 - 1),
+          ).createShader(bounds),
+          child: child,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              block(40, 40),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: block(120, 14),
+                ),
+              ),
+              block(84, 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Slide extends GradientTransform {
+  const _Slide(this.offset);
+
+  final double offset;
+
+  @override
+  Matrix4 transform(Rect bounds, {TextDirection? textDirection}) =>
+      Matrix4.translationValues(bounds.width * offset, 0, 0);
 }
 
 class _AppRow extends StatelessWidget {
