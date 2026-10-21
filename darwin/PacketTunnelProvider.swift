@@ -201,7 +201,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     let footprint = result == KERN_SUCCESS ? info.phys_footprint : 0
     peakFootprint = max(peakFootprint, footprint)
     trafficLock.lock()
-    let snapshot: [String: Any] = [
+    var snapshot: [String: Any] = [
       "running": running, "pid": ProcessInfo.processInfo.processIdentifier,
       "uptimeSeconds": Date().timeIntervalSince(startedAt),
       "receivedBytes": receivedBytes, "receivedPackets": receivedPackets,
@@ -210,6 +210,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       "footprintBytes": footprint, "peakFootprintBytes": peakFootprint,
     ]
     trafficLock.unlock()
+    if let handle = tunnel, let stats = proxy_packet_tunnel_routing_stats(handle) {
+      defer { proxy_free_string(stats) }
+      if let data = String(cString: stats).data(using: .utf8),
+        let routing = try? JSONSerialization.jsonObject(with: data) {
+        snapshot["routing"] = routing
+      }
+    }
     if let url = diagnosticsURL, let data = try? JSONSerialization.data(withJSONObject: snapshot, options: .sortedKeys) {
       try? data.write(to: url, options: .atomic)
     }

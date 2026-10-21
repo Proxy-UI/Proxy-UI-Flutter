@@ -8,7 +8,9 @@ import 'l10n/app_language.dart';
 import 'dart:async' show unawaited;
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, LicenseRegistry, LicenseEntryWithLineBreaks;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:toastification/toastification.dart';
@@ -30,6 +32,11 @@ import 'src/services/proxy_launcher_service.dart';
 
 void main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'china-operator-ip',
+    ], await rootBundle.loadString('assets/licenses/china-operator-ip.txt'));
+  });
   await WindowsTypography.initialize();
   try {
     await WindowsStorageMigration.initialize();
