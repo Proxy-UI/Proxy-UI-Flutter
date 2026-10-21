@@ -7,6 +7,7 @@ int32_t proxy_packet_tunnel_write(const PacketTunnelRuntime *handle, const uint8
 int32_t proxy_packet_tunnel_read(const PacketTunnelRuntime *handle, uint8_t *bytes, size_t capacity);
 void proxy_packet_tunnel_cancel(const PacketTunnelRuntime *handle);
 char *proxy_packet_tunnel_last_error(const PacketTunnelRuntime *handle);
+char *proxy_packet_tunnel_routing_stats(const PacketTunnelRuntime *handle);
 void proxy_packet_tunnel_destroy(PacketTunnelRuntime *handle);
 void proxy_free_string(char *value);
 
