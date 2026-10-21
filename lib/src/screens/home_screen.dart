@@ -1,21 +1,25 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 
+import '../providers/proxy_provider.dart';
 import '../services/app_brand.dart';
 import '../services/build_capabilities.dart';
+import '../services/proxy_launcher_service.dart';
 import '../widgets/app_window_title_bar.dart';
 import '../updates/update_dialog.dart';
 import '../widgets/appearance_controls.dart';
 import 'dashboard_page.dart';
 import 'log_page.dart';
+import 'launcher_page.dart';
 import 'nodes/nodes_page.dart';
 import 'store_demo_screen.dart';
 import 'store_privacy_screen.dart';
 import 'subscription_page.dart';
 
-enum _Destination { proxy, nodes, logs, subscription }
+enum _Destination { proxy, nodes, logs, launchers, subscription }
 
 /// The application shell: a navigation rail beside the page on wide
 /// windows, a navigation bar beneath it on phones, and a power control that
@@ -38,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _Destination.proxy,
     _Destination.nodes,
     _Destination.logs,
+    if (ProxyLauncherService.isSupported) _Destination.launchers,
     if (!BuildCapabilities.usesPacketTunnel) _Destination.subscription,
   ];
 
@@ -71,6 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
       selected: Icons.cloud_download,
       label: context.l10n.subscription,
     ),
+    _Destination.launchers => (
+      icon: Icons.rocket_launch_outlined,
+      selected: Icons.rocket_launch,
+      label: context.l10n.appLaunchers,
+    ),
   };
 
   Widget _page() => switch (_current) {
@@ -79,6 +89,11 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
     _Destination.nodes => NodesPage(initialSelection: _nodesSelection),
     _Destination.logs => const LogPage(),
+    _Destination.launchers => LauncherPage(
+      defaultPort: context.select<ProxyState, int>(
+        (state) => state.config.localPort,
+      ),
+    ),
     _Destination.subscription => const SubscriptionPage(),
   };
 

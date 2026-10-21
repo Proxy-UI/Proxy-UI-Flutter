@@ -18,6 +18,58 @@ env:
   FLUTTER_VERSION: '3.47.7'
 
 jobs:
+  windows-launchers:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Verify Windows launcher generation and isolation
+        run: python scripts/test_windows_proxy_launcher.py
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/setup-fvm
+      - name: Verify app proxy routing and native configuration on Windows
+        run: |
+          fvm flutter pub get
+          fvm flutter test test/app_proxy_router_test.dart test/claude_native_proxy_test.dart test/proxy_launcher_test.dart
+      # Fork PRs cannot download private native release inputs. Their launcher
+      # and Dart tests still run without credentials.
+      - name: Stage verified native libraries
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP 'app-proxy-native'
+          New-Item -ItemType Directory -Force $work, native/windows/x64 | Out-Null
+          $name = "libhttp_proxy-$env:LIB_VERSION-x86_64-pc-windows-msvc"
+          gh release download $env:LIB_VERSION -R $env:PRIVATE_REPO -p "$name.zip" -p SHA256SUMS -D $work
+          if ($LASTEXITCODE -ne 0) { throw 'Native release download failed' }
+          $line = @(Get-Content (Join-Path $work 'SHA256SUMS') | Where-Object {
+            $_ -match ("^[0-9a-fA-F]{64}\s+\*?" + [regex]::Escape("$name.zip") + '$')
+          })
+          if ($line.Count -ne 1) { throw 'Native archive checksum is missing or ambiguous' }
+          $expected = ($line[0] -split '\s+')[0]
+          $archive = Join-Path $work "$name.zip"
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected) { throw 'Native archive checksum mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $work
+          foreach ($file in @('http_proxy.dll', 'wintun.dll', 'cipherrelay-updater.exe')) {
+            Copy-Item -LiteralPath (Join-Path $work "$name/$file") -Destination native/windows/x64/
+          }
+      - name: Build and verify the Windows desktop bundle
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        shell: pwsh
+        run: |
+          fvm flutter build windows --debug
+          if ($LASTEXITCODE -ne 0) { throw 'Windows build failed' }
+          $bundle = 'build/windows/x64/runner/Debug'
+          foreach ($file in @('CipherRelay.exe', 'http_proxy.dll', 'wintun.dll', 'cipherrelay-updater.exe', 'flutter_windows.dll', 'data/flutter_assets/assets/launchers/windows/manage.ps1')) {
+            if (-not (Test-Path (Join-Path $bundle $file))) { throw "Missing bundle file: $file" }
+          }
+
   analyze-and-test:
     runs-on: ubuntu-latest
     steps:
