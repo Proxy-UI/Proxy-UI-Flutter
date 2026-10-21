@@ -20,7 +20,7 @@ class DesktopReleaseTest(unittest.TestCase):
         self.artifacts.mkdir()
         bundle = self.root / 'bundle'
         (bundle / 'data').mkdir(parents=True)
-        for name in ('CipherRelay.exe', 'http_proxy.dll', 'cipherrelay-updater.exe', 'wintun.dll', 'flutter_windows.dll', 'data/icudtl.dat'):
+        for name in ('CipherRelay.exe', 'http_proxy.dll', 'cipherrelay-updater.exe', 'cipherrelay-app-launcher.exe', 'wintun.dll', 'flutter_windows.dll', 'data/icudtl.dat'):
             (bundle / name).write_bytes(b'fixture')
         self.zip = package(bundle, self.artifacts / 'windows-packages')
         self.exe = self.artifacts / artifact_name('windows', 'x64-setup', 'exe')

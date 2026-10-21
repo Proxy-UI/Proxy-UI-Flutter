@@ -6,7 +6,7 @@ import zipfile
 
 from release_artifact_name import artifact_name
 
-REQUIRED = ('CipherRelay.exe', 'cipherrelay-updater.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')
+REQUIRED = ('CipherRelay.exe', 'cipherrelay-updater.exe', 'cipherrelay-app-launcher.exe', 'http_proxy.dll', 'wintun.dll', 'flutter_windows.dll', 'data')
 
 
 def package(bundle, output_directory):
