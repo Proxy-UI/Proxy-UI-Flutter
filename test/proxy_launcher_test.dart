@@ -69,6 +69,39 @@ class FakeLaunchers extends ProxyLauncherService {
       entries.removeWhere((item) => item.id == launcher.id);
 }
 
+Future<FakeLaunchers> _pumpPage(WidgetTester tester, Size size) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final service = FakeLaunchers()
+    ..discovered = [_claude, _codex]
+    ..entries.add(
+      const ProxyLauncher(
+        id: 'codex',
+        name: 'Codex Proxy Launcher',
+        appPath: '/Applications/Codex.app',
+        applicationId: 'com.openai.codex',
+        mode: LauncherMode.chromium,
+        port: 18080,
+        bypassRules: ['.internal.example'],
+      ),
+    );
+  await tester.pumpWidget(
+    ToastificationWrapper(
+      child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: LauncherPage(defaultPort: 18765, service: service),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return service;
+}
+
 void main() {
   final strings = lookupAppLocalizations(const Locale('en'));
 
@@ -156,35 +189,8 @@ void main() {
   testWidgets('add a detected app, sync its port, edit rules, and remove it', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1100, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final service = FakeLaunchers()
-      ..discovered = [_claude, _codex]
-      ..entries.add(
-        const ProxyLauncher(
-          id: 'codex',
-          name: 'Codex Proxy Launcher',
-          appPath: '/Applications/Codex.app',
-          applicationId: 'com.openai.codex',
-          mode: LauncherMode.chromium,
-          port: 18080,
-          bypassRules: ['.internal.example'],
-        ),
-      );
-    await tester.pumpWidget(
-      ToastificationWrapper(
-        child: MaterialApp(
-          locale: const Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: LauncherPage(defaultPort: 18765, service: service),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+    // The smallest desktop window edits in a dialog.
+    final service = await _pumpPage(tester, const Size(800, 900));
 
     // Only Claude is offered; one click uses the current port and defaults.
     expect(find.text(strings.setUpApp), findsOneWidget);
@@ -241,6 +247,39 @@ void main() {
     expect(service.entries.map((entry) => entry.id), [claude.id]);
     expect(find.byIcon(Icons.error_outline), findsNothing);
     // Let the confirmation toasts close.
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+  });
+
+  testWidgets('a wide window edits the selected app beside the list', (
+    tester,
+  ) async {
+    final service = await _pumpPage(tester, const Size(1400, 900));
+    VoidCallback? save() => tester
+        .widget<FilledButton>(find.widgetWithText(FilledButton, strings.save))
+        .onPressed;
+    ProxyLauncher codex() =>
+        service.entries.singleWhere((entry) => entry.id == 'codex');
+
+    // The first app is open beside the list; Save waits for a change.
+    expect(find.text('/Applications/Codex.app'), findsOneWidget);
+    expect(save(), isNull);
+
+    // A one-click setup selects the new app.
+    await tester.tap(find.text(strings.setUpApp));
+    await tester.pumpAndSettle();
+    expect(find.text('/Applications/Claude.app'), findsOneWidget);
+
+    await tester.tap(find.text('Codex Proxy Launcher').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '18080'), '19000');
+    await tester.pump();
+    expect(save(), isNotNull);
+    await tester.tap(find.widgetWithText(FilledButton, strings.save));
+    await tester.pumpAndSettle();
+    expect(codex().port, 19000);
+    // The panel shows the saved settings again, with nothing left to save.
+    expect(find.widgetWithText(TextField, '19000'), findsOneWidget);
+    expect(save(), isNull);
     await tester.pumpAndSettle(const Duration(seconds: 5));
   });
 }

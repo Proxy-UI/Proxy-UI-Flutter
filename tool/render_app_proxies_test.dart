@@ -182,7 +182,10 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    const desktop = Size(1100, 760);
+    // Content sizes beside the navigation rail: a full-screen 1080p window,
+    // a laptop window, and the smallest window the app allows.
+    const fullScreen = Size(1840, 1000);
+    const laptop = Size(1360, 820);
     const minimum = Size(704, 600);
     final zh = lookupAppLocalizations(const Locale('zh'));
     final en = lookupAppLocalizations(const Locale('en'));
@@ -190,64 +193,55 @@ void main() {
     final configuredEn = _configured(en.proxyLauncherSuffix);
 
     await show(
-      desktop,
+      fullScreen,
+      Brightness.dark,
+      'zh',
+      _SampleLaunchers(configuredZh, [_claude, _codex]),
+    );
+    await capture('01-wide-dark-zh');
+    await open(configuredZh[1].name);
+    await capture('02-wide-codex-dark-zh');
+
+    await show(
+      laptop,
+      Brightness.light,
+      'en',
+      _SampleLaunchers(configuredEn, [_claude, _codex]),
+    );
+    await open(configuredEn[2].name);
+    await capture('03-wide-environment-light-en');
+    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.pumpAndSettle();
+    await capture('04-wide-remove-light-en');
+
+    await show(
+      laptop,
       Brightness.light,
       'zh',
       _SampleLaunchers([], [_claude, _codex]),
     );
-    await capture('01-first-run-light-zh');
-    await show(desktop, Brightness.dark, 'en', _SampleLaunchers([], []));
-    await capture('02-empty-dark-en');
+    await capture('05-wide-first-run-light-zh');
+    await show(laptop, Brightness.dark, 'en', _SampleLaunchers([], []));
+    await capture('06-empty-dark-en');
 
-    await show(
-      desktop,
-      Brightness.light,
-      'zh',
-      _SampleLaunchers(configuredZh, [_claude, _codex]),
-    );
-    await capture('03-configured-light-zh');
-    await open(configuredZh[1].name);
-    await capture('04-edit-launcher-light-zh');
-
-    await show(
-      desktop,
-      Brightness.dark,
-      'en',
-      _SampleLaunchers(configuredEn, [_claude, _codex]),
-    );
-    await capture('05-configured-dark-en');
-    await open(configuredEn[2].name);
-    await capture('06-edit-environment-dark-en');
-    await tester.tap(find.text(en.cancel));
-    await tester.pumpAndSettle();
-    await open('Claude');
-    await capture('07-edit-claude-dark-en');
-    await tester.tap(find.text(en.cancel));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.more_vert).first);
-    await tester.pumpAndSettle();
-    await capture('08-row-menu-dark-en');
-    await tester.tap(find.text(en.removeAppProxy));
-    await tester.pumpAndSettle();
-    await capture('09-remove-dark-en');
-
-    // The smallest desktop window (800x600) leaves this beside the rail.
     await show(
       minimum,
       Brightness.light,
       'en',
       _SampleLaunchers(configuredEn.sublist(1), [_claude, _codex]),
     );
-    await capture('10-min-window-light-en');
+    await capture('07-min-window-light-en');
+    await tester.tap(find.byIcon(Icons.more_vert).first);
+    await tester.pumpAndSettle();
+    await capture('08-min-window-menu-light-en');
     await show(
       minimum,
       Brightness.dark,
       'zh',
       _SampleLaunchers(configuredZh, [_claude, _codex]),
     );
-    await capture('11-min-window-dark-zh');
     await open(configuredZh[1].name);
-    await capture('12-edit-min-window-dark-zh');
+    await capture('09-min-window-edit-dark-zh');
 
     await tester.pumpWidget(const SizedBox());
     tester.view.resetPhysicalSize();
