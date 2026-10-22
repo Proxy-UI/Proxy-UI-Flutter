@@ -68,7 +68,7 @@ class ProxyConfigModel {
        // answers makes iOS prefer IPv6 even when the selected node lacks it.
        tunFakeIp = tunFakeIp ?? BuildCapabilities.isIOS,
        udpDirectFallback =
-           udpDirectFallback ?? BuildCapabilities.supportsUdpDirectFallback,
+           udpDirectFallback ?? !BuildCapabilities.usesPacketTunnel,
        tunBypassProcesses = _normalizeProcessNames(tunBypassProcesses),
        tunBypassWeGame =
            tunBypassWeGame ?? suggestsWeGameBypass(tunBypassProcesses),
@@ -134,11 +134,13 @@ class ProxyConfigModel {
         allowLan: _parseBool(json['allowLan'], false),
         sessionKey: json['sessionKey']?.toString(),
         autoProxy: _parseBool(json['autoProxy'], true),
-        // Imported configurations created by older versions keep the
-        // historical behavior, where SOCKS5 UDP was always available.
-        udpEnabled: _parseBool(json['udpEnabled'], true),
-        // Preserve the Mihomo-style direct fallback for imported configs.
-        udpDirectFallback: _parseBool(json['udpDirectFallback'], true),
+        // UDP proxying is opt-in, including legacy and imported configs.
+        udpEnabled: _parseBool(json['udpEnabled'], false),
+        // Retain explicit legacy desktop fallback preferences.
+        udpDirectFallback: _parseBool(
+          json['udpDirectFallback'],
+          !BuildCapabilities.usesPacketTunnel,
+        ),
         // TUN is opt-in so legacy configurations never start changing system
         // routes after an application upgrade.
         tunEnabled: _parseBool(json['tunEnabled'], false),

@@ -233,7 +233,7 @@
   "autoProxy": "自动分流",
   "routeTrafficBasedOnGeoLocation": "根据地理位置选择路由",
   "socksUdp": "SOCKS5 UDP",
-  "proxyUdpThroughTheServer": "通过服务器代理 UDP",
+  "proxyUdpThroughTheServer": "手动启用后通过服务器代理 UDP，不参与 Auto 属地分流",
   "directUdpFallback": "UDP 直连回退",
   "whenSocksUdpIsOffSendVpnTunUdp": "关闭 SOCKS5 UDP 时，让 VPN/TUN 的 UDP 流量直连，而非阻断",
   "reverseGeo": "反向地区分流",
@@ -484,5 +484,8 @@
   "useCurrentProxyPort": "使用代理端口 {port}",
   "appProxyReopen": "完全退出 {app} 后重新打开即可生效。",
   "appProxyReopenLauncher": "完全退出 {app}，再从这里打开即可生效。",
-  "nativeRoutingUnavailable": "路由已停止，打开并保存即可修复。"
+  "nativeRoutingUnavailable": "路由已停止，打开并保存即可修复。",
+  "packetTunnelUdpProxyDescription": "大陆 UDP 始终直连；开启后代理境外 UDP，否则立即拒绝。需服务器支持 UDP，与 TCP Auto 开关无关。",
+  "tcpProxyUdpCountryProxy": "{value0} / UDP：大陆直连，境外代理",
+  "tcpProxyUdpCountryReject": "{value0} / UDP：大陆直连，境外拒绝"
 }

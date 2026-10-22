@@ -9,7 +9,8 @@ import 'proxy_service.dart';
 import 'native_proxy_operations.dart';
 
 /// Apple VPN builds run forwarding inside the packet provider. Inherited FFI
-/// methods still handle the node catalogue and probes in the containing app.
+/// methods handle the catalogue and disconnected probes in the containing app.
+/// Connected probes run in the provider so they cannot re-enter the VPN.
 class ApplePacketTunnelProxyService extends ProxyService {
   final AppleVpnService _vpn;
   String? _error;
@@ -38,8 +39,8 @@ class ApplePacketTunnelProxyService extends ProxyService {
     int localPort = 1080,
     String? sessionKey,
     bool autoProxy = true,
-    bool udpEnabled = true,
-    bool udpDirectFallback = true,
+    bool udpEnabled = false,
+    bool udpDirectFallback = false,
     bool tunEnabled = false,
     bool tunFakeIp = false,
     String tunDnsServer = '8.8.8.8',
@@ -64,8 +65,8 @@ class ApplePacketTunnelProxyService extends ProxyService {
         'udpEnabled': udpEnabled,
         'tunFakeIp': tunFakeIp,
         'tunDnsServer': tunDnsServer,
-        'udpDirectFallback':
-            BuildCapabilities.supportsUdpDirectFallback && udpDirectFallback,
+        // Legacy field cannot override the provider's fixed country policy.
+        'udpDirectFallback': false,
         'reverseGeo': !BuildCapabilities.isMacAppStore && reverseGeo,
       });
       _localPort = localPort;
@@ -117,6 +118,90 @@ class ApplePacketTunnelProxyService extends ProxyService {
       },
     );
     return result['latencyMs'] as int;
+  }
+
+  @override
+  Future<NodeProbe> probeNode({
+    required String serverHost,
+    required int serverPort,
+    bool secureTransport = false,
+    int timeoutMs = 10000,
+  }) => isRunning
+      ? _probeInProvider(
+          (host: serverHost, port: serverPort),
+          secureTransport: secureTransport,
+          timeoutMs: timeoutMs,
+        )
+      : super.probeNode(
+          serverHost: serverHost,
+          serverPort: serverPort,
+          secureTransport: secureTransport,
+          timeoutMs: timeoutMs,
+        );
+
+  Future<NodeProbe> _probeInProvider(
+    NodeProbeTarget target, {
+    required bool secureTransport,
+    required int timeoutMs,
+  }) async {
+    try {
+      final result = await _vpn.probeNode(
+        host: target.host,
+        port: target.port,
+        secureTransport: secureTransport,
+        timeoutMs: timeoutMs,
+      );
+      return NodeProbe(
+        success: result['success'] == true,
+        countryCode: result['countryCode'] as String? ?? '',
+        egressIp: result['egressIp'] as String? ?? '',
+        latencyMs: result['latencyMs'] as int?,
+        error: result['error'] as String?,
+      );
+    } catch (error) {
+      return NodeProbe(success: false, error: error.toString());
+    }
+  }
+
+  @override
+  Stream<(int, NodeProbe)> probeNodes(
+    List<NodeProbeTarget> targets, {
+    bool secureTransport = false,
+    int timeoutMs = 10000,
+  }) {
+    if (!isRunning) {
+      return super.probeNodes(
+        targets,
+        secureTransport: secureTransport,
+        timeoutMs: timeoutMs,
+      );
+    }
+    // Keep one route for the whole batch, including across disconnects. Falling
+    // back into the app midway would mix tunneled and direct measurements.
+    late final StreamController<(int, NodeProbe)> results;
+    var cancelled = false;
+    results = StreamController(
+      onCancel: () => cancelled = true,
+      onListen: () {
+        var next = 0;
+        Future<void> worker() async {
+          while (!cancelled && next < targets.length) {
+            final index = next++;
+            final probe = await _probeInProvider(
+              targets[index],
+              secureTransport: secureTransport,
+              timeoutMs: timeoutMs,
+            );
+            if (!cancelled) results.add((index, probe));
+          }
+        }
+
+        Future.wait([
+          for (var i = 0; i < targets.length && i < 4; i++) worker(),
+        ]).whenComplete(results.close);
+      },
+    );
+    return results.stream;
   }
 
   @override
