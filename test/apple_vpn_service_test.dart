@@ -67,15 +67,15 @@ void main() {
       final service = ApplePacketTunnelProxyService(vpn: vpn);
       addTearDown(service.dispose);
       final results = await service.probeNodes([
-        for (var i = 0; i < 9; i++) (host: 'node-$i.example', port: 1081),
+        for (var i = 0; i < 33; i++) (host: 'node-$i.example', port: 1081),
       ]).toList();
       expect(results.map((value) => value.$1).toSet(), {
-        for (var i = 0; i < 9; i++) i,
+        for (var i = 0; i < 33; i++) i,
       });
-      expect(vpn.calls, 9);
-      expect(vpn.peak, 4);
-      expect(results.where((value) => value.$2.success).length, 4);
-      expect(results.where((value) => !value.$2.success).length, 5);
+      expect(vpn.calls, 33);
+      expect(vpn.peak, 16);
+      expect(results.where((value) => value.$2.success).length, 16);
+      expect(results.where((value) => !value.$2.success).length, 17);
     },
   );
 

@@ -40,24 +40,17 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       let timeoutMs = request["timeoutMs"] as? Int, (1...30000).contains(timeoutMs)
     else { respond(["success": false, "error": "Invalid node probe request"]); return }
     stateQueue.async {
-      guard self.tunnel != nil, !self.stopping, self.starting == nil, self.activeProbes < 4 else {
+      guard self.tunnel != nil, !self.stopping, self.starting == nil, self.activeProbes < 32 else {
         respond(["success": false, "error": "VPN is unavailable or node probes are busy"])
         return
       }
       let generation = self.generation
       self.activeProbes += 1
-      DispatchQueue.global(qos: .utility).async {
-        var probe = host.withCString {
-          proxy_probe_node_v3($0, UInt16(port), 0, UInt32(timeoutMs), Int32(protocolVersion))
-        }
-        let value: [String: Any] = [
-          "success": probe.success == 1,
-          "countryCode": probe.country_code.map { String(cString: $0) } ?? "",
-          "egressIp": probe.egress_ip.map { String(cString: $0) } ?? "",
-          "latencyMs": probe.latency_ms,
-          "error": probe.error.map { String(cString: $0) } as Any? ?? NSNull(),
-        ]
-        proxy_free_node_probe_result(&probe)
+      // The same async runtime used by desktop/Android owns the sockets. Do
+      // not park a GCD worker per node or serialize a catalogue behind four
+      // unresponsive nodes. The app admits 16; leave room for a separate test.
+      ProviderNodeProbe.start(host: host, port: UInt16(port), timeoutMs: UInt32(timeoutMs),
+                              protocolVersion: Int32(protocolVersion)) { value in
         self.stateQueue.async {
           self.activeProbes -= 1
           guard generation == self.generation, !self.stopping else {
@@ -301,5 +294,50 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     let completions = stopCompletions
     stopCompletions.removeAll()
     completions.forEach { $0() }
+  }
+}
+
+/// A native batch owns copied target strings and delivers exactly once. The
+/// retained context lives until that callback, including a tunnel stop; the
+/// provider checks its generation before returning the result to the app.
+private final class ProviderNodeProbe {
+  private let completion: ([String: Any]) -> Void
+
+  private init(_ completion: @escaping ([String: Any]) -> Void) {
+    self.completion = completion
+  }
+
+  static func start(host: String, port: UInt16, timeoutMs: UInt32, protocolVersion: Int32,
+                    completion: @escaping ([String: Any]) -> Void) {
+    let context = Unmanaged.passRetained(ProviderNodeProbe(completion))
+    let token = UInt64(UInt(bitPattern: context.toOpaque()))
+    var port = port
+    let status = host.withCString { host in
+      var pointer: UnsafePointer<CChar>? = host
+      return proxy_probe_nodes_v1(&pointer, &port, 1, 1, timeoutMs, protocolVersion, { token, _, result in
+        guard let address = UnsafeRawPointer(bitPattern: UInt(token)) else { return }
+        let context = Unmanaged<ProviderNodeProbe>.fromOpaque(address).takeRetainedValue()
+        guard let result = result else {
+          context.completion(["success": false, "error": "Node probe returned no result"])
+          return
+        }
+        defer { proxy_release_node_probe_result(result) }
+        let probe = result.pointee
+        autoreleasepool {
+          context.completion([
+            "success": probe.success == 1,
+            "countryCode": probe.country_code.map { String(cString: $0) } ?? "",
+            "egressIp": probe.egress_ip.map { String(cString: $0) } ?? "",
+            "latencyMs": probe.latency_ms,
+            "error": probe.error.map { String(cString: $0) } as Any? ?? NSNull(),
+          ])
+        }
+      }, token)
+    }
+    if status != 0 {
+      // Rejected batches never invoke their callback.
+      context.release()
+      completion(["success": false, "error": "Cannot start the node probe (\(status))"])
+    }
   }
 }
