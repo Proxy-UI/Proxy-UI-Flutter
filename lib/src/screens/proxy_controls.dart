@@ -173,6 +173,11 @@ String connectionModeLabel(BuildContext context, ProxyState state) {
   final strings = context.l10n;
   if (state.isTunRunning) {
     final capture = captureIsVpn ? 'VPN' : 'TUN';
+    if (BuildCapabilities.usesPacketTunnel) {
+      return state.config.udpEnabled
+          ? strings.tcpProxyUdpCountryProxy(capture)
+          : strings.tcpProxyUdpCountryReject(capture);
+    }
     if (state.config.udpEnabled) return strings.tcpUdpProxy(capture);
     return state.config.udpDirectFallback
         ? strings.tcpProxyUdpDirect(capture)

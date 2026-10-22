@@ -13,18 +13,30 @@ void main() {
     expect(config.toJson()['allowLan'], isFalse);
   });
 
-  test('legacy config imports with UDP enabled', () {
+  test('legacy imports leave UDP proxying disabled', () {
     final config = ProxyConfigModel.fromJson({
       'serverHost': 'proxy.example.com',
       'localPort': 1080,
     });
 
-    expect(config.udpEnabled, isTrue);
+    expect(config.udpEnabled, isFalse);
     expect(config.udpDirectFallback, isTrue);
     expect(config.tunEnabled, isFalse);
     expect(config.tunBypassProcesses, isEmpty);
     expect(config.allowLan, isFalse);
-    expect(config.toJson()['udpEnabled'], isTrue);
+    expect(config.toJson()['udpEnabled'], isFalse);
+  });
+
+  test('explicit UDP opt-in survives Auto configuration and persistence', () {
+    final config = ProxyConfigModel(
+      autoProxy: true,
+      reverseGeo: true,
+      udpEnabled: true,
+    );
+    final restored = ProxyConfigModel.fromJson(config.toJson());
+    expect(restored.udpEnabled, isTrue);
+    expect(restored.copyWith(autoProxy: false).udpEnabled, isTrue);
+    expect(restored.copyWith(udpEnabled: false).autoProxy, isTrue);
   });
 
   test('LAN exposure is opt-in and survives persistence and copyWith', () {

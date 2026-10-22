@@ -21,6 +21,54 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private var diagnosticsURL: URL?
   private var peakFootprint: UInt64 = 0
   private var startedAt = Date()
+  private var activeProbes = 0
+
+  // Probe sockets must originate in the provider. A containing-app probe is
+  // captured by this VPN and measures selected-node -> candidate-node instead.
+  override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
+    guard let completion = completionHandler else { return }
+    let respond: ([String: Any]) -> Void = { value in
+      completion(try? JSONSerialization.data(withJSONObject: value))
+    }
+    guard messageData.count <= 4096,
+      let request = try? JSONSerialization.jsonObject(with: messageData) as? [String: Any],
+      request["operation"] as? String == "probeNode",
+      let host = request["host"] as? String, !host.isEmpty, host.utf8.count <= 253,
+      !host.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+      let port = request["port"] as? Int, (1...65535).contains(port),
+      let protocolVersion = request["protocol"] as? Int, [0, 3].contains(protocolVersion),
+      let timeoutMs = request["timeoutMs"] as? Int, (1...30000).contains(timeoutMs)
+    else { respond(["success": false, "error": "Invalid node probe request"]); return }
+    stateQueue.async {
+      guard self.tunnel != nil, !self.stopping, self.starting == nil, self.activeProbes < 4 else {
+        respond(["success": false, "error": "VPN is unavailable or node probes are busy"])
+        return
+      }
+      let generation = self.generation
+      self.activeProbes += 1
+      DispatchQueue.global(qos: .utility).async {
+        var probe = host.withCString {
+          proxy_probe_node_v3($0, UInt16(port), 0, UInt32(timeoutMs), Int32(protocolVersion))
+        }
+        let value: [String: Any] = [
+          "success": probe.success == 1,
+          "countryCode": probe.country_code.map { String(cString: $0) } ?? "",
+          "egressIp": probe.egress_ip.map { String(cString: $0) } ?? "",
+          "latencyMs": probe.latency_ms,
+          "error": probe.error.map { String(cString: $0) } as Any? ?? NSNull(),
+        ]
+        proxy_free_node_probe_result(&probe)
+        self.stateQueue.async {
+          self.activeProbes -= 1
+          guard generation == self.generation, !self.stopping else {
+            respond(["success": false, "error": "VPN changed while probing the node"])
+            return
+          }
+          respond(value)
+        }
+      }
+    }
+  }
 
   override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
     stateQueue.async {

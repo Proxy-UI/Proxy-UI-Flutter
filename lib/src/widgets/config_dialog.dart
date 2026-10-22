@@ -63,8 +63,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
     _allowLan = !BuildCapabilities.usesPacketTunnel && config.allowLan;
     _autoProxy = !BuildCapabilities.isMacAppStore && config.autoProxy;
     _udpEnabled = config.udpEnabled;
-    _udpDirectFallback =
-        BuildCapabilities.supportsUdpDirectFallback && config.udpDirectFallback;
+    _udpDirectFallback = config.udpDirectFallback;
     _tunFakeIp = config.tunFakeIp;
     _tunDnsController = TextEditingController(text: config.tunDnsServer);
     _reverseGeo = !BuildCapabilities.isMacAppStore && config.reverseGeo;
@@ -312,7 +311,11 @@ class _ConfigDialogState extends State<ConfigDialog> {
                     ),
                   SwitchListTile(
                     title: Text(context.l10n.socksUdp),
-                    subtitle: Text(context.l10n.proxyUdpThroughTheServer),
+                    subtitle: Text(
+                      BuildCapabilities.usesPacketTunnel
+                          ? context.l10n.packetTunnelUdpProxyDescription
+                          : context.l10n.proxyUdpThroughTheServer,
+                    ),
                     value: _udpEnabled,
                     onChanged: (v) => setState(() => _udpEnabled = v),
                   ),
@@ -333,7 +336,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
                       helperMaxLines: 3,
                     ),
                   ),
-                  if (BuildCapabilities.supportsUdpDirectFallback)
+                  if (!BuildCapabilities.usesPacketTunnel)
                     SwitchListTile(
                       title: Text(context.l10n.directUdpFallback),
                       subtitle: Text(

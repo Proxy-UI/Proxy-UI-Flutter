@@ -11,6 +11,16 @@ char *proxy_packet_tunnel_routing_stats(const PacketTunnelRuntime *handle);
 void proxy_packet_tunnel_destroy(PacketTunnelRuntime *handle);
 void proxy_free_string(char *value);
 
+typedef struct {
+  int32_t success;
+  char *country_code;
+  char *egress_ip;
+  uint64_t latency_ms;
+  char *error;
+} NodeProbeResult;
+NodeProbeResult proxy_probe_node_v3(const char *host, uint16_t port, int32_t force_codec, uint32_t timeout_ms, int32_t protocol);
+void proxy_free_node_probe_result(NodeProbeResult *result);
+
 void proxy_init_logging(void);
 void proxy_set_log_level(int32_t level);
 void proxy_set_log_callback(void (*callback)(int32_t level, const char *message));

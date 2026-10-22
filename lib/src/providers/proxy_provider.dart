@@ -480,9 +480,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       ? config.copyWith(
           setSystemProxy: false,
           allowLan: false,
-          udpDirectFallback:
-              BuildCapabilities.supportsUdpDirectFallback &&
-              config.udpDirectFallback,
+          udpDirectFallback: false,
           autoProxy: BuildCapabilities.isMacAppStore ? false : config.autoProxy,
           reverseGeo: BuildCapabilities.isMacAppStore
               ? false

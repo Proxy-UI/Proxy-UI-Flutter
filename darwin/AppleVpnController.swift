@@ -69,6 +69,22 @@ final class AppleVpnController: NSObject, FlutterStreamHandler {
       }
     case "start": start(call.arguments, result: result)
     case "stop": stop(result: result)
+    case "probeNode":
+      guard let session = manager?.connection as? NETunnelProviderSession,
+        session.status == .connected || session.status == .reasserting,
+        let request = call.arguments as? [String: Any],
+        let data = try? JSONSerialization.data(withJSONObject: request), data.count <= 4096
+      else { result(FlutterError(code: "vpn_unavailable", message: "VPN is not connected", details: nil)); return }
+      do {
+        try session.sendProviderMessage(data) { response in
+          DispatchQueue.main.async {
+            guard let response = response,
+              let value = try? JSONSerialization.jsonObject(with: response) as? [String: Any]
+            else { result(FlutterError(code: "probe_failed", message: "VPN probe response is unavailable", details: nil)); return }
+            result(value)
+          }
+        }
+      } catch { result(flutterError(error)) }
     #if os(macOS)
     case "openLogs":
       guard let path = call.arguments as? String else { result(FlutterError(code: "invalid_path", message: "Missing log folder.", details: nil)); return }

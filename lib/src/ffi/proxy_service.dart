@@ -264,7 +264,7 @@ class ProxyService {
     int localPort = 1080,
     String? sessionKey,
     bool autoProxy = true,
-    bool udpEnabled = true,
+    bool udpEnabled = false,
     bool udpDirectFallback = true,
     bool tunEnabled = false,
     bool tunFakeIp = false,

@@ -11,8 +11,4 @@ abstract final class BuildCapabilities {
 
   /// The system owns forwarding and its lifetime independently of the UI.
   static bool get usesPacketTunnel => isIOS || isMacAppStore;
-
-  /// A device-wide iOS VPN must not silently send QUIC or STUN outside its
-  /// selected proxy when UDP proxying is disabled.
-  static bool get supportsUdpDirectFallback => !isIOS;
 }

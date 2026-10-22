@@ -679,7 +679,7 @@
   "autoProxy": "Auto Proxy",
   "routeTrafficBasedOnGeoLocation": "Route traffic based on geo-location",
   "socksUdp": "SOCKS5 UDP",
-  "proxyUdpThroughTheServer": "Proxy UDP through the server",
+  "proxyUdpThroughTheServer": "Opt in to proxy UDP through the server; independent of Auto routing",
   "directUdpFallback": "Direct UDP fallback",
   "whenSocksUdpIsOffSendVpnTunUdp": "When SOCKS5 UDP is off, send VPN/TUN UDP directly instead of blocking it",
   "reverseGeo": "Reverse Geo",
@@ -1153,5 +1153,22 @@
       }
     }
   },
-  "nativeRoutingUnavailable": "Routing stopped. Open and save to repair."
+  "nativeRoutingUnavailable": "Routing stopped. Open and save to repair.",
+  "packetTunnelUdpProxyDescription": "Mainland China UDP stays direct. Enable to proxy foreign UDP; otherwise reject it immediately. Requires server UDP support. Independent of TCP Auto.",
+  "tcpProxyUdpCountryProxy": "{value0} / UDP: mainland direct, foreign proxy",
+  "tcpProxyUdpCountryReject": "{value0} / UDP: mainland direct, foreign rejected",
+  "@tcpProxyUdpCountryProxy": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  },
+  "@tcpProxyUdpCountryReject": {
+    "placeholders": {
+      "value0": {
+        "type": "String"
+      }
+    }
+  }
 }
