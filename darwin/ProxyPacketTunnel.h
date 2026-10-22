@@ -18,8 +18,11 @@ typedef struct {
   uint64_t latency_ms;
   char *error;
 } NodeProbeResult;
-NodeProbeResult proxy_probe_node_v3(const char *host, uint16_t port, int32_t force_codec, uint32_t timeout_ms, int32_t protocol);
-void proxy_free_node_probe_result(NodeProbeResult *result);
+typedef void (*NodeProbeCallback)(uint64_t batch, uint32_t index, NodeProbeResult *result);
+int32_t proxy_probe_nodes_v1(const char *const *hosts, const uint16_t *ports, uint32_t count,
+                            uint32_t concurrency, uint32_t timeout_ms, int32_t protocol,
+                            NodeProbeCallback callback, uint64_t batch);
+void proxy_release_node_probe_result(NodeProbeResult *result);
 
 void proxy_init_logging(void);
 void proxy_set_log_level(int32_t level);

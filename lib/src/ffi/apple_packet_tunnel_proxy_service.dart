@@ -197,7 +197,12 @@ class ApplePacketTunnelProxyService extends ProxyService {
         }
 
         Future.wait([
-          for (var i = 0; i < targets.length && i < 4; i++) worker(),
+          for (
+            var i = 0;
+            i < targets.length && i < ProxyService.batchProbeConcurrency;
+            i++
+          )
+            worker(),
         ]).whenComplete(results.close);
       },
     );
