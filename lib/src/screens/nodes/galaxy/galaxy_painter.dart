@@ -48,6 +48,9 @@ class GalaxyPalette {
   /// the node it is connected through.
   Color get signal => scheme.primary;
 
+  /// QUIC, as the tag beside a QUIC address shows it.
+  Color get quic => scheme.tertiary;
+
   Color health(NodeHealth health) => status.health(health, scheme);
 
   bool same(GalaxyPalette o) =>
@@ -647,6 +650,23 @@ class _Frame {
       glow: 0.9,
       opacity: opacity,
     );
+    if (node.quic) {
+      // A moon on the rim, in the QUIC tag's colour: there when the node
+      // serves QUIC, absent while that is unknown.
+      final moon = c + Offset(radius * 0.74, -radius * 0.74);
+      final size = math.max(1.6, radius * 0.3);
+      canvas
+        ..drawCircle(
+          moon,
+          size + 1,
+          Paint()..color = palette.scheme.surface.withValues(alpha: opacity),
+        )
+        ..drawCircle(
+          moon,
+          size,
+          Paint()..color = palette.quic.withValues(alpha: 0.95 * opacity),
+        );
+    }
     if (node.health == NodeHealth.testing) {
       // Still, and turned per node so a country under test does not show a
       // row of identical marks.
@@ -669,7 +689,7 @@ class _Frame {
     if (!emphasis && !node.current && radius < 3.6) return;
     if (!lit && !emphasis) return;
     final latency = node.health.isAvailable && node.latencyMs != null
-        ? ' · ${node.latencyMs}ms'
+        ? ' · ${node.testedOverQuic ? 'QUIC ' : ''}${node.latencyMs}ms'
         : '';
     final address = emphasis ? node.address : node.host;
     pending.add(

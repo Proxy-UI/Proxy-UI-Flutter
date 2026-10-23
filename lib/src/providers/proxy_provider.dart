@@ -21,6 +21,7 @@ import '../models/node_catalog_preferences.dart';
 import '../models/node_group_model.dart';
 import '../models/node_model.dart';
 import '../models/proxy_config.dart';
+import '../models/quic_support.dart';
 import '../models/socks5_link.dart';
 import '../services/desktop_log_service.dart';
 import '../services/android_vpn_service.dart';
@@ -97,6 +98,15 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// SOCKS5 links by node, once a node has answered; null when it serves none.
   final Map<String, Socks5Link?> _socks5Links = <String, Socks5Link?>{};
   final Set<String> _socks5Lookups = <String>{};
+
+  /// QUIC answers by node since the catalogue was last loaded. A node with
+  /// no entry has not answered, or could not.
+  final Map<String, QuicSupport> _quicSupport = <String, QuicSupport>{};
+  bool _quicAsked = false;
+
+  /// Bumped when the catalogue or its key changes, so a late answer about
+  /// the previous catalogue is dropped.
+  int _quicGeneration = 0;
   bool _isInitialized = false;
   bool _isDisposed = false;
 
@@ -1036,6 +1046,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   void updateNodesServerConfig({String? host, int? port, String? sessionKey}) {
     if (sessionKey != null && sessionKey != nodesSessionKey) {
       _socks5Links.clear();
+      _forgetQuicSupport();
     }
     _nodeCatalogPreferences = _nodeCatalogPreferences.copyWith(
       serverHost: host,
@@ -1076,6 +1087,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _groupsError = null;
     // Administrators enable, disable and rotate links at any time.
     _socks5Links.clear();
+    _forgetQuicSupport();
     _safeNotifyListeners();
 
     try {
@@ -1119,6 +1131,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       _isLoadingNodes = false;
       _safeNotifyListeners();
     }
+    unawaited(lookUpQuicSupport());
   }
 
   NodeVerification? verificationFor(NodeInfo node) =>
@@ -1153,6 +1166,74 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _safeNotifyListeners();
   }
 
+  void _forgetQuicSupport() {
+    _quicSupport.clear();
+    _quicAsked = false;
+    _quicGeneration++;
+  }
+
+  /// Whether [node] serves QUIC. A catalogue address that is already
+  /// `quic://` does by definition; any other is as the node last answered.
+  QuicSupport quicSupportOf(NodeInfo node) {
+    if (node.endpoint case final endpoint? when endpoint.isQuic) {
+      return QuicSupport.at(endpoint.port);
+    }
+    return _quicSupport[node.storageKey] ?? QuicSupport.unknown;
+  }
+
+  /// Whether the catalogue has been asked about QUIC since it was loaded.
+  bool get hasAskedQuicSupport => _quicAsked;
+
+  /// Ask every node for its QUIC endpoint in one batch, once per catalogue
+  /// load. Nodes addressed over QUIC are not asked. Every node stays unknown
+  /// when the batch cannot run, as with a native library older than it.
+  Future<void> lookUpQuicSupport() async {
+    if (_quicAsked || _nodes.isEmpty) return;
+    _quicAsked = true;
+    final generation = _quicGeneration;
+    final asked = [
+      for (final node in _nodes)
+        if (node.endpoint case final endpoint? when !endpoint.isQuic) node,
+    ];
+    if (asked.isEmpty) return;
+    final List<QuicSupport> answers;
+    try {
+      answers = await _service.getQuicEndpoints([
+        for (final node in asked) (host: node.host, port: node.port),
+      ], sessionKey: nodesSessionKey?.isEmpty ?? true ? null : nodesSessionKey);
+    } catch (_) {
+      return;
+    }
+    if (generation != _quicGeneration || _isDisposed) return;
+    for (var i = 0; i < asked.length; i++) {
+      _quicSupport[asked[i].storageKey] = answers[i];
+    }
+    _safeNotifyListeners();
+  }
+
+  /// Where a test of [node] over [carrier] connects: its own address for
+  /// TCP, which for a `quic://` entry is QUIC already; its QUIC endpoint
+  /// for QUIC. Null when it has none, or its address does not parse.
+  UpstreamEndpoint? testEndpointOf(NodeInfo node, UpstreamTransport carrier) {
+    final endpoint = node.endpoint;
+    if (endpoint == null) return null;
+    if (carrier == UpstreamTransport.tcp || endpoint.isQuic) return endpoint;
+    final port = quicSupportOf(node).port;
+    return port == null
+        ? null
+        : UpstreamEndpoint(endpoint.host, port, UpstreamTransport.quic);
+  }
+
+  /// The carrier behind [node]'s last result. Results recorded before the
+  /// carrier was, for a `quic://` entry, still travelled over QUIC.
+  UpstreamTransport? testedCarrierOf(NodeInfo node) {
+    final verification = verificationFor(node);
+    if (verification == null) return null;
+    return node.endpoint?.isQuic == true
+        ? UpstreamTransport.quic
+        : verification.carrier;
+  }
+
   /// The country to show for a node: what its traffic actually says, falling
   /// back to what the catalogue claims.
   String effectiveCountry(NodeInfo node) {
@@ -1174,9 +1255,12 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// screen that shows the catalogue and lays the galaxy out again.
   static const Duration verificationBatchWindow = Duration(milliseconds: 150);
 
-  /// Test one node; see [verifyNodes]. Null when it is already under test.
-  Future<NodeVerification?> verifyNode(NodeInfo node) async =>
-      (await verifyNodes([node])).single;
+  /// Test one node; see [verifyNodes]. Null when it is already under test,
+  /// or has no endpoint for [carrier].
+  Future<NodeVerification?> verifyNode(
+    NodeInfo node, {
+    UpstreamTransport carrier = UpstreamTransport.tcp,
+  }) async => (await verifyNodes([node], carrier: carrier)).single;
 
   /// Test [nodes]: how long a real round trip through each takes, and where
   /// that traffic leaves from.
@@ -1196,16 +1280,24 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// and the catalogue is persisted when the last arrives — including
   /// failures, because "this node did not answer" is worth remembering too.
   ///
+  /// Over [carrier] QUIC, a node with no QUIC endpoint is skipped and keeps
+  /// the result it had: lacking QUIC says nothing about whether it works.
+  ///
   /// Returns each node's answer in order; null for a node that was already
-  /// under test. [onProgress] reports how many have answered so far.
+  /// under test or was skipped. [onProgress] reports how many have answered.
   Future<List<NodeVerification?>> verifyNodes(
     List<NodeInfo> nodes, {
+    UpstreamTransport carrier = UpstreamTransport.tcp,
     void Function(int answered, int total)? onProgress,
   }) async {
     final results = List<NodeVerification?>.filled(nodes.length, null);
+    final endpoints = [for (final node in nodes) testEndpointOf(node, carrier)];
     final testing = [
       for (var i = 0; i < nodes.length; i++)
-        if (_verifyingNodes.add(nodes[i].storageKey)) i,
+        // An address that does not parse is tested, and fails, as before.
+        if ((endpoints[i] != null || nodes[i].endpoint == null) &&
+            _verifyingNodes.add(nodes[i].storageKey))
+          i,
     ];
     if (testing.isEmpty) return results;
     _safeNotifyListeners();
@@ -1246,13 +1338,13 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     final probed = <int>[];
     final targets = <NodeProbeTarget>[];
     for (final index in testing) {
-      final node = nodes[index];
-      try {
-        targets.add((host: node.host, port: node.port));
-        probed.add(index);
-      } on FormatException catch (error) {
-        record(index, unreachable(error.message));
+      final endpoint = endpoints[index];
+      if (endpoint == null) {
+        record(index, unreachable(_addressError(nodes[index])));
+        continue;
       }
+      targets.add((host: endpoint.qualifiedHost, port: endpoint.port));
+      probed.add(index);
     }
 
     String? failure;
@@ -1272,6 +1364,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
             egressIp: probe.egressIp,
             latencyMs: probe.latencyMs,
             error: probe.error,
+            carrier: endpoints[probed[target]]!.transport,
           ),
         );
       }
@@ -1291,6 +1384,16 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _nodeCatalogSaveTimer?.cancel();
     await _saveNodeCatalogPreferences();
     return results;
+  }
+
+  /// Why [node]'s catalogue address does not parse.
+  String _addressError(NodeInfo node) {
+    try {
+      UpstreamEndpoint.parse(node.addr);
+      return appStrings.nodeVerificationFailed;
+    } on FormatException catch (error) {
+      return error.message;
+    }
   }
 
   // Export node config to clipboard (reuse existing export logic)

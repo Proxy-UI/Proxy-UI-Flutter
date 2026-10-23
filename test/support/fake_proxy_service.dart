@@ -4,17 +4,29 @@ import 'package:proxy_ui/src/ffi/proxy_ffi.dart';
 import 'package:proxy_ui/src/ffi/proxy_service.dart';
 import 'package:proxy_ui/src/models/node_catalog_preferences.dart';
 import 'package:proxy_ui/src/models/node_model.dart';
+import 'package:proxy_ui/src/models/quic_support.dart';
 import 'package:proxy_ui/src/models/socks5_link.dart';
 
 /// A proxy service that never touches native code, the network or routes.
 class FakeProxyService extends ProxyService {
-  FakeProxyService({this.probes = const {}, this.socks5Links = const {}});
+  FakeProxyService({
+    this.probes = const {},
+    this.socks5Links = const {},
+    this.quicSupport = const {},
+    this.rejectsQuicLookup = false,
+  });
 
   /// Answers to node probes, by address; anything else does not answer.
   final Map<String, NodeProbe> probes;
 
   /// SOCKS5 links by node address; other nodes serve none.
   final Map<String, Socks5Link> socks5Links;
+
+  /// QUIC answers by node address; any other node could not be asked.
+  final Map<String, QuicSupport> quicSupport;
+
+  /// Behaves like a native library older than the QUIC question.
+  final bool rejectsQuicLookup;
   final calls = <String>[];
   bool _running = false;
   bool _tunRunning = false;
@@ -110,6 +122,21 @@ class FakeProxyService extends ProxyService {
   }) async {
     calls.add('socks5 $serverHost:$serverPort');
     return socks5Links['$serverHost:$serverPort'];
+  }
+
+  @override
+  Future<List<QuicSupport>> getQuicEndpoints(
+    List<NodeProbeTarget> nodes, {
+    String? sessionKey,
+    int timeoutMs = 5000,
+    int concurrency = 16,
+  }) async {
+    calls.add('quic ${nodes.map((n) => '${n.host}:${n.port}').join(',')}');
+    if (rejectsQuicLookup) throw StateError('unsupported operation');
+    return [
+      for (final node in nodes)
+        quicSupport['${node.host}:${node.port}'] ?? QuicSupport.unknown,
+    ];
   }
 
   @override

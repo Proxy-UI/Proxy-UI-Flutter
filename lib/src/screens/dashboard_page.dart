@@ -35,6 +35,7 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<ProxyState>();
+    askQuicSupportAfterFrame(state);
     final nodes = galaxyNodesOf(state);
     return LayoutBuilder(
       builder: (context, box) {
@@ -131,6 +132,8 @@ class _GalaxyDashboardState extends State<_GalaxyDashboard> {
               a.health == b.health &&
               a.current == b.current &&
               a.latencyMs == b.latencyMs &&
+              a.quic == b.quic &&
+              a.testedOverQuic == b.testedOverQuic &&
               identical(a.node, b.node);
         })) {
       return;
@@ -628,10 +631,14 @@ class _CurrentNodeRow extends StatelessWidget {
       title: current == null
           ? context.l10n.currentNodeTitle
           : placeName(context, current.country),
-      detail: current == null ? context.l10n.noCurrentNode : current.address,
+      detail: current == null ? context.l10n.noCurrentNode : current.label,
       trailing: [
         if (current != null)
-          HealthChip(health: current.health, latencyMs: current.latencyMs),
+          HealthChip(
+            health: current.health,
+            latencyMs: current.latencyMs,
+            overQuic: current.testedOverQuic,
+          ),
         Icon(
           Icons.chevron_right,
           color: Theme.of(context).colorScheme.onSurfaceVariant,

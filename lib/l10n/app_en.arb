@@ -1203,5 +1203,46 @@
         "type": "String"
       }
     }
-  }
+  },
+  "quicOnUdpPort": "QUIC on UDP {port}",
+  "@quicOnUdpPort": {
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "noQuic": "No QUIC",
+  "testOver": "Test over",
+  "testAllOver": "Test all over {carrier}",
+  "@testAllOver": {
+    "placeholders": {
+      "carrier": {
+        "type": "String"
+      }
+    }
+  },
+  "testedOverQuic": "Tested {count} over QUIC: {reachable} reachable, {failed} failed",
+  "@testedOverQuic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "reachable": {
+        "type": "String"
+      },
+      "failed": {
+        "type": "String"
+      }
+    }
+  },
+  "withoutQuic": "{count} without QUIC",
+  "@withoutQuic": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "noNodeServesQuic": "None of these nodes serves QUIC"
 }

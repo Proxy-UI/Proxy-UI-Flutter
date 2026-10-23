@@ -83,6 +83,8 @@ class GalaxyNode {
     required this.health,
     this.current = false,
     this.latencyMs,
+    this.quic = false,
+    this.testedOverQuic = false,
   });
 
   final NodeInfo node;
@@ -101,8 +103,18 @@ class GalaxyNode {
   /// a server by; the raw address when it does not parse.
   String get host => node.endpoint?.host ?? node.addr;
 
-  /// `host:port`, with the carrier named when it is QUIC.
-  String get address => node.endpoint?.label ?? node.addr;
+  /// `host:port` of the catalogue address, without its carrier.
+  String get address => node.endpoint?.address ?? node.addr;
+
+  /// [address], naming QUIC when the node serves it.
+  String get label => quic ? '$address · QUIC' : address;
+
+  /// Whether the node serves QUIC: addressed over it, or reported a QUIC
+  /// endpoint. False while unknown.
+  final bool quic;
+
+  /// Whether [latencyMs] was measured over QUIC.
+  final bool testedOverQuic;
 }
 
 /// One node, orbiting its country.

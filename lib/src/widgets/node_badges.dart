@@ -4,6 +4,7 @@ import 'package:proxy_ui/l10n/app_language.dart';
 
 import '../models/country_atlas.dart';
 import '../models/node_health.dart';
+import '../models/quic_support.dart';
 import '../models/upstream_endpoint.dart';
 import '../theme/app_theme.dart';
 import 'planet_glyph.dart';
@@ -94,20 +95,50 @@ class TestingRing extends StatelessWidget {
   }
 }
 
+/// [latencyMs] as text, naming QUIC when it carried the measurement:
+/// "120 ms" or "QUIC 120 ms".
+String latencyText(
+  BuildContext context,
+  int latencyMs, {
+  bool overQuic = false,
+}) {
+  final value = context.l10n.latencyValue(latencyMs);
+  return overQuic ? '${UpstreamTransport.quic.label} $value' : value;
+}
+
+/// [health] in words, naming QUIC when a QUIC test is what failed, so that
+/// "unreachable" is not read as unreachable over TCP too.
+String quicFailureText(
+  BuildContext context,
+  NodeHealth health, {
+  bool overQuic = false,
+}) => overQuic && health == NodeHealth.unreachable
+    ? '${healthLabel(context, health)} · ${UpstreamTransport.quic.label}'
+    : healthLabel(context, health);
+
 /// A node's health as a small tonal chip, with its latency when it answered.
 class HealthChip extends StatelessWidget {
-  const HealthChip({super.key, required this.health, this.latencyMs});
+  const HealthChip({
+    super.key,
+    required this.health,
+    this.latencyMs,
+    this.overQuic = false,
+  });
 
   final NodeHealth health;
   final int? latencyMs;
+
+  /// Whether [latencyMs] was measured over QUIC.
+  final bool overQuic;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = StatusColors.of(context).health(health, theme.colorScheme);
     final label = health.isAvailable && latencyMs != null
-        ? '${healthLabel(context, health)} · ${context.l10n.latencyValue(latencyMs!)}'
-        : healthLabel(context, health);
+        ? '${healthLabel(context, health)} · '
+              '${latencyText(context, latencyMs!, overQuic: overQuic)}'
+        : quicFailureText(context, health, overQuic: overQuic);
     return Container(
       padding: const EdgeInsets.fromLTRB(6, 3, 10, 3),
       decoration: BoxDecoration(
@@ -138,43 +169,58 @@ class HealthChip extends StatelessWidget {
 /// A protocol's name as a small tag beside an address: QUIC on a node, UDP
 /// on a SOCKS5 link. Lists show it only for the exception, never for TCP.
 class ProtocolTag extends StatelessWidget {
-  const ProtocolTag(this.label, {super.key});
-
-  /// Tags a node whose sessions are carried over QUIC; nothing otherwise.
-  static Widget? carrier(UpstreamEndpoint? endpoint) =>
-      endpoint?.isQuic == true ? ProtocolTag(endpoint!.transport.label) : null;
+  const ProtocolTag(this.label, {super.key, this.tooltip, this.muted = false});
 
   final String label;
+  final String? tooltip;
+
+  /// Outlined rather than filled, for an absence such as "No QUIC".
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Container(
+    final tag = Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: scheme.tertiaryContainer,
+        color: muted ? null : scheme.tertiaryContainer,
+        border: muted ? Border.all(color: scheme.outlineVariant) : null,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
         style: theme.textTheme.labelSmall?.copyWith(
-          color: scheme.onTertiaryContainer,
+          color: muted ? scheme.onSurfaceVariant : scheme.onTertiaryContainer,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.4,
         ),
       ),
     );
+    return tooltip == null ? tag : Tooltip(message: tooltip, child: tag);
   }
 }
 
-/// A node's `host:port` on one line, followed by its carrier tag.
+/// A node's `host:port` on one line, followed by a QUIC tag when it serves
+/// QUIC: addressed over it, or reporting a QUIC port beside its TCP one.
 class NodeAddressText extends StatelessWidget {
-  const NodeAddressText(this.addr, {super.key, this.style});
+  const NodeAddressText(
+    this.addr, {
+    super.key,
+    this.style,
+    this.quic = QuicSupport.unknown,
+    this.withoutQuic = false,
+  });
 
   /// The catalogue's address, with or without `quic://`.
   final String addr;
   final TextStyle? style;
+
+  /// What the node said about QUIC; nothing is shown while unknown.
+  final QuicSupport quic;
+
+  /// Marks a node a QUIC test just left out for having no QUIC endpoint.
+  final bool withoutQuic;
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +231,17 @@ class NodeAddressText extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: style,
     );
-    final tag = ProtocolTag.carrier(endpoint);
+    final quicPort = endpoint?.isQuic == true ? null : quic.port;
+    final tag = endpoint?.isQuic == true || quicPort != null
+        ? ProtocolTag(
+            UpstreamTransport.quic.label,
+            tooltip: quicPort == null
+                ? null
+                : context.l10n.quicOnUdpPort(quicPort.toString()),
+          )
+        : withoutQuic
+        ? ProtocolTag(context.l10n.noQuic, muted: true)
+        : null;
     if (tag == null) return text;
     return Row(
       mainAxisSize: MainAxisSize.min,
