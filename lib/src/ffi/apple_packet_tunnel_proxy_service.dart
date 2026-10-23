@@ -30,7 +30,7 @@ class ApplePacketTunnelProxyService extends ProxyService {
   @override
   bool get isTunRunning => _vpn.running;
   @override
-  String? get lastError => _vpn.running ? null : _vpn.lastError ?? _error;
+  String? get lastError => _error ?? (_vpn.running ? null : _vpn.lastError);
 
   @override
   Future<int> start({
@@ -95,10 +95,23 @@ class ApplePacketTunnelProxyService extends ProxyService {
   @override
   Future<int> stopTun() => stop();
   @override
+  bool get supportsLiveTunSwitch => true;
+  @override
   Future<int> switchUpstream({
     required String serverHost,
     required int serverPort,
-  }) async => ProxyResult.invalidParam;
+  }) async {
+    _error = null;
+    if (!_vpn.running) return ProxyResult.notRunning;
+    try {
+      await _vpn.switchUpstream(serverHost, serverPort);
+      return ProxyResult.ok;
+    } catch (error) {
+      _error = error.toString();
+      return ProxyResult.runtimeError;
+    }
+  }
+
   @override
   int setTunBypassProcesses(List<String> processes) => ProxyResult.invalidParam;
   @override

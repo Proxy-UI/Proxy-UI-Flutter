@@ -17,6 +17,41 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('changing the carrier preserves the listener and active TUN', () async {
+    final service = _FakeProxyService();
+    final state = ProxyState(service: service);
+    addTearDown(state.dispose);
+    await _waitUntilInitialized(state);
+    state.updateConfig(
+      ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+    );
+    expect(await state.start(), isTrue);
+    expect(await state.setTunEnabled(true), isTrue);
+    service.calls.clear();
+    expect(
+      await state.applyConfig(
+        state.config.copyWith(
+          serverHost: 'quic://node.example',
+          serverPort: 10811,
+        ),
+      ),
+      isTrue,
+    );
+    expect(service.calls, ['switch:quic://node.example:10811']);
+    expect(service.listenerStartCount, 1);
+    expect(state.isRunning && state.isTunRunning, isTrue);
+    expect(state.config.serverHost, 'quic://node.example');
+    service.calls.clear();
+    expect(
+      await state.applyConfig(
+        state.config.copyWith(serverHost: 'node.example', serverPort: 1081),
+      ),
+      isTrue,
+    );
+    expect(service.calls, ['switch:node.example:1081']);
+    expect(service.listenerStartCount, 1);
+  });
+
   test('confirmed draft rolls back a failed listener and commits only a successful apply', () async {
     final service = _FakeProxyService();
     final state = ProxyState(service: service);

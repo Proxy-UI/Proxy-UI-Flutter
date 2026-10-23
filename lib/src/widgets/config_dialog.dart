@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
 import '../models/proxy_config.dart';
+import '../models/upstream_endpoint.dart';
 import '../services/desktop_settings.dart';
 import '../utils/toast_utils.dart';
 import 'lan_proxy_link.dart';
@@ -36,6 +37,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
   late TextEditingController _tunDnsController;
   late bool _reverseGeo;
   late bool _secureTransport;
+  late UpstreamTransport _transport;
   late bool _minimizeToTray;
   late bool _launchAtStartup;
   late bool _weGame;
@@ -49,9 +51,21 @@ class _ConfigDialogState extends State<ConfigDialog> {
     final desktop = context.read<DesktopSettings>();
     _minimizeToTray = desktop.minimizeToTray;
     _launchAtStartup = desktop.launchAtStartup;
-    _hostController = TextEditingController(text: config.serverHost);
+    UpstreamEndpoint? endpoint;
+    try {
+      endpoint = UpstreamEndpoint.fromHost(
+        config.serverHost,
+        config.serverPort,
+      );
+    } on FormatException {
+      // Keep a saved invalid address editable.
+    }
+    _transport = endpoint?.transport ?? UpstreamTransport.tcp;
+    _hostController = TextEditingController(
+      text: endpoint?.host ?? config.serverHost,
+    );
     _serverPortController = TextEditingController(
-      text: config.serverPort.toString(),
+      text: (endpoint?.port ?? config.serverPort).toString(),
     );
     _localPortController = TextEditingController(
       text: config.localPort.toString(),
@@ -106,14 +120,25 @@ class _ConfigDialogState extends State<ConfigDialog> {
       return;
     }
 
+    late UpstreamEndpoint endpoint;
+    try {
+      final parsed = UpstreamEndpoint.fromHost(
+        _hostController.text.trim(),
+        serverPort,
+      );
+      endpoint = UpstreamEndpoint(parsed.host, parsed.port, _transport);
+    } on FormatException {
+      ToastUtils.showError(context.l10n.invalidConfiguration);
+      return;
+    }
     final currentConfig = widget.initialConfig ?? state.config;
     final desktop = context.read<DesktopSettings>();
     final navigator = Navigator.of(context);
     setState(() => _applying = true);
     final applied = await state.applyConfig(
       currentConfig.copyWith(
-        serverHost: _hostController.text.trim(),
-        serverPort: serverPort,
+        serverHost: endpoint.qualifiedHost,
+        serverPort: endpoint.port,
         localPort: localPort,
         allowLan: _allowLan,
         sessionKey: _sessionKeyController.text.isEmpty
@@ -215,6 +240,27 @@ class _ConfigDialogState extends State<ConfigDialog> {
                   Text(
                     context.l10n.server,
                     style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<UpstreamTransport>(
+                    initialValue: _transport,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.upstreamTransport,
+                      helperText: context.l10n.upstreamTransportHelp,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: UpstreamTransport.tcp,
+                        child: Text('TCP'),
+                      ),
+                      DropdownMenuItem(
+                        value: UpstreamTransport.quic,
+                        child: Text('QUIC'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _transport = value);
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextField(

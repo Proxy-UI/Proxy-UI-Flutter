@@ -185,8 +185,47 @@ void main() {
           serverHost: 'other.example',
           serverPort: 1,
         ),
-        ProxyResult.invalidParam,
+        ProxyResult.notRunning,
       );
+    },
+  );
+
+  test(
+    'switches the connected provider without stopping and reports rejection',
+    () async {
+      final vpn = AppleVpnService()..running = true;
+      final service = ApplePacketTunnelProxyService(vpn: vpn);
+      addTearDown(service.dispose);
+      var accepted = true;
+      messenger.setMockMethodCallHandler(methods, (call) async {
+        calls.add(call);
+        return {
+          'success': accepted,
+          'error': accepted ? null : 'invalid endpoint',
+        };
+      });
+      expect(service.supportsLiveTunSwitch, isTrue);
+      expect(
+        await service.switchUpstream(
+          serverHost: 'quic://node.example',
+          serverPort: 10811,
+        ),
+        ProxyResult.ok,
+      );
+      expect(calls.single.method, 'switchUpstream');
+      expect(calls.single.arguments, {
+        'operation': 'switchUpstream',
+        'host': 'quic://node.example',
+        'port': 10811,
+      });
+      accepted = false;
+      expect(
+        await service.switchUpstream(serverHost: 'bad/host', serverPort: 1081),
+        ProxyResult.runtimeError,
+      );
+      expect(service.isRunning, isTrue);
+      expect(service.lastError, contains('invalid endpoint'));
+      expect(calls.every((call) => call.method == 'switchUpstream'), isTrue);
     },
   );
 

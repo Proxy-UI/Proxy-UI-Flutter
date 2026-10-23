@@ -1,3 +1,5 @@
+import '../models/upstream_endpoint.dart';
+
 import 'package:proxy_ui/l10n/app_language.dart';
 
 import 'dart:async';
@@ -391,6 +393,26 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       return false;
     }
     final previous = _config;
+    late final UpstreamEndpoint nextEndpoint;
+    UpstreamEndpoint? previousEndpoint;
+    try {
+      nextEndpoint = UpstreamEndpoint.fromHost(
+        candidate.serverHost,
+        candidate.serverPort,
+      );
+    } on FormatException {
+      _lastError = appStrings.invalidConfiguration;
+      _safeNotifyListeners();
+      return false;
+    }
+    try {
+      previousEndpoint = UpstreamEndpoint.fromHost(
+        previous.serverHost,
+        previous.serverPort,
+      );
+    } on FormatException {
+      // A saved invalid endpoint can be replaced by a valid configuration.
+    }
     _lastError = null;
     if (jsonEncode(candidate.toJson()) == jsonEncode(previous.toJson())) {
       return true;
@@ -402,6 +424,41 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       await _saveConfig();
       _safeNotifyListeners();
       return true;
+    }
+
+    final oldSessionSettings = previous.toJson()
+      ..remove('serverHost')
+      ..remove('serverPort');
+    final newSessionSettings = candidate.toJson()
+      ..remove('serverHost')
+      ..remove('serverPort');
+    if (wasRunning &&
+        jsonEncode(oldSessionSettings) == jsonEncode(newSessionSettings) &&
+        (!wasTunRunning ||
+            _service.supportsLiveTunSwitch ||
+            previousEndpoint?.host == nextEndpoint.host)) {
+      _isProxyTransitioning = true;
+      _safeNotifyListeners();
+      try {
+        final result = await _service.switchUpstream(
+          serverHost: candidate.serverHost,
+          serverPort: candidate.serverPort,
+        );
+        if (result != ProxyResult.ok) {
+          _lastError = _service.lastError ?? ProxyResult.message(result);
+          return false;
+        }
+        _config = candidate;
+        _currentNodeId = null;
+        await _saveConfig();
+        return true;
+      } catch (error) {
+        _lastError = error.toString();
+        return false;
+      } finally {
+        _isProxyTransitioning = false;
+        _safeNotifyListeners();
+      }
     }
 
     final before = previous.toJson()

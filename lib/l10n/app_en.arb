@@ -1176,5 +1176,7 @@
         "type": "String"
       }
     }
-  }
+  },
+  "upstreamTransport": "Upstream transport",
+  "upstreamTransportHelp": "Applies to new connections. QUIC requires a valid server certificate."
 }
