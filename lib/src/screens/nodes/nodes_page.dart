@@ -7,6 +7,7 @@ import '../../models/node_filter.dart';
 import '../../models/node_group_model.dart';
 import '../../models/node_health.dart';
 import '../../models/node_model.dart';
+import '../../models/upstream_endpoint.dart';
 import '../../providers/proxy_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/node_badges.dart';
@@ -91,6 +92,8 @@ class _NodesPageState extends State<NodesPage> {
           node.health,
           node.current,
           node.latencyMs,
+          node.quic,
+          node.testedOverQuic,
         ),
       _search.text,
       _filter,
@@ -129,6 +132,7 @@ class _NodesPageState extends State<NodesPage> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<ProxyState>();
+    askQuicSupportAfterFrame(state);
     if (_group != null && !state.groups.any((g) => g.groupId == _group)) {
       _group = null;
     }
@@ -580,7 +584,10 @@ class _Toolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: strings.testAll,
+            // Follows the TCP/QUIC choice made in a node or country panel.
+            tooltip: actions.carrierFor(shownNodes) == UpstreamTransport.quic
+                ? strings.testAllOver(UpstreamTransport.quic.label)
+                : strings.testAll,
             onPressed: actions.testingMany || shownNodes.isEmpty
                 ? null
                 : () => actions.testMany(context, shownNodes),

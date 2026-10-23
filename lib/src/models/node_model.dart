@@ -25,6 +25,10 @@ class NodeVerification {
   final String? error;
   final DateTime checkedAt;
 
+  /// What carried the test: TCP to the catalogue address, or QUIC. Results
+  /// recorded before the choice existed were all TCP.
+  final UpstreamTransport carrier;
+
   const NodeVerification({
     required this.status,
     required this.checkedAt,
@@ -32,6 +36,7 @@ class NodeVerification {
     this.egressIp = '',
     this.latencyMs,
     this.error,
+    this.carrier = UpstreamTransport.tcp,
   });
 
   bool get isVerified => status == NodeVerificationStatus.verified;
@@ -50,6 +55,7 @@ class NodeVerification {
     'latencyMs': latencyMs,
     'error': error,
     'checkedAt': checkedAt.toUtc().toIso8601String(),
+    'carrier': carrier.name,
   };
 
   static NodeVerification? fromJson(Object? value) {
@@ -70,6 +76,10 @@ class NodeVerification {
       egressIp: value['egressIp'] is String ? value['egressIp'] as String : '',
       latencyMs: latency is int && latency >= 0 ? latency : null,
       error: value['error'] is String ? value['error'] as String : null,
+      carrier: UpstreamTransport.values.firstWhere(
+        (candidate) => candidate.name == value['carrier'],
+        orElse: () => UpstreamTransport.tcp,
+      ),
     );
   }
 }

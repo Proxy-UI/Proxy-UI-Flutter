@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/node_group_model.dart';
 import '../models/node_model.dart';
+import '../models/quic_support.dart';
 import '../models/socks5_link.dart';
 import '../services/android_vpn_service.dart';
 import 'proxy_ffi.dart';
@@ -892,6 +893,33 @@ class ProxyService {
       },
     );
     return Socks5Link.fromJson(result);
+  }
+
+  /// Whether each of [nodes] serves QUIC, in the same order, asked in one
+  /// native batch. Throws when the native library cannot answer at all, as
+  /// one older than the question rejects it.
+  Future<List<QuicSupport>> getQuicEndpoints(
+    List<NodeProbeTarget> nodes, {
+    String? sessionKey,
+    int timeoutMs = 5000,
+    int concurrency = 16,
+  }) async {
+    final result = await NativeProxyOperations.shared.run(
+      'quic_endpoints',
+      arguments: {
+        'nodes': [
+          for (final node in nodes) {'host': node.host, 'port': node.port},
+        ],
+        'session_key': sessionKey,
+        'timeout_ms': timeoutMs,
+        'concurrency': concurrency,
+      },
+    );
+    final endpoints = result['endpoints'];
+    if (endpoints is! List || endpoints.length != nodes.length) {
+      throw const FormatException('Malformed quic_endpoints answer');
+    }
+    return [for (final entry in endpoints) QuicSupport.fromJson(entry)];
   }
 
   /// Get all node groups from server.

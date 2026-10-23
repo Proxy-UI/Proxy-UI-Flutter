@@ -198,6 +198,8 @@ class _NodeTile extends StatelessWidget {
                   children: [
                     NodeAddressText(
                       info.addr,
+                      quic: actions.state.quicSupportOf(info),
+                      withoutQuic: actions.skippedWithoutQuic(info),
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w500,
                         fontFeatures: const [FontFeature.tabularFigures()],
@@ -216,7 +218,11 @@ class _NodeTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              HealthChip(health: node.health, latencyMs: node.latencyMs),
+              HealthChip(
+                health: node.health,
+                latencyMs: node.latencyMs,
+                overQuic: node.testedOverQuic,
+              ),
               const SizedBox(width: 6),
               if (node.current && actions.state.isRunning)
                 Tooltip(

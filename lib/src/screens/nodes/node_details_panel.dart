@@ -225,6 +225,7 @@ class _CountryDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final total = system.planets.length;
     final best = system.bestLatency;
+    final nodes = [for (final planet in system.planets) planet.node.node];
     final planets = [...system.planets]
       ..sort((a, b) {
         final byHealth = NodeHealth.displayOrder
@@ -251,20 +252,32 @@ class _CountryDetails extends StatelessWidget {
         const SizedBox(height: 16),
         _HealthBar(counts: system.counts, total: total),
         const SizedBox(height: 16),
-        FilledButton.tonalIcon(
-          onPressed: actions.testingMany
-              ? null
-              : () => actions.testMany(context, [
-                  for (final planet in system.planets) planet.node.node,
-                ]),
-          icon: actions.testingMany
-              ? TestingRing(size: 18, progress: actions.testProgress)
-              : const Icon(Icons.network_check),
-          label: Text(context.l10n.testRegion),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: actions.testingMany
+                    ? null
+                    : () => actions.testMany(context, nodes),
+                icon: actions.testingMany
+                    ? TestingRing(size: 18, progress: actions.testProgress)
+                    : const Icon(Icons.network_check),
+                label: Text(context.l10n.testRegion),
+              ),
+            ),
+            if (actions.offersQuicTest(nodes)) ...[
+              const SizedBox(width: 8),
+              _TestCarrierChoice(actions: actions),
+            ],
+          ],
         ),
         const SizedBox(height: 12),
         for (final planet in planets)
-          _NodeRow(planet: planet, onTap: () => onSelect(planet.id)),
+          _NodeRow(
+            planet: planet,
+            actions: actions,
+            onTap: () => onSelect(planet.id),
+          ),
       ],
     );
   }
@@ -337,10 +350,11 @@ class _HealthBar extends StatelessWidget {
 
 /// A node as one row: its health, address and latency.
 class _NodeRow extends StatelessWidget {
-  const _NodeRow({required this.planet, required this.onTap});
+  const _NodeRow({required this.planet, required this.onTap, this.actions});
 
   final NodePlanet planet;
   final VoidCallback onTap;
+  final NodeActions? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -360,6 +374,8 @@ class _NodeRow extends StatelessWidget {
             Expanded(
               child: NodeAddressText(
                 node.node.addr,
+                quic: context.watch<ProxyState>().quicSupportOf(node.node),
+                withoutQuic: actions?.skippedWithoutQuic(node.node) ?? false,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontFeatures: const [FontFeature.tabularFigures()],
                   fontWeight: node.current ? FontWeight.w600 : null,
@@ -372,8 +388,16 @@ class _NodeRow extends StatelessWidget {
             ],
             Text(
               node.health.isAvailable && node.latencyMs != null
-                  ? context.l10n.latencyValue(node.latencyMs!)
-                  : healthLabel(context, node.health),
+                  ? latencyText(
+                      context,
+                      node.latencyMs!,
+                      overQuic: node.testedOverQuic,
+                    )
+                  : quicFailureText(
+                      context,
+                      node.health,
+                      overQuic: node.testedOverQuic,
+                    ),
               style: theme.textTheme.labelMedium?.copyWith(
                 color: node.health.isAvailable
                     ? theme.colorScheme.onSurface
@@ -422,6 +446,10 @@ class _NodeDetails extends StatelessWidget {
     final switching = actions.isSwitching(info);
     final testing = state.isVerifyingNode(info);
     final endpoint = info.endpoint;
+    final quicPort = endpoint?.isQuic == false
+        ? state.quicSupportOf(info).port
+        : null;
+    final testedOver = state.testedCarrierOf(info) ?? UpstreamTransport.tcp;
     final restartsTun = actions.restartsTun(info);
     final switchError = actions.switchError(info);
     final drift =
@@ -433,10 +461,13 @@ class _NodeDetails extends StatelessWidget {
           leading: PlanetGlyph(color: color, size: 36, ring: node.current),
           title: node.host,
           selectableTitle: true,
-          // "QUIC 10811", the way a protocol and port are usually written.
+          // "TCP 1081 · QUIC 10811", the way a protocol and port are usually
+          // written: every endpoint the node serves, its own address first.
           subtitle: [
             if (endpoint != null)
               '${endpoint.transport.label} ${endpoint.port}',
+            if (quicPort != null) '${UpstreamTransport.quic.label} $quicPort',
+            if (actions.skippedWithoutQuic(info)) context.l10n.noQuic,
             placeName(context, system.code),
           ].join(' · '),
           onClose: onClose,
@@ -452,7 +483,11 @@ class _NodeDetails extends StatelessWidget {
               label: Text(placeName(context, system.code)),
               onPressed: () => onSelect(system.id),
             ),
-            HealthChip(health: node.health, latencyMs: node.latencyMs),
+            HealthChip(
+              health: node.health,
+              latencyMs: node.latencyMs,
+              overQuic: node.testedOverQuic,
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -517,6 +552,23 @@ class _NodeDetails extends StatelessWidget {
             ),
           ],
         ),
+        // Only where the node serves both does the carrier mean anything.
+        if (actions.offersQuicTest([info])) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                context.l10n.testOver,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _TestCarrierChoice(actions: actions),
+            ],
+          ),
+        ],
         // Said before the click: TUN routes are built around the current
         // host, so outside Windows another host means restarting capture.
         if (restartsTun && !switching) ...[
@@ -562,7 +614,8 @@ class _NodeDetails extends StatelessWidget {
           label: context.l10n.latency,
           value: node.latencyMs == null
               ? context.l10n.nA
-              : context.l10n.latencyValue(node.latencyMs!),
+              : '${testedOver.label} · '
+                    '${context.l10n.latencyValue(node.latencyMs!)}',
         ),
         _InfoRow(
           label: context.l10n.nodeChecked,
@@ -613,6 +666,35 @@ class _NodeDetails extends StatelessWidget {
       ],
     );
   }
+}
+
+/// TCP or QUIC for the tests started here, shared with every other test
+/// button through [NodeActions.testCarrier].
+class _TestCarrierChoice extends StatelessWidget {
+  const _TestCarrierChoice({required this.actions});
+
+  final NodeActions actions;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: context.l10n.testOver,
+    child: SegmentedButton<UpstreamTransport>(
+      key: const Key('test-carrier'),
+      showSelectedIcon: false,
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      segments: [
+        for (final carrier in UpstreamTransport.values)
+          ButtonSegment(value: carrier, label: Text(carrier.label)),
+      ],
+      selected: {actions.testCarrier},
+      onSelectionChanged: actions.testingMany
+          ? null
+          : (selection) => actions.testCarrier = selection.single,
+    ),
+  );
 }
 
 class _InfoRow extends StatelessWidget {
