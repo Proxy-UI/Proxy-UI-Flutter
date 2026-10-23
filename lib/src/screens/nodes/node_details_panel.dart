@@ -14,6 +14,7 @@ import '../../widgets/node_badges.dart';
 import '../../widgets/planet_glyph.dart';
 import 'galaxy/galaxy_model.dart';
 import 'node_actions.dart';
+import 'node_socks5_link.dart';
 
 /// What is known about the selected body: this device, a country, or a node,
 /// with the actions that apply to it.
@@ -545,6 +546,7 @@ class _NodeDetails extends StatelessWidget {
               info.region,
             ].where((part) => part.isNotEmpty).join(' · '),
           ),
+        NodeSocks5Link(node: info),
         if (drift) ...[
           const SizedBox(height: 12),
           _Notice(

@@ -4,13 +4,17 @@ import 'package:proxy_ui/src/ffi/proxy_ffi.dart';
 import 'package:proxy_ui/src/ffi/proxy_service.dart';
 import 'package:proxy_ui/src/models/node_catalog_preferences.dart';
 import 'package:proxy_ui/src/models/node_model.dart';
+import 'package:proxy_ui/src/models/socks5_link.dart';
 
 /// A proxy service that never touches native code, the network or routes.
 class FakeProxyService extends ProxyService {
-  FakeProxyService({this.probes = const {}});
+  FakeProxyService({this.probes = const {}, this.socks5Links = const {}});
 
   /// Answers to node probes, by address; anything else does not answer.
   final Map<String, NodeProbe> probes;
+
+  /// SOCKS5 links by node address; other nodes serve none.
+  final Map<String, Socks5Link> socks5Links;
   final calls = <String>[];
   bool _running = false;
   bool _tunRunning = false;
@@ -69,6 +73,17 @@ class FakeProxyService extends ProxyService {
     calls.add('probe $serverHost:$serverPort');
     return probes['$serverHost:$serverPort'] ??
         const NodeProbe(success: false, error: 'no answer');
+  }
+
+  @override
+  Future<Socks5Link?> getSocks5Link({
+    required String serverHost,
+    required int serverPort,
+    String? sessionKey,
+    int timeoutMs = 5000,
+  }) async {
+    calls.add('socks5 $serverHost:$serverPort');
+    return socks5Links['$serverHost:$serverPort'];
   }
 
   @override
