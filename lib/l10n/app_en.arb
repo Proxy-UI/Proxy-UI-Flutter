@@ -582,7 +582,6 @@
   "refreshLanAddress": "Refresh LAN address",
   "copyLanProxyLink": "Copy LAN proxy link",
   "socks5Link": "SOCKS5 link",
-  "socks5LinkWithUdp": "SOCKS5 link · TCP and UDP",
   "socks5LinkCopied": "SOCKS5 link copied",
   "copySocks5Link": "Copy SOCKS5 link",
   "showSocks5Password": "Show password",
@@ -885,8 +884,6 @@
   "applyConfiguration": "Apply configuration",
   "systemProxy": "Use system proxy",
   "applyingConfiguration": "Applying…",
-  "configurationDraftDescription": "Changes here are a draft until you press Apply configuration.",
-  "configurationApplyReconnects": "Applying network settings reconnects the proxy and restores TUN if it is active. Changing only exclusions keeps TUN running.",
   "invalidConfiguration": "Enter a server host and valid server and local ports.",
   "configurationRestoredAfterFailure": "Could not apply configuration: {error}. The previous configuration is running again.",
   "@configurationRestoredAfterFailure": {
@@ -1177,6 +1174,34 @@
       }
     }
   },
-  "upstreamTransport": "Upstream transport",
-  "upstreamTransportHelp": "Applies to new connections. QUIC requires a valid server certificate."
+  "upstreamTransport": "Transport",
+  "upstreamTransportHelp": "Needs a server certificate this device trusts. For a private CA, set PROXY_QUIC_CA.",
+  "serverPortUdp": "Server port (UDP)",
+  "applyKeepsOpenConnections": "Open connections stay on the current server.",
+  "applyReconnects": "Applying reconnects the proxy.",
+  "applyReconnectsTun": "Applying reconnects the proxy and restarts {capture}.",
+  "@applyReconnectsTun": {
+    "placeholders": {
+      "capture": {
+        "type": "String"
+      }
+    }
+  },
+  "switchRestartsTun": "Switching to another host restarts {capture}.",
+  "@switchRestartsTun": {
+    "placeholders": {
+      "capture": {
+        "type": "String"
+      }
+    }
+  },
+  "macosAsksForPassword": "macOS will ask for your password.",
+  "connectRestartsTun": "Connect (restarts {capture})",
+  "@connectRestartsTun": {
+    "placeholders": {
+      "capture": {
+        "type": "String"
+      }
+    }
+  }
 }

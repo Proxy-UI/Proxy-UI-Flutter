@@ -194,7 +194,6 @@
   "refreshLanAddress": "刷新局域网地址",
   "copyLanProxyLink": "复制局域网代理链接",
   "socks5Link": "SOCKS5 链接",
-  "socks5LinkWithUdp": "SOCKS5 链接 · 支持 TCP 和 UDP",
   "socks5LinkCopied": "SOCKS5 链接已复制",
   "copySocks5Link": "复制 SOCKS5 链接",
   "showSocks5Password": "显示密码",
@@ -377,8 +376,6 @@
   "applyConfiguration": "应用配置",
   "systemProxy": "使用系统代理",
   "applyingConfiguration": "正在应用…",
-  "configurationDraftDescription": "这里的修改仅为草稿，点击“应用配置”后才生效。",
-  "configurationApplyReconnects": "应用网络设置会重新连接代理，并恢复已开启的 TUN。仅修改排除规则时，TUN 保持运行。",
   "invalidConfiguration": "请填写服务器地址以及有效的服务器端口和本地端口。",
   "configurationRestoredAfterFailure": "应用配置失败：{error}。已恢复原配置并重新连接。",
   "configurationRollbackFailed": "应用配置失败：{error}。恢复原连接也失败：{rollbackError}。",
@@ -494,6 +491,13 @@
   "packetTunnelUdpProxyDescription": "大陆 UDP 始终直连；开启后代理境外 UDP，否则立即拒绝。需服务器支持 UDP，与 TCP Auto 开关无关。",
   "tcpProxyUdpCountryProxy": "{value0} / UDP：大陆直连，境外代理",
   "tcpProxyUdpCountryReject": "{value0} / UDP：大陆直连，境外拒绝",
-  "upstreamTransport": "上游传输协议",
-  "upstreamTransportHelp": "对新连接生效。QUIC 需要有效的服务端证书。"
+  "upstreamTransport": "传输协议",
+  "upstreamTransportHelp": "服务器证书需受本机信任。私有 CA 请设置 PROXY_QUIC_CA。",
+  "serverPortUdp": "服务器端口（UDP）",
+  "applyKeepsOpenConnections": "已建立的连接继续使用当前服务器。",
+  "applyReconnects": "应用后代理将重新连接。",
+  "applyReconnectsTun": "应用后代理将重新连接，并重启 {capture}。",
+  "switchRestartsTun": "切换到其他主机会重启 {capture}。",
+  "macosAsksForPassword": "macOS 会要求输入密码。",
+  "connectRestartsTun": "连接（将重启 {capture}）"
 }

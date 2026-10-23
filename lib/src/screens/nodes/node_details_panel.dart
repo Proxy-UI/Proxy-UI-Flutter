@@ -7,11 +7,13 @@ import 'package:proxy_ui/l10n/app_language.dart';
 
 import '../../models/country_atlas.dart';
 import '../../models/node_health.dart';
+import '../../models/upstream_endpoint.dart';
 import '../../providers/proxy_provider.dart';
 import '../../services/build_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/node_badges.dart';
 import '../../widgets/planet_glyph.dart';
+import '../proxy_controls.dart';
 import 'galaxy/galaxy_model.dart';
 import 'node_actions.dart';
 import 'node_socks5_link.dart';
@@ -183,7 +185,10 @@ class _HomeDetails extends StatelessWidget {
         if (state.config.serverHost.isNotEmpty)
           _InfoRow(
             label: context.l10n.server,
-            value: '${state.config.serverHost}:${state.config.serverPort}',
+            value: endpointLabel(
+              state.config.serverHost,
+              state.config.serverPort,
+            ),
           ),
         const SizedBox(height: 12),
         if (current != null)
@@ -353,10 +358,8 @@ class _NodeRow extends StatelessWidget {
             PlanetGlyph(color: color, size: 22, ring: node.current),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
+              child: NodeAddressText(
                 node.node.addr,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontFeatures: const [FontFeature.tabularFigures()],
                   fontWeight: node.current ? FontWeight.w600 : null,
@@ -418,12 +421,9 @@ class _NodeDetails extends StatelessWidget {
     final color = StatusColors.of(context).health(node.health, scheme);
     final switching = actions.isSwitching(info);
     final testing = state.isVerifyingNode(info);
-    int? port;
-    try {
-      port = info.port;
-    } on FormatException {
-      port = null;
-    }
+    final endpoint = info.endpoint;
+    final restartsTun = actions.restartsTun(info);
+    final switchError = actions.switchError(info);
     final drift =
         verification != null && verification.disagreesWith(info.country);
     return Column(
@@ -433,8 +433,10 @@ class _NodeDetails extends StatelessWidget {
           leading: PlanetGlyph(color: color, size: 36, ring: node.current),
           title: node.host,
           selectableTitle: true,
+          // "QUIC 10811", the way a protocol and port are usually written.
           subtitle: [
-            if (port != null) '${context.l10n.port3} $port',
+            if (endpoint != null)
+              '${endpoint.transport.label} ${endpoint.port}',
             placeName(context, system.code),
           ].join(' · '),
           onClose: onClose,
@@ -476,7 +478,11 @@ class _NodeDetails extends StatelessWidget {
                                 color: scheme.onPrimary,
                               ),
                             )
-                          : const Icon(Icons.power_settings_new),
+                          : Icon(
+                              restartsTun
+                                  ? Icons.restart_alt
+                                  : Icons.power_settings_new,
+                            ),
                       label: Text(context.l10n.nodeConnect),
                     ),
             ),
@@ -511,6 +517,40 @@ class _NodeDetails extends StatelessWidget {
             ),
           ],
         ),
+        // Said before the click: TUN routes are built around the current
+        // host, so outside Windows another host means restarting capture.
+        if (restartsTun && !switching) ...[
+          const SizedBox(height: 10),
+          Row(
+            key: const Key('node-switch-restarts-tun'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.restart_alt, size: 16, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tunRestartNotice(
+                    context,
+                    context.l10n.switchRestartsTun(captureName),
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (switchError != null) ...[
+          const SizedBox(height: 12),
+          _Notice(
+            key: const Key('node-switch-error'),
+            icon: Icons.error_outline,
+            color: scheme.errorContainer,
+            onColor: scheme.onErrorContainer,
+            text: switchError,
+          ),
+        ],
         const SizedBox(height: 16),
         _InfoRow(label: context.l10n.nodeAddress, value: info.addr),
         if (verification?.egressIp.isNotEmpty ?? false)
@@ -615,6 +655,7 @@ class _InfoRow extends StatelessWidget {
 
 class _Notice extends StatelessWidget {
   const _Notice({
+    super.key,
     required this.icon,
     required this.color,
     required this.onColor,

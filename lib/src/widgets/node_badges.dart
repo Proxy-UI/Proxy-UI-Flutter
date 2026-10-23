@@ -4,6 +4,7 @@ import 'package:proxy_ui/l10n/app_language.dart';
 
 import '../models/country_atlas.dart';
 import '../models/node_health.dart';
+import '../models/upstream_endpoint.dart';
 import '../theme/app_theme.dart';
 import 'planet_glyph.dart';
 
@@ -130,6 +131,69 @@ class HealthChip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A protocol's name as a small tag beside an address: QUIC on a node, UDP
+/// on a SOCKS5 link. Lists show it only for the exception, never for TCP.
+class ProtocolTag extends StatelessWidget {
+  const ProtocolTag(this.label, {super.key});
+
+  /// Tags a node whose sessions are carried over QUIC; nothing otherwise.
+  static Widget? carrier(UpstreamEndpoint? endpoint) =>
+      endpoint?.isQuic == true ? ProtocolTag(endpoint!.transport.label) : null;
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: scheme.onTertiaryContainer,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
+/// A node's `host:port` on one line, followed by its carrier tag.
+class NodeAddressText extends StatelessWidget {
+  const NodeAddressText(this.addr, {super.key, this.style});
+
+  /// The catalogue's address, with or without `quic://`.
+  final String addr;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final endpoint = UpstreamEndpoint.tryParse(addr);
+    final text = Text(
+      endpoint?.address ?? addr,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    final tag = ProtocolTag.carrier(endpoint);
+    if (tag == null) return text;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: text),
+        const SizedBox(width: 6),
+        tag,
+      ],
     );
   }
 }

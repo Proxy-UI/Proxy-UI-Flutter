@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 
 import '../models/node_health.dart';
+import '../models/upstream_endpoint.dart';
 import '../providers/proxy_provider.dart';
 import '../services/build_capabilities.dart';
 import '../theme/app_theme.dart';
@@ -332,7 +333,7 @@ class _PowerSection extends StatelessWidget {
     final busy = state.isProxyOperationInProgress || state.isTunBusy;
     final endpoint = state.config.serverHost.isEmpty
         ? context.l10n.configureAServerToGetStarted
-        : '${state.config.serverHost}:${state.config.serverPort}';
+        : endpointLabel(state.config.serverHost, state.config.serverPort);
     final align = horizontal
         ? CrossAxisAlignment.start
         : CrossAxisAlignment.center;
@@ -627,7 +628,7 @@ class _CurrentNodeRow extends StatelessWidget {
       title: current == null
           ? context.l10n.currentNodeTitle
           : placeName(context, current.country),
-      detail: current == null ? context.l10n.noCurrentNode : current.node.addr,
+      detail: current == null ? context.l10n.noCurrentNode : current.address,
       trailing: [
         if (current != null)
           HealthChip(health: current.health, latencyMs: current.latencyMs),

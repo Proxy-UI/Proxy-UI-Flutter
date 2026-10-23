@@ -97,15 +97,12 @@ class GalaxyNode {
 
   String get id => node.storageKey;
 
-  /// The address without its port, which is what people recognise a server
-  /// by; the raw address when it does not parse.
-  String get host {
-    try {
-      return node.host;
-    } on FormatException {
-      return node.addr;
-    }
-  }
+  /// The address without its port or carrier, which is what people recognise
+  /// a server by; the raw address when it does not parse.
+  String get host => node.endpoint?.host ?? node.addr;
+
+  /// `host:port`, with the carrier named when it is QUIC.
+  String get address => node.endpoint?.label ?? node.addr;
 }
 
 /// One node, orbiting its country.

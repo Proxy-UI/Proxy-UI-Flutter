@@ -125,6 +125,9 @@ class NodeInfo {
     );
   }
 
+  /// The address with its carrier, or null when it does not parse.
+  UpstreamEndpoint? get endpoint => UpstreamEndpoint.tryParse(addr);
+
   // Parse host and port from addr (format: "ip:port")
   String get host => _parseHostAndPort().$1;
   int get port => _parseHostAndPort().$2;

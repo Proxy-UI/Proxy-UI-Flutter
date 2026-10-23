@@ -56,6 +56,68 @@ void main() {
     },
   );
 
+  test('reported switch impact matches the branch each switch takes', () async {
+    final service = _FakeProxyService();
+    final state = ProxyState(service: service);
+    addTearDown(state.dispose);
+    await _waitUntilInitialized(state);
+    state.updateConfig(
+      ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+    );
+    NodeInfo node(String address) => NodeInfo(
+      nodeId: address,
+      addr: address,
+      lastSeen: DateTime.now(),
+      country: '',
+      region: '',
+    );
+    final otherHost = node('other.example:1081');
+    final sameHostQuic = node('quic://node.example:10811');
+    ProxyConfigModel draft(String host, int port) =>
+        state.config.copyWith(serverHost: host, serverPort: port);
+
+    // Stopped: a switch only saves, or starts the proxy.
+    expect(state.switchImpactOf(otherHost), SwitchImpact.none);
+    expect(state.applyImpactOf(draft('other.example', 1)), SwitchImpact.none);
+
+    expect(await state.start(), isTrue);
+    expect(state.switchImpactOf(otherHost), SwitchImpact.newSessions);
+    expect(
+      state.applyImpactOf(state.config.copyWith(localPort: 18090)),
+      SwitchImpact.reconnects,
+    );
+
+    // TUN routes exclude the current host, so only it can switch in place.
+    expect(await state.setTunEnabled(true), isTrue);
+    expect(state.switchImpactOf(sameHostQuic), SwitchImpact.newSessions);
+    expect(state.switchImpactOf(otherHost), SwitchImpact.restartsTun);
+    expect(
+      state.applyImpactOf(draft('quic://node.example', 10811)),
+      SwitchImpact.newSessions,
+    );
+    expect(
+      state.applyImpactOf(draft('other.example', 1081)),
+      SwitchImpact.reconnects,
+    );
+    expect(
+      state.applyImpactOf(state.config.copyWith(tunBypassWeGame: true)),
+      SwitchImpact.none,
+    );
+
+    service.calls.clear();
+    expect(await state.switchToNode(sameHostQuic), isTrue);
+    expect(service.calls, ['switch:quic://node.example:10811']);
+    expect(state.switchImpactOf(sameHostQuic), SwitchImpact.none);
+
+    // Windows prepares the new host's bypass route before switching.
+    service.supportsLiveTunSwitch = true;
+    expect(state.switchImpactOf(otherHost), SwitchImpact.newSessions);
+    expect(
+      state.applyImpactOf(draft('other.example', 1081)),
+      SwitchImpact.newSessions,
+    );
+  });
+
   test('changing the carrier preserves the listener and active TUN', () async {
     final service = _FakeProxyService();
     final state = ProxyState(service: service);
