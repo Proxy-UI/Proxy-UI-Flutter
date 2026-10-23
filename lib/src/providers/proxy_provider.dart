@@ -1,3 +1,5 @@
+import '../models/upstream_endpoint.dart';
+
 import 'package:proxy_ui/l10n/app_language.dart';
 
 import 'dart:async';
@@ -23,6 +25,23 @@ import '../models/socks5_link.dart';
 import '../services/desktop_log_service.dart';
 import '../services/android_vpn_service.dart';
 import '../services/subscription_service.dart';
+
+/// What applying a configuration or selecting a node does to a running proxy.
+enum SwitchImpact {
+  /// Nothing is running, or nothing that is running changes.
+  none,
+
+  /// Only the endpoint changes: new sessions use it, open ones keep theirs.
+  newSessions,
+
+  /// Another host while TUN routes exclude the current one: capture restarts.
+  restartsTun,
+
+  /// Other settings change, so the listener and any capture restart.
+  reconnects,
+}
+
+enum _ApplyPlan { unchanged, save, switchUpstream, bypassOnly, restart }
 
 /// Proxy state provider for UI.
 class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
@@ -390,27 +409,53 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       _safeNotifyListeners();
       return false;
     }
+    if (UpstreamEndpoint.tryFromHost(
+          candidate.serverHost,
+          candidate.serverPort,
+        ) ==
+        null) {
+      _lastError = appStrings.invalidConfiguration;
+      _safeNotifyListeners();
+      return false;
+    }
     final previous = _config;
     _lastError = null;
-    if (jsonEncode(candidate.toJson()) == jsonEncode(previous.toJson())) {
-      return true;
-    }
-    final wasRunning = _isRunning;
     final wasTunRunning = _isTunRunning;
-    if (!wasRunning && !wasTunRunning) {
+    final plan = _applyPlan(previous, candidate);
+    if (plan == _ApplyPlan.unchanged) return true;
+    if (plan == _ApplyPlan.save) {
       _config = candidate;
       await _saveConfig();
       _safeNotifyListeners();
       return true;
     }
 
-    final before = previous.toJson()
-      ..remove('tunBypassProcesses')
-      ..remove('tunBypassWeGame');
-    final after = candidate.toJson()
-      ..remove('tunBypassProcesses')
-      ..remove('tunBypassWeGame');
-    if (jsonEncode(before) == jsonEncode(after)) {
+    if (plan == _ApplyPlan.switchUpstream) {
+      _isProxyTransitioning = true;
+      _safeNotifyListeners();
+      try {
+        final result = await _service.switchUpstream(
+          serverHost: candidate.serverHost,
+          serverPort: candidate.serverPort,
+        );
+        if (result != ProxyResult.ok) {
+          _lastError = _service.lastError ?? ProxyResult.message(result);
+          return false;
+        }
+        _config = candidate;
+        _currentNodeId = null;
+        await _saveConfig();
+        return true;
+      } catch (error) {
+        _lastError = error.toString();
+        return false;
+      } finally {
+        _isProxyTransitioning = false;
+        _safeNotifyListeners();
+      }
+    }
+
+    if (plan == _ApplyPlan.bypassOnly) {
       return updateTunBypassProcesses(
         candidate.tunBypassProcesses,
         weGame: candidate.tunBypassWeGame,
@@ -479,6 +524,76 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   bool _isValidPort(int port) => port >= 1 && port <= 65535;
+
+  /// The branch [applyConfig] takes, and what [applyImpactOf] reports.
+  _ApplyPlan _applyPlan(ProxyConfigModel previous, ProxyConfigModel candidate) {
+    bool sameExcept(List<String> keys) {
+      final before = previous.toJson();
+      final after = candidate.toJson();
+      for (final key in keys) {
+        before.remove(key);
+        after.remove(key);
+      }
+      return jsonEncode(before) == jsonEncode(after);
+    }
+
+    if (sameExcept(const [])) return _ApplyPlan.unchanged;
+    if (!_isRunning && !_isTunRunning) return _ApplyPlan.save;
+    if (_isRunning &&
+        sameExcept(const ['serverHost', 'serverPort']) &&
+        _keepsCapture(previous, candidate.serverHost, candidate.serverPort)) {
+      return _ApplyPlan.switchUpstream;
+    }
+    if (sameExcept(const ['tunBypassProcesses', 'tunBypassWeGame'])) {
+      return _ApplyPlan.bypassOnly;
+    }
+    return _ApplyPlan.restart;
+  }
+
+  /// Whether running TUN capture survives a move from [previous]'s endpoint.
+  /// Its routes exclude the server host; Windows and Apple's packet provider
+  /// update them in place, elsewhere only the same host keeps them valid.
+  bool _keepsCapture(ProxyConfigModel previous, String host, int port) {
+    if (!_isTunRunning || _service.supportsLiveTunSwitch) return true;
+    final from = UpstreamEndpoint.tryFromHost(
+      previous.serverHost,
+      previous.serverPort,
+    );
+    final to = UpstreamEndpoint.tryFromHost(host, port);
+    return from != null && to != null && from.host == to.host;
+  }
+
+  /// What applying [draft] would do to the running proxy right now.
+  SwitchImpact applyImpactOf(ProxyConfigModel draft) {
+    final candidate = _supportedConfig(draft);
+    if (UpstreamEndpoint.tryFromHost(
+          candidate.serverHost,
+          candidate.serverPort,
+        ) ==
+        null) {
+      return SwitchImpact.none;
+    }
+    return switch (_applyPlan(_config, candidate)) {
+      _ApplyPlan.unchanged || _ApplyPlan.save => SwitchImpact.none,
+      _ApplyPlan.bypassOnly => SwitchImpact.none,
+      _ApplyPlan.switchUpstream => SwitchImpact.newSessions,
+      _ApplyPlan.restart => SwitchImpact.reconnects,
+    };
+  }
+
+  /// What selecting [node] would do to the running proxy right now.
+  SwitchImpact switchImpactOf(NodeInfo node) {
+    final endpoint = node.endpoint;
+    if (!_isRunning || endpoint == null || isCurrentNode(node)) {
+      return SwitchImpact.none;
+    }
+    if (_keepsCapture(_config, endpoint.qualifiedHost, endpoint.port)) {
+      return SwitchImpact.newSessions;
+    }
+    return _isTunRunning && !BuildCapabilities.usesPacketTunnel
+        ? SwitchImpact.restartsTun
+        : SwitchImpact.reconnects;
+  }
 
   ProxyConfigModel _supportedConfig(ProxyConfigModel config) =>
       BuildCapabilities.usesPacketTunnel
@@ -1211,9 +1326,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       throw StateError(appStrings.proxyOperationIsAlreadyInProgress);
     }
 
-    // Captured before anything is applied so a failed start can put the
-    // previous node back. Reachability and the stop/restart are handled below,
-    // where the TUN and non-TUN paths differ.
+    // A failed cold start or route update must retain the previous selection.
     final previousConfig = _config;
     final previousNodeId = _currentNodeId;
 
@@ -1236,10 +1349,18 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       setSystemProxy: _config.setSystemProxy,
     );
 
+    // Keep this branching in step with [switchImpactOf], which the node
+    // panels use to say what a switch will do before it is made.
+    if (_isRunning &&
+        _keepsCapture(
+          previousConfig,
+          newConfig.serverHost,
+          newConfig.serverPort,
+        )) {
+      return _switchLiveNode(node, _supportedConfig(newConfig));
+    }
+
     if (_isRunning && _isTunRunning && !BuildCapabilities.usesPacketTunnel) {
-      if (_service.supportsLiveTunSwitch) {
-        return _switchLiveTunNode(node, newConfig);
-      }
       return _hotSwitchTunNode(node, newConfig);
     }
 
@@ -1248,14 +1369,6 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     await _ensureNodeReachable(node);
-
-    // Outside TUN mode, preserve the established restart behavior because
-    // non-TUN HTTP/SOCKS sessions are not owned by the TUN relay and therefore
-    // cannot all be drained by stopping capture.
-    if (_isRunning) {
-      if (!await stop()) return false;
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
 
     updateConfig(newConfig);
     _currentNodeId = node.nodeId;
@@ -1271,9 +1384,8 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     return started;
   }
 
-  /// A provider owns both capture and the listener, so a node change replaces
-  /// the whole VPN session. Probe after disconnecting to avoid routing the new
-  /// endpoint through the old node. Keep the operation locked through rollback.
+  /// Start a stopped provider, or replace one that lacks live switching.
+  /// Probe after disconnecting so the old VPN cannot capture the new endpoint.
   Future<bool> _switchPacketTunnelNode(
     NodeInfo node,
     ProxyConfigModel newConfig,
@@ -1340,10 +1452,14 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _ensureNodeReachable(NodeInfo node) async {
+    final endpoint = UpstreamEndpoint.parse(node.addr);
+    // QUIC is authenticated by the native runtime when a session opens.
+    // A TCP probe to its UDP port cannot establish reachability.
+    if (endpoint.transport == UpstreamTransport.quic) return;
     try {
       final socket = await Socket.connect(
-        node.host,
-        node.port,
+        endpoint.host,
+        endpoint.port,
         timeout: const Duration(seconds: 5),
       );
       socket.destroy();
@@ -1354,9 +1470,9 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Native Windows route ownership stays with the active TUN session. A failed
-  /// preparation leaves its upstream unchanged, so no restart/rollback is needed.
-  Future<bool> _switchLiveTunNode(
+  /// Existing flows retain their endpoint; native route preparation, when
+  /// required, completes before the new endpoint becomes visible.
+  Future<bool> _switchLiveNode(
     NodeInfo node,
     ProxyConfigModel newConfig,
   ) async {

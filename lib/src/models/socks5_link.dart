@@ -20,11 +20,9 @@ class Socks5Link {
   /// Whether the endpoint also relays UDP.
   final bool udp;
 
-  /// The link with its password hidden, for display.
-  String get maskedUrl {
-    final address = host.contains(':') ? '[$host]' : host;
-    return 'socks5://${Uri.encodeComponent(username)}:••••••@$address:$port';
-  }
+  /// `host:port`, shown in place of the link until its credentials are
+  /// asked for: the part that fits beside a node and is checked at a glance.
+  String get address => '${host.contains(':') ? '[$host]' : host}:$port';
 
   /// Null when the node serves no SOCKS5 endpoint or the answer is malformed.
   static Socks5Link? fromJson(Map<String, dynamic> json) {

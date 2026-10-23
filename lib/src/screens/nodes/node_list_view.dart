@@ -4,6 +4,7 @@ import 'package:proxy_ui/l10n/app_language.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/node_badges.dart';
 import '../../widgets/planet_glyph.dart';
+import '../proxy_controls.dart';
 import 'galaxy/galaxy_model.dart';
 import 'node_actions.dart';
 import 'node_details_panel.dart';
@@ -195,10 +196,8 @@ class _NodeTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    NodeAddressText(
                       info.addr,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w500,
                         fontFeatures: const [FontFeature.tabularFigures()],
@@ -229,7 +228,9 @@ class _NodeTile extends StatelessWidget {
                 )
               else
                 IconButton(
-                  tooltip: context.l10n.nodeConnect,
+                  tooltip: actions.restartsTun(info)
+                      ? context.l10n.connectRestartsTun(captureName)
+                      : context.l10n.nodeConnect,
                   onPressed: actions.canConnect(info)
                       ? () => actions.connect(context, info)
                       : null,
@@ -238,6 +239,8 @@ class _NodeTile extends StatelessWidget {
                           dimension: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
+                      // Under TUN nearly every other node is another host, so
+                      // the icon stays put; the tooltip and the panel say it.
                       : const Icon(Icons.power_settings_new),
                 ),
             ],

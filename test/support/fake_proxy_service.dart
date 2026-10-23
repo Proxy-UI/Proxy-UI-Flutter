@@ -18,6 +18,15 @@ class FakeProxyService extends ProxyService {
   final calls = <String>[];
   bool _running = false;
   bool _tunRunning = false;
+  String? _lastError;
+
+  /// Whether TUN follows a switch to another host in place, as on Windows.
+  @override
+  bool supportsLiveTunSwitch = false;
+
+  /// What [switchUpstream] answers, and the runtime's reason when it refuses.
+  int switchResult = ProxyResult.ok;
+  String? switchError;
 
   @override
   void initLogging() {}
@@ -57,6 +66,23 @@ class FakeProxyService extends ProxyService {
   }
 
   @override
+  Future<int> stopTun() async {
+    calls.add('stopTun');
+    _tunRunning = false;
+    return ProxyResult.ok;
+  }
+
+  @override
+  Future<int> switchUpstream({
+    required String serverHost,
+    required int serverPort,
+  }) async {
+    calls.add('switch $serverHost:$serverPort');
+    _lastError = switchResult == ProxyResult.ok ? null : switchError;
+    return switchResult;
+  }
+
+  @override
   Future<int> stop() async {
     calls.add('stop');
     _running = _tunRunning = false;
@@ -93,7 +119,7 @@ class FakeProxyService extends ProxyService {
   @override
   bool get isElevated => true;
   @override
-  String? get lastError => null;
+  String? get lastError => _lastError;
   @override
   void dispose() {}
 }

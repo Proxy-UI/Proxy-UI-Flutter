@@ -30,6 +30,9 @@ final bool supportsTunProcessBypass =
 bool get captureIsVpn =>
     Platform.isAndroid || BuildCapabilities.usesPacketTunnel;
 
+/// What traffic capture is called here: the platform VPN, or TUN.
+String get captureName => captureIsVpn ? 'VPN' : 'TUN';
+
 /// Start or stop the proxy, with the outcome as a toast.
 Future<void> toggleProxy(BuildContext context) async {
   final state = context.read<ProxyState>();
@@ -172,7 +175,7 @@ Future<void> importConfigFromClipboard(BuildContext context) async {
 String connectionModeLabel(BuildContext context, ProxyState state) {
   final strings = context.l10n;
   if (state.isTunRunning) {
-    final capture = captureIsVpn ? 'VPN' : 'TUN';
+    final capture = captureName;
     if (BuildCapabilities.usesPacketTunnel) {
       return state.config.udpEnabled
           ? strings.tcpProxyUdpCountryProxy(capture)
@@ -185,6 +188,13 @@ String connectionModeLabel(BuildContext context, ProxyState state) {
   }
   return state.config.udpEnabled ? strings.socksTcpUdp : strings.socksTcpOnly;
 }
+
+/// [text] about restarting TUN, plus the password prompt that restart brings
+/// on macOS, where the privileged helper is started again.
+String tunRestartNotice(BuildContext context, String text) =>
+    Platform.isMacOS && !BuildCapabilities.usesPacketTunnel
+    ? '$text ${context.l10n.macosAsksForPassword}'
+    : text;
 
 /// One line on what traffic capture is doing.
 String captureStatusLabel(BuildContext context, ProxyState state) {

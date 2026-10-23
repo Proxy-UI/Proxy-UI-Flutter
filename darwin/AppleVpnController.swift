@@ -69,7 +69,7 @@ final class AppleVpnController: NSObject, FlutterStreamHandler {
       }
     case "start": start(call.arguments, result: result)
     case "stop": stop(result: result)
-    case "probeNode":
+    case "probeNode", "switchUpstream":
       guard let session = manager?.connection as? NETunnelProviderSession,
         session.status == .connected || session.status == .reasserting,
         let request = call.arguments as? [String: Any],

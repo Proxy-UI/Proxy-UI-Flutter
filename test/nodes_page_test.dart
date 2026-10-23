@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
+import 'package:proxy_ui/src/ffi/proxy_ffi.dart';
 import 'package:proxy_ui/src/ffi/proxy_service.dart';
 import 'package:proxy_ui/src/providers/proxy_provider.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_canvas.dart';
@@ -159,6 +160,56 @@ void main() {
     service.answer.complete();
     await tester.pumpAndSettle();
     expect(us.any(state.isVerifyingNode), isFalse);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a node says when switching restarts TUN, and why it failed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final service = FakeProxyService();
+    final state = await _state(tester, service);
+    await tester.runAsync(() async {
+      expect(await state.start(), isTrue);
+      expect(await state.setTunEnabled(true), isTrue);
+    });
+    // Another host than the current node's, which TUN routes do not exclude.
+    final other = state.nodes[0];
+
+    await tester.pumpWidget(_app(state, selection: other.storageKey));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Switching to another host restarts TUN.'),
+      findsOneWidget,
+    );
+
+    // Where capture follows the new host in place, there is nothing to say,
+    // and a refusal is shown in the runtime's own words until retried.
+    service.supportsLiveTunSwitch = true;
+    service.switchResult = ProxyResult.runtimeError;
+    service.switchError = 'QUIC handshake failed: certificate name mismatch';
+    await tester.tap(find.byKey(const Key('node-connect')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('node-switch-restarts-tun')), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('node-switch-error')),
+        matching: find.text(service.switchError!),
+      ),
+      findsOneWidget,
+    );
+
+    service.switchResult = ProxyResult.ok;
+    await tester.tap(find.byKey(const Key('node-connect')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('node-switch-error')), findsNothing);
+    expect(state.isCurrentNode(other), isTrue);
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpWidget(const SizedBox());
   });

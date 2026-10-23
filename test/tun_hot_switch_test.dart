@@ -17,6 +17,142 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test(
+    'node selection starts QUIC and switches carriers without restarting',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(ProxyConfigModel(setSystemProxy: false));
+      NodeInfo node(String address) => NodeInfo(
+        nodeId: address,
+        addr: address,
+        lastSeen: DateTime.now(),
+        country: '',
+        region: '',
+      );
+      expect(
+        await state.switchToNode(node('quic://node.example:10811')),
+        isTrue,
+      );
+      expect(service.listenerStartCount, 1);
+      service.calls.clear();
+      expect(
+        await state.switchToNode(node('tcp://node.example:12111')),
+        isTrue,
+      );
+      expect(service.calls, ['switch:node.example:12111']);
+      expect(await state.setTunEnabled(true), isTrue);
+      service.calls.clear();
+      expect(
+        await state.switchToNode(node('quic://node.example:10811')),
+        isTrue,
+      );
+      expect(service.calls, ['switch:quic://node.example:10811']);
+      expect(service.listenerStartCount, 1);
+      expect(state.isRunning && state.isTunRunning, isTrue);
+      expect(state.currentNodeId, 'quic://node.example:10811');
+    },
+  );
+
+  test('reported switch impact matches the branch each switch takes', () async {
+    final service = _FakeProxyService();
+    final state = ProxyState(service: service);
+    addTearDown(state.dispose);
+    await _waitUntilInitialized(state);
+    state.updateConfig(
+      ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+    );
+    NodeInfo node(String address) => NodeInfo(
+      nodeId: address,
+      addr: address,
+      lastSeen: DateTime.now(),
+      country: '',
+      region: '',
+    );
+    final otherHost = node('other.example:1081');
+    final sameHostQuic = node('quic://node.example:10811');
+    ProxyConfigModel draft(String host, int port) =>
+        state.config.copyWith(serverHost: host, serverPort: port);
+
+    // Stopped: a switch only saves, or starts the proxy.
+    expect(state.switchImpactOf(otherHost), SwitchImpact.none);
+    expect(state.applyImpactOf(draft('other.example', 1)), SwitchImpact.none);
+
+    expect(await state.start(), isTrue);
+    expect(state.switchImpactOf(otherHost), SwitchImpact.newSessions);
+    expect(
+      state.applyImpactOf(state.config.copyWith(localPort: 18090)),
+      SwitchImpact.reconnects,
+    );
+
+    // TUN routes exclude the current host, so only it can switch in place.
+    expect(await state.setTunEnabled(true), isTrue);
+    expect(state.switchImpactOf(sameHostQuic), SwitchImpact.newSessions);
+    expect(state.switchImpactOf(otherHost), SwitchImpact.restartsTun);
+    expect(
+      state.applyImpactOf(draft('quic://node.example', 10811)),
+      SwitchImpact.newSessions,
+    );
+    expect(
+      state.applyImpactOf(draft('other.example', 1081)),
+      SwitchImpact.reconnects,
+    );
+    expect(
+      state.applyImpactOf(state.config.copyWith(tunBypassWeGame: true)),
+      SwitchImpact.none,
+    );
+
+    service.calls.clear();
+    expect(await state.switchToNode(sameHostQuic), isTrue);
+    expect(service.calls, ['switch:quic://node.example:10811']);
+    expect(state.switchImpactOf(sameHostQuic), SwitchImpact.none);
+
+    // Windows prepares the new host's bypass route before switching.
+    service.supportsLiveTunSwitch = true;
+    expect(state.switchImpactOf(otherHost), SwitchImpact.newSessions);
+    expect(
+      state.applyImpactOf(draft('other.example', 1081)),
+      SwitchImpact.newSessions,
+    );
+  });
+
+  test('changing the carrier preserves the listener and active TUN', () async {
+    final service = _FakeProxyService();
+    final state = ProxyState(service: service);
+    addTearDown(state.dispose);
+    await _waitUntilInitialized(state);
+    state.updateConfig(
+      ProxyConfigModel(serverHost: 'node.example', setSystemProxy: false),
+    );
+    expect(await state.start(), isTrue);
+    expect(await state.setTunEnabled(true), isTrue);
+    service.calls.clear();
+    expect(
+      await state.applyConfig(
+        state.config.copyWith(
+          serverHost: 'quic://node.example',
+          serverPort: 10811,
+        ),
+      ),
+      isTrue,
+    );
+    expect(service.calls, ['switch:quic://node.example:10811']);
+    expect(service.listenerStartCount, 1);
+    expect(state.isRunning && state.isTunRunning, isTrue);
+    expect(state.config.serverHost, 'quic://node.example');
+    service.calls.clear();
+    expect(
+      await state.applyConfig(
+        state.config.copyWith(serverHost: 'node.example', serverPort: 1081),
+      ),
+      isTrue,
+    );
+    expect(service.calls, ['switch:node.example:1081']);
+    expect(service.listenerStartCount, 1);
+  });
+
   test('confirmed draft rolls back a failed listener and commits only a successful apply', () async {
     final service = _FakeProxyService();
     final state = ProxyState(service: service);

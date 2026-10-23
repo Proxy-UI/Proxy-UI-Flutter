@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 
+import '../../models/upstream_endpoint.dart';
 import '../../providers/proxy_provider.dart';
 
 /// Where the node catalogue comes from: the control server's address and
@@ -24,9 +25,15 @@ class ControlServerDialog extends StatefulWidget {
 
 class _ControlServerDialogState extends State<ControlServerDialog> {
   late final ProxyState _state = context.read<ProxyState>();
+  // The proxy server's plain host: its carrier and port are the proxy's, and
+  // the catalogue is asked on the control port below.
   late final TextEditingController _host = TextEditingController(
     text: _state.nodesServerHost.isEmpty
-        ? _state.config.serverHost
+        ? UpstreamEndpoint.tryFromHost(
+                _state.config.serverHost,
+                _state.config.serverPort,
+              )?.host ??
+              _state.config.serverHost
         : _state.nodesServerHost,
   );
   late final TextEditingController _port = TextEditingController(

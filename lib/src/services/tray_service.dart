@@ -13,6 +13,7 @@ import 'package:tray_manager/legacy.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models/node_model.dart';
+import '../models/upstream_endpoint.dart';
 import '../providers/proxy_provider.dart';
 import '../utils/toast_utils.dart';
 import 'window_state_service.dart';
@@ -288,7 +289,7 @@ class TrayService with TrayListener {
             _TrayStatus.disconnected => appStrings.disconnected,
             _TrayStatus.error => appStrings.connectionError,
           };
-    final serverLabel = '${config.serverHost}:${config.serverPort}';
+    final serverLabel = endpointLabel(config.serverHost, config.serverPort);
 
     final menu = Menu(
       items: [
@@ -427,7 +428,8 @@ class TrayService with TrayListener {
     final name = node.displayName.trim();
     // `displayName` is "country - region" and geo lookup can leave both empty.
     final hasName = name.isNotEmpty && name != '-';
-    final label = hasName ? '$name (${node.addr})' : node.addr;
+    final address = node.endpoint?.label ?? node.addr;
+    final label = hasName ? '$name ($address)' : address;
     return node.latencyMs != null ? '$label · ${node.latencyDisplay}' : label;
   }
 

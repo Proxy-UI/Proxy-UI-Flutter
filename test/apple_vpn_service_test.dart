@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -185,8 +184,47 @@ void main() {
           serverHost: 'other.example',
           serverPort: 1,
         ),
-        ProxyResult.invalidParam,
+        ProxyResult.notRunning,
       );
+    },
+  );
+
+  test(
+    'switches the connected provider without stopping and reports rejection',
+    () async {
+      final vpn = AppleVpnService()..running = true;
+      final service = ApplePacketTunnelProxyService(vpn: vpn);
+      addTearDown(service.dispose);
+      var accepted = true;
+      messenger.setMockMethodCallHandler(methods, (call) async {
+        calls.add(call);
+        return {
+          'success': accepted,
+          'error': accepted ? null : 'invalid endpoint',
+        };
+      });
+      expect(service.supportsLiveTunSwitch, isTrue);
+      expect(
+        await service.switchUpstream(
+          serverHost: 'quic://node.example',
+          serverPort: 10811,
+        ),
+        ProxyResult.ok,
+      );
+      expect(calls.single.method, 'switchUpstream');
+      expect(calls.single.arguments, {
+        'operation': 'switchUpstream',
+        'host': 'quic://node.example',
+        'port': 10811,
+      });
+      accepted = false;
+      expect(
+        await service.switchUpstream(serverHost: 'bad/host', serverPort: 1081),
+        ProxyResult.runtimeError,
+      );
+      expect(service.isRunning, isTrue);
+      expect(service.lastError, contains('invalid endpoint'));
+      expect(calls.every((call) => call.method == 'switchUpstream'), isTrue);
     },
   );
 
@@ -230,7 +268,7 @@ void main() {
   );
 
   test(
-    'iOS node failure restores prior VPN and config without a hot FFI switch',
+    'iOS node selection keeps the VPN and commits only an accepted switch',
     () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       final service = _QuietStoreService();
@@ -259,34 +297,35 @@ void main() {
       expect(state.config.tunBypassProcesses, isEmpty);
       expect(await state.start(), isTrue);
       calls.clear();
-      failStart = true;
-      final listener = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-      final subscription = listener.listen((socket) => socket.destroy());
-      addTearDown(() async {
-        await subscription.cancel();
-        await listener.close();
+      var accepted = false;
+      messenger.setMockMethodCallHandler(methods, (call) async {
+        calls.add(call);
+        return {
+          'success': accepted,
+          'error': accepted ? null : 'invalid endpoint',
+        };
       });
       final node = NodeInfo(
         nodeId: 'candidate',
         country: 'Test',
         region: 'Loopback',
-        addr: '127.0.0.1:${listener.port}',
+        addr: 'quic://new.example:10811',
         lastSeen: DateTime.now(),
       );
       expect(await state.switchToNode(node), isFalse);
-      expect(calls.map((call) => call.method), [
-        'stop',
-        'start',
-        'stop',
-        'start',
-      ]);
-      expect((calls.last.arguments as Map)['serverHost'], 'old.example');
+      expect(calls.single.method, 'switchUpstream');
       expect(state.config.serverHost, 'old.example');
       expect(state.currentNodeId, isNull);
       expect(state.isRunning, isTrue);
       expect(state.isTunRunning, isTrue);
       expect(state.isProxyOperationInProgress, isFalse);
-      expect(state.lastError, contains('restored'));
+      expect(state.lastError, contains('invalid endpoint'));
+      accepted = true;
+      expect(await state.switchToNode(node), isTrue);
+      expect(state.config.serverHost, 'quic://new.example');
+      expect(state.currentNodeId, 'candidate');
+      expect(state.isRunning && state.isTunRunning, isTrue);
+      expect(calls.every((call) => call.method == 'switchUpstream'), isTrue);
     },
   );
 }

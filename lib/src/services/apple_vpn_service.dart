@@ -45,6 +45,18 @@ class AppleVpnService {
     _apply(await _channel.invokeMapMethod<String, dynamic>('stop'));
   }
 
+  Future<void> switchUpstream(String host, int port) async {
+    final response = await _channel.invokeMapMethod<String, dynamic>(
+      'switchUpstream',
+      {'operation': 'switchUpstream', 'host': host, 'port': port},
+    );
+    if (response?['success'] != true) {
+      throw StateError(
+        response?['error']?.toString() ?? 'VPN upstream switch failed',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> probeNode({
     required String host,
     required int port,

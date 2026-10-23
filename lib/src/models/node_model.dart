@@ -1,3 +1,4 @@
+import 'upstream_endpoint.dart';
 import 'proxy_config.dart';
 
 /// Outcome of asking an echo service, through a node, where its traffic leaves
@@ -124,44 +125,16 @@ class NodeInfo {
     );
   }
 
+  /// The address with its carrier, or null when it does not parse.
+  UpstreamEndpoint? get endpoint => UpstreamEndpoint.tryParse(addr);
+
   // Parse host and port from addr (format: "ip:port")
   String get host => _parseHostAndPort().$1;
   int get port => _parseHostAndPort().$2;
 
   (String, int) _parseHostAndPort() {
-    final value = addr.trim();
-    if (value.isEmpty) {
-      throw const FormatException('Address is empty');
-    }
-
-    if (value.startsWith('[')) {
-      final endBracket = value.indexOf(']');
-      if (endBracket <= 1 || endBracket >= value.length - 2) {
-        throw FormatException('Invalid address format: $value');
-      }
-      if (value[endBracket + 1] != ':') {
-        throw FormatException('Invalid address format: $value');
-      }
-      final hostPart = value.substring(1, endBracket);
-      final portPart = value.substring(endBracket + 2);
-      final parsedPort = int.tryParse(portPart);
-      if (parsedPort == null || parsedPort < 1 || parsedPort > 65535) {
-        throw FormatException('Invalid port: $portPart');
-      }
-      return (hostPart, parsedPort);
-    }
-
-    final separatorIndex = value.lastIndexOf(':');
-    if (separatorIndex <= 0 || separatorIndex >= value.length - 1) {
-      throw FormatException('Invalid address format: $value');
-    }
-    final hostPart = value.substring(0, separatorIndex);
-    final portPart = value.substring(separatorIndex + 1);
-    final parsedPort = int.tryParse(portPart);
-    if (parsedPort == null || parsedPort < 1 || parsedPort > 65535) {
-      throw FormatException('Invalid port: $portPart');
-    }
-    return (hostPart, parsedPort);
+    final endpoint = UpstreamEndpoint.parse(addr);
+    return (endpoint.qualifiedHost, endpoint.port);
   }
 
   // Generate ProxyConfigModel for this node

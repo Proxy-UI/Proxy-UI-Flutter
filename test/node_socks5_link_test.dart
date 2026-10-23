@@ -86,11 +86,9 @@ void main() {
       containsAll(['socks5 ${serving.addr}', 'socks5 ${nodes[1].addr}']),
     );
     expect(find.byKey(const Key('node-socks5-link')), findsOneWidget);
-    expect(find.text('SOCKS5 link · TCP and UDP'), findsOneWidget);
-    expect(
-      find.text('socks5://cipherrelay:••••••@${serving.host}:1080'),
-      findsOneWidget,
-    );
+    expect(find.text('SOCKS5 link'), findsOneWidget);
+    expect(find.text('UDP'), findsOneWidget);
+    expect(find.text('${serving.host}:1080'), findsOneWidget);
     expect(find.textContaining('secret-value'), findsNothing);
 
     await tester.tap(find.byTooltip('Show password'));

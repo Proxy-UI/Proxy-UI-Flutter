@@ -32,9 +32,18 @@ class NodeActions extends ChangeNotifier {
 
   final ProxyState state;
   final Set<String> _switching = {};
+  final Map<String, String> _switchErrors = {};
   bool _testingMany = false;
 
   bool isSwitching(NodeInfo node) => _switching.contains(node.storageKey);
+
+  /// Why the last [connect] to [node] failed, in the runtime's own words,
+  /// until it is tried again or another switch succeeds.
+  String? switchError(NodeInfo node) => _switchErrors[node.storageKey];
+
+  /// Whether [connect] restarts TUN capture to reach [node]'s host.
+  bool restartsTun(NodeInfo node) =>
+      state.switchImpactOf(node) == SwitchImpact.restartsTun;
 
   bool get isSwitchingAny => _switching.isNotEmpty;
 
@@ -59,18 +68,26 @@ class NodeActions extends ChangeNotifier {
     final strings = context.l10n;
     final language = Localizations.localeOf(context).languageCode;
     if (!_switching.add(node.storageKey)) return;
+    _switchErrors.remove(node.storageKey);
     notifyListeners();
+    void fail(String message) {
+      _switchErrors[node.storageKey] = message;
+      ToastUtils.showError(message);
+    }
+
     try {
       final success = await state.switchToNode(node);
       if (success) {
+        // Another node's failure is history once a switch went through.
+        _switchErrors.clear();
         ToastUtils.showSuccess(
           strings.switchedTo(_label(node, strings, language)),
         );
       } else {
-        ToastUtils.showError(state.lastError ?? strings.failedToSwitchNode);
+        fail(state.lastError ?? strings.failedToSwitchNode);
       }
     } catch (error) {
-      ToastUtils.showError(strings.failedToSwitch(error.toString()));
+      fail(strings.failedToSwitch(error.toString()));
     } finally {
       _switching.remove(node.storageKey);
       notifyListeners();
@@ -156,6 +173,6 @@ class NodeActions extends ChangeNotifier {
     final place = code.isEmpty
         ? strings.galaxyUnlocated
         : countryName(code, language);
-    return '$place · ${node.addr}';
+    return '$place · ${node.endpoint?.label ?? node.addr}';
   }
 }

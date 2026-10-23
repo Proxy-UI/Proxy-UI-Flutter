@@ -671,7 +671,7 @@ class _Frame {
     final latency = node.health.isAvailable && node.latencyMs != null
         ? ' · ${node.latencyMs}ms'
         : '';
-    final address = emphasis ? node.node.addr : node.host;
+    final address = emphasis ? node.address : node.host;
     pending.add(
       _Label(
         planet.id,

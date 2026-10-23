@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../services/local_network_service.dart';
 import '../utils/toast_utils.dart';
+import 'link_tile.dart';
 
 /// The addresses on offer, and the one currently shown.
 typedef _LanChoices = ({List<LanAddress> addresses, LanAddress? selected});
@@ -77,8 +78,6 @@ class _LanProxyLinkState extends State<LanProxyLink> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     return FutureBuilder<_LanChoices>(
       future: _choices,
       builder: (context, snapshot) {
@@ -90,90 +89,56 @@ class _LanProxyLinkState extends State<LanProxyLink> {
         // between; on a single-homed machine it is noise.
         final showInterface = addresses.length > 1 && selected != null;
 
-        return Container(
+        return LinkTile(
           key: const Key('lan-proxy-link'),
-          constraints: const BoxConstraints(minHeight: 64),
-          padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.lan_outlined, color: colors.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      showInterface
-                          ? context.l10n.lanHttpProxy(
-                              (selected.interfaceName).toString(),
-                            )
-                          : context.l10n.lanHttpProxy2,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      loading
-                          ? context.l10n.findingLanAddress
-                          : url ?? context.l10n.lanAddressUnavailable,
-                      key: const Key('lan-proxy-url'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: url == null
-                            ? colors.onSurfaceVariant
-                            : colors.onSurface,
+          icon: Icons.lan_outlined,
+          title: showInterface
+              ? context.l10n.lanHttpProxy((selected.interfaceName).toString())
+              : context.l10n.lanHttpProxy2,
+          value: loading
+              ? context.l10n.findingLanAddress
+              : url ?? context.l10n.lanAddressUnavailable,
+          valueKey: const Key('lan-proxy-url'),
+          muted: url == null,
+          actions: [
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else ...[
+              if (addresses.length > 1)
+                PopupMenuButton<LanAddress>(
+                  key: const Key('lan-proxy-picker'),
+                  tooltip: context.l10n.chooseTheNetworkToShareOn,
+                  icon: const Icon(Icons.swap_horiz),
+                  onSelected: _select,
+                  itemBuilder: (context) => <PopupMenuEntry<LanAddress>>[
+                    for (final address in addresses)
+                      CheckedPopupMenuItem<LanAddress>(
+                        value: address,
+                        checked: address == selected,
+                        child: Text(
+                          '${address.address} · ${address.interfaceName}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
                   ],
                 ),
-              ),
-              if (loading)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else ...[
-                if (addresses.length > 1)
-                  PopupMenuButton<LanAddress>(
-                    key: const Key('lan-proxy-picker'),
-                    tooltip: context.l10n.chooseTheNetworkToShareOn,
-                    icon: const Icon(Icons.swap_horiz),
-                    onSelected: _select,
-                    itemBuilder: (context) => <PopupMenuEntry<LanAddress>>[
-                      for (final address in addresses)
-                        CheckedPopupMenuItem<LanAddress>(
-                          value: address,
-                          checked: address == selected,
-                          child: Text(
-                            '${address.address} · ${address.interfaceName}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                  ),
-                IconButton(
-                  onPressed: url == null ? _refresh : () => _copy(url),
-                  icon: Icon(
-                    url == null ? Icons.refresh : Icons.content_copy_outlined,
-                  ),
-                  tooltip: url == null
-                      ? context.l10n.refreshLanAddress
-                      : context.l10n.copyLanProxyLink,
+              IconButton(
+                onPressed: url == null ? _refresh : () => _copy(url),
+                icon: Icon(
+                  url == null ? Icons.refresh : Icons.content_copy_outlined,
                 ),
-              ],
+                tooltip: url == null
+                    ? context.l10n.refreshLanAddress
+                    : context.l10n.copyLanProxyLink,
+              ),
             ],
-          ),
+          ],
         );
       },
     );

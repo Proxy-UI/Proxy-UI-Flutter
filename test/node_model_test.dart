@@ -3,6 +3,18 @@ import 'package:proxy_ui/src/models/node_model.dart';
 
 void main() {
   group('NodeInfo', () {
+    test('QUIC node selection preserves the carrier through configuration', () {
+      final node = NodeInfo(
+        nodeId: 'quic',
+        addr: 'quic://[::1]:10811',
+        lastSeen: DateTime.now(),
+        country: '',
+        region: '',
+      );
+      expect(node.host, 'quic://[::1]');
+      expect(node.port, 10811);
+      expect(node.toProxyConfig().serverHost, 'quic://[::1]');
+    });
     test('parses IPv4 host and port', () {
       final node = NodeInfo(
         nodeId: 'n1',

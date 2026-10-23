@@ -30,6 +30,39 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     let respond: ([String: Any]) -> Void = { value in
       completion(try? JSONSerialization.data(withJSONObject: value))
     }
+    if messageData.count <= 4096,
+      let request = try? JSONSerialization.jsonObject(with: messageData) as? [String: Any],
+      request["operation"] as? String == "switchUpstream" {
+      guard let host = request["host"] as? String, !host.isEmpty, host.utf8.count <= 1024,
+        !host.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+        let port = request["port"] as? Int, (1...65535).contains(port)
+      else { respond(["success": false, "error": "Invalid upstream endpoint"]); return }
+      stateQueue.async {
+        guard let tunnel = self.tunnel, !self.stopping, self.starting == nil,
+          let config = self.protocolConfiguration as? NETunnelProviderProtocol,
+          let reference = config.passwordReference
+        else { respond(["success": false, "error": "VPN is unavailable"]); return }
+        do {
+          let data = try TunnelConfigurationStore.load(reference: reference)
+          guard var saved = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let oldHost = saved["serverHost"] as? String,
+            let oldPort = saved["serverPort"] as? Int
+          else { throw TunnelConfigurationStore.failure("Invalid saved VPN configuration") }
+          let status = host.withCString { proxy_packet_tunnel_switch_upstream(tunnel, $0, UInt16(port)) }
+          guard status == 0 else { throw TunnelConfigurationStore.failure("Cannot switch the VPN upstream") }
+          do {
+            saved["serverHost"] = host
+            saved["serverPort"] = port
+            _ = try TunnelConfigurationStore.save(JSONSerialization.data(withJSONObject: saved))
+          } catch {
+            _ = oldHost.withCString { proxy_packet_tunnel_switch_upstream(tunnel, $0, UInt16(oldPort)) }
+            throw error
+          }
+          respond(["success": true])
+        } catch { respond(["success": false, "error": error.localizedDescription]) }
+      }
+      return
+    }
     guard messageData.count <= 4096,
       let request = try? JSONSerialization.jsonObject(with: messageData) as? [String: Any],
       request["operation"] as? String == "probeNode",
