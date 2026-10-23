@@ -355,7 +355,7 @@ Build the complete Rust workspace and Windows UI together with:
 .\scripts\windows\build.ps1 -Configuration Release
 ```
 
-Version 2.0.12 requires native 0.6.9. Downloads, integrity/signature checks,
+Version 2.0.13 requires native 0.6.10. Downloads, integrity/signature checks,
 disk logging, subscription HTTP, blocking process/proxy control, galaxy
 computation and desktop app proxies use the shared Rust runtime on supported
 platforms. The Windows
