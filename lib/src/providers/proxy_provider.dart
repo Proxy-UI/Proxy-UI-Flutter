@@ -19,6 +19,7 @@ import '../models/node_catalog_preferences.dart';
 import '../models/node_group_model.dart';
 import '../models/node_model.dart';
 import '../models/proxy_config.dart';
+import '../models/socks5_link.dart';
 import '../services/desktop_log_service.dart';
 import '../services/android_vpn_service.dart';
 import '../services/subscription_service.dart';
@@ -73,6 +74,10 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       const NodeCatalogPreferences();
   Timer? _nodeCatalogSaveTimer;
   final Set<String> _verifyingNodes = <String>{};
+
+  /// SOCKS5 links by node, once a node has answered; null when it serves none.
+  final Map<String, Socks5Link?> _socks5Links = <String, Socks5Link?>{};
+  final Set<String> _socks5Lookups = <String>{};
   bool _isInitialized = false;
   bool _isDisposed = false;
 
@@ -914,6 +919,9 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
 
   // Update nodes server config
   void updateNodesServerConfig({String? host, int? port, String? sessionKey}) {
+    if (sessionKey != null && sessionKey != nodesSessionKey) {
+      _socks5Links.clear();
+    }
     _nodeCatalogPreferences = _nodeCatalogPreferences.copyWith(
       serverHost: host,
       serverPort: port,
@@ -951,6 +959,8 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _isLoadingNodes = true;
     _nodesError = null;
     _groupsError = null;
+    // Administrators enable, disable and rotate links at any time.
+    _socks5Links.clear();
     _safeNotifyListeners();
 
     try {
@@ -998,6 +1008,35 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
 
   NodeVerification? verificationFor(NodeInfo node) =>
       _nodeCatalogPreferences.verificationFor(node);
+
+  /// The node's SOCKS5 link, when it has reported one.
+  Socks5Link? socks5LinkFor(NodeInfo node) => _socks5Links[node.storageKey];
+
+  /// Whether [node] has answered since the last catalogue refresh.
+  bool hasSocks5Answer(NodeInfo node) =>
+      _socks5Links.containsKey(node.storageKey);
+
+  /// Ask [node] for its SOCKS5 link, once per catalogue refresh. A node that
+  /// cannot answer, including one older than the feature, has none until the
+  /// catalogue is refreshed.
+  Future<void> lookUpSocks5Link(NodeInfo node) async {
+    final key = node.storageKey;
+    if (_socks5Links.containsKey(key) || !_socks5Lookups.add(key)) return;
+    Socks5Link? link;
+    try {
+      link = await _service.getSocks5Link(
+        serverHost: node.host,
+        serverPort: node.port,
+        sessionKey: nodesSessionKey?.isEmpty ?? true ? null : nodesSessionKey,
+      );
+    } catch (_) {
+      // Unreachable, malformed, or not supported: nothing to show.
+    } finally {
+      _socks5Lookups.remove(key);
+    }
+    _socks5Links[key] = link;
+    _safeNotifyListeners();
+  }
 
   /// The country to show for a node: what its traffic actually says, falling
   /// back to what the catalogue claims.

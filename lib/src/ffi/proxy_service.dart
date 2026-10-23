@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/node_group_model.dart';
 import '../models/node_model.dart';
+import '../models/socks5_link.dart';
 import '../services/android_vpn_service.dart';
 import 'proxy_ffi.dart';
 import 'native_operation_queue.dart';
@@ -871,6 +872,26 @@ class ProxyService {
     } else {
       throw Exception(result['error'] ?? appStrings.failedToGetNodes);
     }
+  }
+
+  /// The node's SOCKS5 link, or null when it serves none. Throws when the
+  /// node, or the native library, cannot answer.
+  Future<Socks5Link?> getSocks5Link({
+    required String serverHost,
+    required int serverPort,
+    String? sessionKey,
+    int timeoutMs = 5000,
+  }) async {
+    final result = await NativeProxyOperations.shared.run(
+      'socks5_endpoint',
+      arguments: {
+        'server_host': serverHost,
+        'server_port': serverPort,
+        'session_key': sessionKey,
+        'timeout_ms': timeoutMs,
+      },
+    );
+    return Socks5Link.fromJson(result);
   }
 
   /// Get all node groups from server.
