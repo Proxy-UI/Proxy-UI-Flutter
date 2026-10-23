@@ -17,6 +17,45 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test(
+    'node selection starts QUIC and switches carriers without restarting',
+    () async {
+      final service = _FakeProxyService();
+      final state = ProxyState(service: service);
+      addTearDown(state.dispose);
+      await _waitUntilInitialized(state);
+      state.updateConfig(ProxyConfigModel(setSystemProxy: false));
+      NodeInfo node(String address) => NodeInfo(
+        nodeId: address,
+        addr: address,
+        lastSeen: DateTime.now(),
+        country: '',
+        region: '',
+      );
+      expect(
+        await state.switchToNode(node('quic://node.example:10811')),
+        isTrue,
+      );
+      expect(service.listenerStartCount, 1);
+      service.calls.clear();
+      expect(
+        await state.switchToNode(node('tcp://node.example:12111')),
+        isTrue,
+      );
+      expect(service.calls, ['switch:node.example:12111']);
+      expect(await state.setTunEnabled(true), isTrue);
+      service.calls.clear();
+      expect(
+        await state.switchToNode(node('quic://node.example:10811')),
+        isTrue,
+      );
+      expect(service.calls, ['switch:quic://node.example:10811']);
+      expect(service.listenerStartCount, 1);
+      expect(state.isRunning && state.isTunRunning, isTrue);
+      expect(state.currentNodeId, 'quic://node.example:10811');
+    },
+  );
+
   test('changing the carrier preserves the listener and active TUN', () async {
     final service = _FakeProxyService();
     final state = ProxyState(service: service);

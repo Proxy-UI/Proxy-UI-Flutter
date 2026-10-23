@@ -1268,9 +1268,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       throw StateError(appStrings.proxyOperationIsAlreadyInProgress);
     }
 
-    // Captured before anything is applied so a failed start can put the
-    // previous node back. Reachability and the stop/restart are handled below,
-    // where the TUN and non-TUN paths differ.
+    // A failed cold start or route update must retain the previous selection.
     final previousConfig = _config;
     final previousNodeId = _currentNodeId;
 
@@ -1293,10 +1291,18 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       setSystemProxy: _config.setSystemProxy,
     );
 
+    if (_isRunning &&
+        (!_isTunRunning ||
+            _service.supportsLiveTunSwitch ||
+            UpstreamEndpoint.fromHost(
+                  previousConfig.serverHost,
+                  previousConfig.serverPort,
+                ).host ==
+                UpstreamEndpoint.parse(node.addr).host)) {
+      return _switchLiveNode(node, _supportedConfig(newConfig));
+    }
+
     if (_isRunning && _isTunRunning && !BuildCapabilities.usesPacketTunnel) {
-      if (_service.supportsLiveTunSwitch) {
-        return _switchLiveTunNode(node, newConfig);
-      }
       return _hotSwitchTunNode(node, newConfig);
     }
 
@@ -1305,14 +1311,6 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     await _ensureNodeReachable(node);
-
-    // Outside TUN mode, preserve the established restart behavior because
-    // non-TUN HTTP/SOCKS sessions are not owned by the TUN relay and therefore
-    // cannot all be drained by stopping capture.
-    if (_isRunning) {
-      if (!await stop()) return false;
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
 
     updateConfig(newConfig);
     _currentNodeId = node.nodeId;
@@ -1328,9 +1326,8 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     return started;
   }
 
-  /// A provider owns both capture and the listener, so a node change replaces
-  /// the whole VPN session. Probe after disconnecting to avoid routing the new
-  /// endpoint through the old node. Keep the operation locked through rollback.
+  /// Start a stopped provider, or replace one that lacks live switching.
+  /// Probe after disconnecting so the old VPN cannot capture the new endpoint.
   Future<bool> _switchPacketTunnelNode(
     NodeInfo node,
     ProxyConfigModel newConfig,
@@ -1397,10 +1394,14 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _ensureNodeReachable(NodeInfo node) async {
+    final endpoint = UpstreamEndpoint.parse(node.addr);
+    // QUIC is authenticated by the native runtime when a session opens.
+    // A TCP probe to its UDP port cannot establish reachability.
+    if (endpoint.transport == UpstreamTransport.quic) return;
     try {
       final socket = await Socket.connect(
-        node.host,
-        node.port,
+        endpoint.host,
+        endpoint.port,
         timeout: const Duration(seconds: 5),
       );
       socket.destroy();
@@ -1411,9 +1412,9 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Native Windows route ownership stays with the active TUN session. A failed
-  /// preparation leaves its upstream unchanged, so no restart/rollback is needed.
-  Future<bool> _switchLiveTunNode(
+  /// Existing flows retain their endpoint; native route preparation, when
+  /// required, completes before the new endpoint becomes visible.
+  Future<bool> _switchLiveNode(
     NodeInfo node,
     ProxyConfigModel newConfig,
   ) async {
