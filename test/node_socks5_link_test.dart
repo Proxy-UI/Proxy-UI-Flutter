@@ -24,7 +24,7 @@ void main() {
     final serving = nodes[0];
     final url = 'socks5://cipherrelay:secret-value@${serving.host}:1080';
     final service = FakeProxyService(
-      socks5Links: {
+      socks5Links: <String, Socks5Link>{
         serving.addr: Socks5Link(
           url: url,
           username: 'cipherrelay',
@@ -102,5 +102,18 @@ void main() {
     expect(copied, url);
     // Let the confirmation toast run out.
     await tester.pump(const Duration(seconds: 4));
+
+    // An open panel asks again after the catalogue's key changes, and the
+    // link disappears once the administrator disables it.
+    service.socks5Links.clear();
+    state.updateNodesServerConfig(sessionKey: 'rotated-key');
+    await tester.pumpAndSettle();
+    expect(
+      service.calls.where((call) => call == 'socks5 ${serving.addr}'),
+      hasLength(2),
+    );
+    expect(find.byKey(const Key('node-socks5-link')), findsNothing);
+    // Let the debounced catalogue save run.
+    await tester.pump(const Duration(seconds: 1));
   });
 }

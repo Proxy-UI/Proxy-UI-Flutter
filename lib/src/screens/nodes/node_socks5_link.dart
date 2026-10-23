@@ -23,18 +23,9 @@ class _NodeSocks5LinkState extends State<NodeSocks5Link> {
   bool _revealed = false;
 
   @override
-  void initState() {
-    super.initState();
-    context.read<ProxyState>().lookUpSocks5Link(widget.node);
-  }
-
-  @override
   void didUpdateWidget(covariant NodeSocks5Link oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.node.storageKey != widget.node.storageKey) {
-      _revealed = false;
-      context.read<ProxyState>().lookUpSocks5Link(widget.node);
-    }
+    if (oldWidget.node.storageKey != widget.node.storageKey) _revealed = false;
   }
 
   Future<void> _copy(String url) async {
@@ -49,9 +40,19 @@ class _NodeSocks5LinkState extends State<NodeSocks5Link> {
 
   @override
   Widget build(BuildContext context) {
-    final socks5 = context.select<ProxyState, Socks5Link?>(
-      (state) => state.socks5LinkFor(widget.node),
+    final (answered, socks5) = context.select<ProxyState, (bool, Socks5Link?)>(
+      (state) => (
+        state.hasSocks5Answer(widget.node),
+        state.socks5LinkFor(widget.node),
+      ),
     );
+    // Asks once per catalogue refresh, including while the panel stays open.
+    if (!answered) {
+      final node = widget.node;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<ProxyState>().lookUpSocks5Link(node);
+      });
+    }
     if (socks5 == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
