@@ -19,6 +19,7 @@ import '../ffi/apple_packet_tunnel_proxy_service.dart';
 import '../services/build_capabilities.dart';
 import '../models/node_catalog_preferences.dart';
 import '../models/node_group_model.dart';
+import '../models/node_health.dart';
 import '../models/node_model.dart';
 import '../models/proxy_config.dart';
 import '../models/quic_support.dart';
@@ -93,6 +94,9 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   NodeCatalogPreferences _nodeCatalogPreferences =
       const NodeCatalogPreferences();
   Timer? _nodeCatalogSaveTimer;
+
+  /// Tests in flight, by [_testKey]: a node can be under test over one
+  /// carrier and not the other.
   final Set<String> _verifyingNodes = <String>{};
 
   /// SOCKS5 links by node, once a node has answered; null when it serves none.
@@ -435,6 +439,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     if (plan == _ApplyPlan.unchanged) return true;
     if (plan == _ApplyPlan.save) {
       _config = candidate;
+      _followConfiguredCarrier(previous);
       await _saveConfig();
       _safeNotifyListeners();
       return true;
@@ -454,6 +459,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         }
         _config = candidate;
         _currentNodeId = null;
+        _followConfiguredCarrier(previous);
         await _saveConfig();
         return true;
       } catch (error) {
@@ -520,6 +526,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
           candidate.serverPort != previous.serverPort) {
         _currentNodeId = null;
       }
+      _followConfiguredCarrier(previous);
       await _saveConfig();
       return true;
     } catch (error) {
@@ -534,6 +541,19 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   bool _isValidPort(int port) => port >= 1 && port <= 65535;
+
+  /// A server configured over the other carrier is a choice of carrier, so
+  /// the node map follows it.
+  void _followConfiguredCarrier(ProxyConfigModel previous) {
+    final before = UpstreamEndpoint.tryFromHost(
+      previous.serverHost,
+      previous.serverPort,
+    )?.transport;
+    final after = currentCarrier;
+    if (after == null || after == before) return;
+    _nodeCatalogPreferences = _nodeCatalogPreferences.copyWith(carrier: after);
+    _scheduleNodeCatalogSave();
+  }
 
   /// The branch [applyConfig] takes, and what [applyImpactOf] reports.
   _ApplyPlan _applyPlan(ProxyConfigModel previous, ProxyConfigModel candidate) {
@@ -591,10 +611,12 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     };
   }
 
-  /// What selecting [node] would do to the running proxy right now.
-  SwitchImpact switchImpactOf(NodeInfo node) {
-    final endpoint = node.endpoint;
-    if (!_isRunning || endpoint == null || isCurrentNode(node)) {
+  /// What selecting [node] over [carrier], by default the one [carrierFor]
+  /// picks, would do to the running proxy right now.
+  SwitchImpact switchImpactOf(NodeInfo node, [UpstreamTransport? carrier]) {
+    carrier ??= carrierFor(node);
+    final endpoint = endpointOf(node, carrier);
+    if (!_isRunning || endpoint == null || isInUse(node, carrier)) {
       return SwitchImpact.none;
     }
     if (_keepsCapture(_config, endpoint.qualifiedHost, endpoint.port)) {
@@ -1025,21 +1047,94 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Whether [node] is the upstream the proxy is configured to use.
+  /// The configured server, or null while it does not parse.
+  UpstreamEndpoint? get _configuredEndpoint =>
+      UpstreamEndpoint.tryFromHost(_config.serverHost, _config.serverPort);
+
+  /// The carrier the configured server is reached over.
+  UpstreamTransport? get currentCarrier => _configuredEndpoint?.transport;
+
+  /// Whether [node] is the server the proxy is configured to use, over
+  /// either carrier.
   ///
-  /// The node id chosen in this session disambiguates nodes sharing an
-  /// address. After a restart there is none, and the configured address alone
-  /// still identifies the node, so the dashboard and the galaxy keep showing
-  /// which node traffic goes through.
+  /// The configured host must be the node's, and its port one the node
+  /// serves the configured carrier on. A host no other catalogue node shares
+  /// identifies the node by itself, so a QUIC endpoint that is not known yet
+  /// still finds it. The node id chosen in this session disambiguates nodes
+  /// sharing an address; after a restart the address alone identifies the
+  /// node, so the dashboard and the galaxy keep showing which node traffic
+  /// goes through.
   bool isCurrentNode(NodeInfo node) {
-    try {
-      final sameAddress =
-          _config.serverHost == node.host && _config.serverPort == node.port;
-      final currentId = _currentNodeId;
-      return sameAddress && (currentId == null || currentId == node.nodeId);
-    } catch (_) {
+    final current = _configuredEndpoint;
+    final endpoint = node.endpoint;
+    if (current == null ||
+        endpoint == null ||
+        !_sameHost(current.host, endpoint.host)) {
       return false;
     }
+    final currentId = _currentNodeId;
+    if (currentId != null) return currentId == node.nodeId;
+    if (endpointOf(node, current.transport)?.port == current.port) return true;
+    return _nodes.where((other) {
+          final host = other.endpoint?.host;
+          return host != null && _sameHost(host, current.host);
+        }).length ==
+        1;
+  }
+
+  static bool _sameHost(String a, String b) =>
+      a.toLowerCase() == b.toLowerCase();
+
+  /// Whether the proxy is configured to reach [node] over [carrier], by
+  /// default the one [carrierFor] picks: exactly that endpoint, so another
+  /// carrier, or a QUIC port the node does not report, is not in use.
+  bool isInUse(NodeInfo node, [UpstreamTransport? carrier]) {
+    final current = _configuredEndpoint;
+    final endpoint = endpointOf(node, carrier ?? carrierFor(node));
+    return current != null &&
+        endpoint != null &&
+        isCurrentNode(node) &&
+        current.transport == endpoint.transport &&
+        current.port == endpoint.port;
+  }
+
+  /// The carrier the node map tests and connects over, and shows results
+  /// for, where a node serves both. Until one is chosen, the configured
+  /// server's.
+  UpstreamTransport get preferredCarrier =>
+      _nodeCatalogPreferences.carrier ??
+      currentCarrier ??
+      UpstreamTransport.tcp;
+
+  void setPreferredCarrier(UpstreamTransport carrier) {
+    if (_nodeCatalogPreferences.carrier == carrier) return;
+    _nodeCatalogPreferences = _nodeCatalogPreferences.copyWith(
+      carrier: carrier,
+    );
+    _scheduleNodeCatalogSave();
+    _safeNotifyListeners();
+  }
+
+  /// Whether [node] can be reached over either carrier: a TCP address on a
+  /// node that also reported a QUIC endpoint.
+  bool servesBothCarriers(NodeInfo node) =>
+      node.carrier == UpstreamTransport.tcp && quicSupportOf(node).isAvailable;
+
+  /// The carrier [node] is tested and connected over from the node map:
+  /// [preferredCarrier] where it serves both, its own otherwise.
+  UpstreamTransport carrierFor(NodeInfo node) =>
+      servesBothCarriers(node) ? preferredCarrier : node.carrier;
+
+  /// The port the catalogue says [host] serves [carrier] on, when exactly
+  /// one node there says so; null otherwise.
+  int? catalogPortFor(String host, UpstreamTransport carrier) {
+    final ports = {
+      for (final node in _nodes)
+        if (node.endpoint case final endpoint?
+            when _sameHost(endpoint.host, host))
+          endpointOf(node, carrier)?.port,
+    };
+    return ports.length == 1 ? ports.single : null;
   }
 
   // Update nodes server config
@@ -1134,8 +1229,15 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(lookUpQuicSupport());
   }
 
-  NodeVerification? verificationFor(NodeInfo node) =>
-      _nodeCatalogPreferences.verificationFor(node);
+  /// [node]'s last result over [carrier], by default the one [carrierFor]
+  /// picks.
+  NodeVerification? verificationFor(
+    NodeInfo node, [
+    UpstreamTransport? carrier,
+  ]) => _nodeCatalogPreferences.verificationFor(
+    node,
+    carrier ?? carrierFor(node),
+  );
 
   /// The node's SOCKS5 link, when it has reported one.
   Socks5Link? socks5LinkFor(NodeInfo node) => _socks5Links[node.storageKey];
@@ -1211,43 +1313,61 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _safeNotifyListeners();
   }
 
-  /// Where a test of [node] over [carrier] connects: its own address for
-  /// TCP, which for a `quic://` entry is QUIC already; its QUIC endpoint
-  /// for QUIC. Null when it has none, or its address does not parse.
-  UpstreamEndpoint? testEndpointOf(NodeInfo node, UpstreamTransport carrier) {
+  /// Where [node] is reached over [carrier]: its own address over its own
+  /// carrier, its reported QUIC endpoint over QUIC. Null when it has none —
+  /// a `quic://` entry has no TCP address — or its address does not parse.
+  UpstreamEndpoint? endpointOf(NodeInfo node, UpstreamTransport carrier) {
     final endpoint = node.endpoint;
     if (endpoint == null) return null;
-    if (carrier == UpstreamTransport.tcp || endpoint.isQuic) return endpoint;
+    if (carrier == endpoint.transport) return endpoint;
+    if (carrier == UpstreamTransport.tcp) return null;
     final port = quicSupportOf(node).port;
     return port == null
         ? null
         : UpstreamEndpoint(endpoint.host, port, UpstreamTransport.quic);
   }
 
-  /// The carrier behind [node]'s last result. Results recorded before the
-  /// carrier was, for a `quic://` entry, still travelled over QUIC.
-  UpstreamTransport? testedCarrierOf(NodeInfo node) {
-    final verification = verificationFor(node);
-    if (verification == null) return null;
-    return node.endpoint?.isQuic == true
-        ? UpstreamTransport.quic
-        : verification.carrier;
-  }
-
-  /// The country to show for a node: what its traffic actually says, falling
-  /// back to what the catalogue claims.
+  /// The country to show for a node: what its traffic actually says, over
+  /// the carrier shown first, falling back to what the catalogue claims.
   String effectiveCountry(NodeInfo node) {
-    final verification = verificationFor(node);
-    if (verification != null &&
-        verification.isVerified &&
-        verification.countryCode.isNotEmpty) {
-      return verification.countryCode;
+    final shown = carrierFor(node);
+    for (final carrier in [shown, ...UpstreamTransport.values]) {
+      final verification = verificationFor(node, carrier);
+      if (verification != null &&
+          verification.isVerified &&
+          verification.countryCode.isNotEmpty) {
+        return verification.countryCode;
+      }
     }
     return node.country;
   }
 
-  bool isVerifyingNode(NodeInfo node) =>
-      _verifyingNodes.contains(node.storageKey);
+  static String _testKey(NodeInfo node, UpstreamTransport carrier) =>
+      '${node.storageKey}\u0000${carrier.name}';
+
+  /// Whether [node] is under test over [carrier], by default the one
+  /// [carrierFor] picks.
+  bool isVerifyingNode(NodeInfo node, [UpstreamTransport? carrier]) =>
+      _verifyingNodes.contains(_testKey(node, carrier ?? carrierFor(node)));
+
+  /// How [node] answered over [carrier], by default the one [carrierFor]
+  /// picks. A latency remembered from an earlier build is its own address's.
+  NodeHealth healthOf(NodeInfo node, [UpstreamTransport? carrier]) {
+    carrier ??= carrierFor(node);
+    return nodeHealthOf(
+      testing: isVerifyingNode(node, carrier),
+      verification: verificationFor(node, carrier),
+      latencyMs: carrier == node.carrier ? node.latencyMs : null,
+    );
+  }
+
+  /// [node]'s last latency over [carrier], by default the one [carrierFor]
+  /// picks.
+  int? latencyOf(NodeInfo node, [UpstreamTransport? carrier]) {
+    carrier ??= carrierFor(node);
+    return verificationFor(node, carrier)?.latencyMs ??
+        (carrier == node.carrier ? node.latencyMs : null);
+  }
 
   /// How long answers wait so they are shown together.
   ///
@@ -1259,7 +1379,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// or has no endpoint for [carrier].
   Future<NodeVerification?> verifyNode(
     NodeInfo node, {
-    UpstreamTransport carrier = UpstreamTransport.tcp,
+    UpstreamTransport? carrier,
   }) async => (await verifyNodes([node], carrier: carrier)).single;
 
   /// Test [nodes]: how long a real round trip through each takes, and where
@@ -1280,23 +1400,29 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// and the catalogue is persisted when the last arrives — including
   /// failures, because "this node did not answer" is worth remembering too.
   ///
-  /// Over [carrier] QUIC, a node with no QUIC endpoint is skipped and keeps
-  /// the result it had: lacking QUIC says nothing about whether it works.
+  /// Each node is tested over [carrier], by default the one [carrierFor]
+  /// picks for it, and the answer is kept with that carrier's, so a QUIC
+  /// test never replaces a TCP result. Over an explicit [carrier], a node
+  /// without an endpoint for it is skipped and keeps what it had: lacking
+  /// QUIC says nothing about whether it works.
   ///
   /// Returns each node's answer in order; null for a node that was already
   /// under test or was skipped. [onProgress] reports how many have answered.
   Future<List<NodeVerification?>> verifyNodes(
     List<NodeInfo> nodes, {
-    UpstreamTransport carrier = UpstreamTransport.tcp,
+    UpstreamTransport? carrier,
     void Function(int answered, int total)? onProgress,
   }) async {
     final results = List<NodeVerification?>.filled(nodes.length, null);
-    final endpoints = [for (final node in nodes) testEndpointOf(node, carrier)];
+    final carriers = [for (final node in nodes) carrier ?? carrierFor(node)];
+    final endpoints = [
+      for (var i = 0; i < nodes.length; i++) endpointOf(nodes[i], carriers[i]),
+    ];
     final testing = [
       for (var i = 0; i < nodes.length; i++)
         // An address that does not parse is tested, and fails, as before.
         if ((endpoints[i] != null || nodes[i].endpoint == null) &&
-            _verifyingNodes.add(nodes[i].storageKey))
+            _verifyingNodes.add(_testKey(nodes[i], carriers[i])))
           i,
     ];
     if (testing.isEmpty) return results;
@@ -1311,10 +1437,12 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       if (pending.isEmpty) return;
       _nodeCatalogPreferences = _nodeCatalogPreferences.withResults(pending);
       for (final (node, verification) in pending) {
-        if (verification.isVerified && verification.latencyMs != null) {
+        if (verification.isVerified &&
+            verification.latencyMs != null &&
+            verification.carrier == node.carrier) {
           node.latencyMs = verification.latencyMs;
         }
-        _verifyingNodes.remove(node.storageKey);
+        _verifyingNodes.remove(_testKey(node, verification.carrier));
       }
       answered += pending.length;
       pending.clear();
@@ -1329,10 +1457,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       flush ??= Timer(verificationBatchWindow, apply);
     }
 
-    NodeVerification unreachable(String error) => NodeVerification(
+    NodeVerification unreachable(int index, String error) => NodeVerification(
       status: NodeVerificationStatus.unreachable,
       checkedAt: DateTime.now(),
       error: error,
+      carrier: carriers[index],
     );
 
     final probed = <int>[];
@@ -1340,7 +1469,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     for (final index in testing) {
       final endpoint = endpoints[index];
       if (endpoint == null) {
-        record(index, unreachable(_addressError(nodes[index])));
+        record(index, unreachable(index, _addressError(nodes[index])));
         continue;
       }
       targets.add((host: endpoint.qualifiedHost, port: endpoint.port));
@@ -1364,7 +1493,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
             egressIp: probe.egressIp,
             latencyMs: probe.latencyMs,
             error: probe.error,
-            carrier: endpoints[probed[target]]!.transport,
+            carrier: carriers[probed[target]],
           ),
         );
       }
@@ -1376,7 +1505,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       if (results[index] == null) {
         record(
           index,
-          unreachable(failure ?? appStrings.nodeVerificationFailed),
+          unreachable(index, failure ?? appStrings.nodeVerificationFailed),
         );
       }
     }
@@ -1396,35 +1525,29 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  // Export node config to clipboard (reuse existing export logic)
-  Future<void> exportNodeConfig(NodeInfo node) async {
-    // Generate config for this node, preserving current settings
-    final nodeConfig = node.toProxyConfig(
-      localPort: _config.localPort,
-      allowLan: _config.allowLan,
-      sessionKey: _config.sessionKey,
-      autoProxy: _config.autoProxy,
-      udpEnabled: _config.udpEnabled,
-      udpDirectFallback: _config.udpDirectFallback,
-      tunFakeIp: _config.tunFakeIp,
-      tunDnsServer: _config.tunDnsServer,
-      tunEnabled: _config.tunEnabled,
-      tunBypassProcesses: _config.tunBypassProcesses,
-      tunBypassWeGame: _config.tunBypassWeGame,
-      androidVpnRoutingMode: _config.androidVpnRoutingMode,
-      androidVpnPackages: _config.androidVpnPackages,
-      reverseGeo: _config.reverseGeo,
-      secureTransport: _config.secureTransport,
-      setSystemProxy: _config.setSystemProxy,
+  /// Where [node] is reached from the node map, as the current settings
+  /// would use it. An address that does not parse throws [FormatException].
+  ProxyConfigModel _configFor(NodeInfo node, UpstreamTransport? carrier) {
+    final endpoint =
+        endpointOf(node, carrier ?? carrierFor(node)) ??
+        UpstreamEndpoint.parse(node.addr);
+    return _config.copyWith(
+      serverHost: endpoint.qualifiedHost,
+      serverPort: endpoint.port,
     );
+  }
 
-    final json = jsonEncode(nodeConfig.toJson());
+  /// Put [node], over the carrier [carrierFor] picks, on the clipboard as a
+  /// configuration carrying the current settings.
+  Future<void> exportNodeConfig(NodeInfo node) async {
+    final json = jsonEncode(_configFor(node, null).toJson());
     final encoded = base64Encode(utf8.encode(json));
     await Clipboard.setData(ClipboardData(text: encoded));
   }
 
-  // Switch to a different node
-  Future<bool> switchToNode(NodeInfo node) async {
+  /// Connect through [node] over [carrier], by default the one [carrierFor]
+  /// picks.
+  Future<bool> switchToNode(NodeInfo node, {UpstreamTransport? carrier}) async {
     if (_isProxyTransitioning) {
       throw StateError(appStrings.proxyOperationIsAlreadyInProgress);
     }
@@ -1433,23 +1556,13 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     final previousConfig = _config;
     final previousNodeId = _currentNodeId;
 
-    final newConfig = node.toProxyConfig(
-      localPort: _config.localPort,
-      allowLan: _config.allowLan,
-      sessionKey: _config.sessionKey,
-      autoProxy: _config.autoProxy,
-      udpEnabled: _config.udpEnabled,
-      udpDirectFallback: _config.udpDirectFallback,
-      tunFakeIp: _config.tunFakeIp,
-      tunDnsServer: _config.tunDnsServer,
-      tunEnabled: _isTunRunning,
-      tunBypassProcesses: _config.tunBypassProcesses,
-      tunBypassWeGame: _config.tunBypassWeGame,
-      androidVpnRoutingMode: _config.androidVpnRoutingMode,
-      androidVpnPackages: _config.androidVpnPackages,
-      reverseGeo: _config.reverseGeo,
-      secureTransport: _config.secureTransport,
-      setSystemProxy: _config.setSystemProxy,
+    final newConfig = _configFor(
+      node,
+      carrier,
+    ).copyWith(tunEnabled: _isTunRunning);
+    final endpoint = UpstreamEndpoint.fromHost(
+      newConfig.serverHost,
+      newConfig.serverPort,
     );
 
     // Keep this branching in step with [switchImpactOf], which the node
@@ -1464,14 +1577,18 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (_isRunning && _isTunRunning && !BuildCapabilities.usesPacketTunnel) {
-      return _hotSwitchTunNode(node, newConfig);
+      return _hotSwitchTunNode(node, endpoint, newConfig);
     }
 
     if (BuildCapabilities.usesPacketTunnel) {
-      return _switchPacketTunnelNode(node, _supportedConfig(newConfig));
+      return _switchPacketTunnelNode(
+        node,
+        endpoint,
+        _supportedConfig(newConfig),
+      );
     }
 
-    await _ensureNodeReachable(node);
+    await _ensureReachable(endpoint);
 
     updateConfig(newConfig);
     _currentNodeId = node.nodeId;
@@ -1491,6 +1608,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// Probe after disconnecting so the old VPN cannot capture the new endpoint.
   Future<bool> _switchPacketTunnelNode(
     NodeInfo node,
+    UpstreamEndpoint endpoint,
     ProxyConfigModel newConfig,
   ) async {
     if (_isTunBusy) return false;
@@ -1510,7 +1628,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       }
       String? failure;
       try {
-        await _ensureNodeReachable(node);
+        await _ensureReachable(endpoint);
         final started = await _startService(newConfig);
         if (started != ProxyResult.ok || !_service.isRunning) {
           failure =
@@ -1554,11 +1672,10 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _ensureNodeReachable(NodeInfo node) async {
-    final endpoint = UpstreamEndpoint.parse(node.addr);
+  Future<void> _ensureReachable(UpstreamEndpoint endpoint) async {
     // QUIC is authenticated by the native runtime when a session opens.
     // A TCP probe to its UDP port cannot establish reachability.
-    if (endpoint.transport == UpstreamTransport.quic) return;
+    if (endpoint.isQuic) return;
     try {
       final socket = await Socket.connect(
         endpoint.host,
@@ -1619,6 +1736,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// TUN policy before returning to the UI.
   Future<bool> _hotSwitchTunNode(
     NodeInfo node,
+    UpstreamEndpoint endpoint,
     ProxyConfigModel newConfig,
   ) async {
     if (_isTunBusy) {
@@ -1653,7 +1771,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       // process-based self bypass is unavailable and a new endpoint would
       // otherwise be captured by the still-active TUN route.
       try {
-        await _ensureNodeReachable(node);
+        await _ensureReachable(endpoint);
       } catch (error) {
         return await _restorePreviousTun(
           previousConfig,

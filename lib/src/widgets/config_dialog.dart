@@ -138,6 +138,17 @@ class _ConfigDialogState extends State<ConfigDialog> {
     });
   }
 
+  /// TCP and QUIC listen on different ports, so a server the catalogue
+  /// knows takes the port it serves [transport] on.
+  void _selectTransport(ProxyState state, UpstreamTransport transport) {
+    final host = UpstreamEndpoint.tryFromHost(_hostController.text, 1)?.host;
+    final port = host == null ? null : state.catalogPortFor(host, transport);
+    setState(() {
+      _transport = transport;
+      if (port != null) _serverPortController.text = '$port';
+    });
+  }
+
   /// The configuration the fields describe, or null while the server
   /// address or a port does not parse.
   ProxyConfigModel? _draft(ProxyState state) {
@@ -334,9 +345,8 @@ class _ConfigDialogState extends State<ConfigDialog> {
                                     ),
                                 ],
                                 selected: {_transport},
-                                onSelectionChanged: (selection) => setState(
-                                  () => _transport = selection.single,
-                                ),
+                                onSelectionChanged: (selection) =>
+                                    _selectTransport(state, selection.single),
                               ),
                             ),
                           ],

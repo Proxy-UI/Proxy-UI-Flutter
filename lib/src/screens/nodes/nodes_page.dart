@@ -93,7 +93,7 @@ class _NodesPageState extends State<NodesPage> {
           node.current,
           node.latencyMs,
           node.quic,
-          node.testedOverQuic,
+          node.carrier,
         ),
       _search.text,
       _filter,
@@ -578,14 +578,26 @@ class _Toolbar extends StatelessWidget {
       selected: {view},
       onSelectionChanged: (next) => onView(next.first),
     );
+    final state = context.watch<ProxyState>();
+    // Only where some node serves both does the carrier mean anything.
+    final carrier = actions.offersCarrierChoice(state.nodes)
+        ? ListenableBuilder(
+            listenable: actions,
+            builder: (context, _) => CarrierChoice(
+              key: const Key('toolbar-carrier'),
+              enabled: !actions.testingMany,
+            ),
+          )
+        : null;
     final buttons = ListenableBuilder(
       listenable: actions,
       builder: (context, _) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            // Follows the TCP/QUIC choice made in a node or country panel.
-            tooltip: actions.carrierFor(shownNodes) == UpstreamTransport.quic
+            tooltip:
+                carrier != null &&
+                    state.preferredCarrier == UpstreamTransport.quic
                 ? strings.testAllOver(UpstreamTransport.quic.label)
                 : strings.testAll,
             onPressed: actions.testingMany || shownNodes.isEmpty
@@ -638,6 +650,7 @@ class _Toolbar extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(child: filters),
               const SizedBox(width: 8),
+              if (carrier != null) ...[carrier, const SizedBox(width: 8)],
               toggle,
               const SizedBox(width: 4),
               buttons,
@@ -657,6 +670,7 @@ class _Toolbar extends StatelessWidget {
               Row(
                 children: [
                   Expanded(child: filters),
+                  if (carrier != null) ...[const SizedBox(width: 6), carrier],
                   buttons,
                 ],
               ),

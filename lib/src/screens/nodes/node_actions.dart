@@ -3,30 +3,30 @@ import 'package:flutter/services.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 
 import '../../models/country_atlas.dart';
-import '../../models/node_health.dart';
 import '../../models/node_model.dart';
 import '../../models/upstream_endpoint.dart';
 import '../../providers/proxy_provider.dart';
 import '../../utils/toast_utils.dart';
 import 'galaxy/galaxy_model.dart';
 
-/// The galaxy's view of every node in the catalogue.
+/// The galaxy's view of every node in the catalogue, each over the carrier
+/// the node map uses for it.
 List<GalaxyNode> galaxyNodesOf(ProxyState state) => [
-  for (final node in state.nodes)
-    GalaxyNode(
-      node: node,
-      country: normalizeCountryCode(state.effectiveCountry(node)),
-      health: nodeHealthOf(
-        testing: state.isVerifyingNode(node),
-        verification: state.verificationFor(node),
-        latencyMs: node.latencyMs,
-      ),
-      current: state.isCurrentNode(node),
-      latencyMs: state.verificationFor(node)?.latencyMs ?? node.latencyMs,
-      quic: state.quicSupportOf(node).isAvailable,
-      testedOverQuic: state.testedCarrierOf(node) == UpstreamTransport.quic,
-    ),
+  for (final node in state.nodes) _galaxyNodeOf(state, node),
 ];
+
+GalaxyNode _galaxyNodeOf(ProxyState state, NodeInfo node) {
+  final carrier = state.carrierFor(node);
+  return GalaxyNode(
+    node: node,
+    country: normalizeCountryCode(state.effectiveCountry(node)),
+    health: state.healthOf(node, carrier),
+    current: state.isCurrentNode(node),
+    latencyMs: state.latencyOf(node, carrier),
+    quic: state.quicSupportOf(node).isAvailable,
+    carrier: carrier,
+  );
+}
 
 /// Ask the catalogue which nodes serve QUIC once a page shows them, rather
 /// than on every launch. [ProxyState.lookUpQuicSupport] asks once per load.
@@ -39,41 +39,21 @@ void askQuicSupportAfterFrame(ProxyState state) {
 
 /// What a user can do to a node, with the feedback each action gives, shared
 /// by the galaxy, the list and the dashboard so they never disagree.
+///
+/// Tests and connections go over [ProxyState.carrierFor] each node: the
+/// TCP/QUIC choice where a node serves both.
 class NodeActions extends ChangeNotifier {
   NodeActions(this.state);
 
   final ProxyState state;
   final Set<String> _switching = {};
   final Map<String, String> _switchErrors = {};
-  final Set<String> _withoutQuic = {};
   bool _testingMany = false;
-  UpstreamTransport _testCarrier = UpstreamTransport.tcp;
 
-  /// What tests run over where a node offers both, shared by every test
-  /// button so one choice holds for the session. TCP until changed.
-  UpstreamTransport get testCarrier => _testCarrier;
-  set testCarrier(UpstreamTransport carrier) {
-    if (carrier == _testCarrier) return;
-    _testCarrier = carrier;
-    if (carrier == UpstreamTransport.tcp) _withoutQuic.clear();
-    notifyListeners();
-  }
-
-  /// Whether any of [nodes] can be tested over either carrier: a TCP address
-  /// on a node that also reported a QUIC endpoint. Elsewhere the choice
-  /// means nothing, so it is not offered.
-  bool offersQuicTest(Iterable<NodeInfo> nodes) => nodes.any(
-    (node) =>
-        node.endpoint?.isQuic == false && state.quicSupportOf(node).isAvailable,
-  );
-
-  /// The carrier a test of [nodes] runs over right now.
-  UpstreamTransport carrierFor(Iterable<NodeInfo> nodes) =>
-      offersQuicTest(nodes) ? _testCarrier : UpstreamTransport.tcp;
-
-  /// Whether the last QUIC run skipped [node] for having no QUIC endpoint.
-  bool skippedWithoutQuic(NodeInfo node) =>
-      _withoutQuic.contains(node.storageKey);
+  /// Whether any of [nodes] serves both carriers, so that choosing one
+  /// means anything.
+  bool offersCarrierChoice(Iterable<NodeInfo> nodes) =>
+      nodes.any(state.servesBothCarriers);
 
   bool isSwitching(NodeInfo node) => _switching.contains(node.storageKey);
 
@@ -97,9 +77,14 @@ class NodeActions extends ChangeNotifier {
   double get testProgress => _testProgress;
   double _testProgress = 0;
 
-  /// Whether [connect] can run for [node] right now.
+  /// Whether traffic already goes through [node] over the carrier [connect]
+  /// would use.
+  bool inUse(NodeInfo node) => state.isRunning && state.isInUse(node);
+
+  /// Whether [connect] can run for [node] right now. Connecting to the
+  /// current node over its other carrier is a switch like any other.
   bool canConnect(NodeInfo node) =>
-      !(state.isCurrentNode(node) && state.isRunning) &&
+      !inUse(node) &&
       !state.isTunBusy &&
       !state.isProxyOperationInProgress &&
       _switching.isEmpty;
@@ -136,10 +121,7 @@ class NodeActions extends ChangeNotifier {
 
   Future<void> test(BuildContext context, NodeInfo node) async {
     final strings = context.l10n;
-    final verification = await state.verifyNode(
-      node,
-      carrier: carrierFor([node]),
-    );
+    final verification = await state.verifyNode(node);
     if (verification == null) return;
     if (verification.isVerified) {
       ToastUtils.showSuccess(
@@ -155,40 +137,18 @@ class NodeActions extends ChangeNotifier {
     }
   }
 
-  /// Test [nodes] together and report how many answered.
-  ///
-  /// Over QUIC, nodes without a QUIC endpoint are left out and named as such
-  /// rather than counted as failures; their earlier results stay.
+  /// Test [nodes] together and report how many answered, and how many of
+  /// them over QUIC.
   Future<void> testMany(BuildContext context, List<NodeInfo> nodes) async {
     if (_testingMany || nodes.isEmpty) return;
     final strings = context.l10n;
-    final carrier = carrierFor(nodes);
-    final tested = [
-      for (final node in nodes)
-        if (state.testEndpointOf(node, carrier) != null ||
-            node.endpoint == null)
-          node,
-    ];
-    _withoutQuic
-      ..clear()
-      ..addAll([
-        for (final node in nodes)
-          if (!tested.contains(node)) node.storageKey,
-      ]);
-    final withoutQuic = nodes.length - tested.length;
-    if (tested.isEmpty) {
-      notifyListeners();
-      ToastUtils.showWarning(strings.noNodeServesQuic);
-      return;
-    }
     _testingMany = true;
     _testProgress = 0;
     notifyListeners();
     final List<NodeVerification?> results;
     try {
       results = await state.verifyNodes(
-        tested,
-        carrier: carrier,
+        nodes,
         onProgress: (answered, total) {
           _testProgress = answered / total;
           notifyListeners();
@@ -201,16 +161,22 @@ class NodeActions extends ChangeNotifier {
     final failures = results
         .where((verification) => verification?.isVerified != true)
         .length;
-    final count = tested.length.toString();
-    final reachable = (tested.length - failures).toString();
+    final overQuic = results
+        .where(
+          (verification) => verification?.carrier == UpstreamTransport.quic,
+        )
+        .length;
+    final count = nodes.length.toString();
     final summary = [
-      if (carrier == UpstreamTransport.quic)
-        strings.testedOverQuic(count, reachable, failures.toString())
-      else if (failures == 0)
+      if (failures == 0)
         strings.testedNodes(count)
       else
-        strings.testedReachableFailed(count, reachable, failures.toString()),
-      if (withoutQuic > 0) strings.withoutQuic(withoutQuic.toString()),
+        strings.testedReachableFailed(
+          count,
+          (nodes.length - failures).toString(),
+          failures.toString(),
+        ),
+      if (overQuic > 0) strings.overQuicCount(overQuic.toString()),
     ].join(' · ');
     failures == 0
         ? ToastUtils.showSuccess(summary)
@@ -242,6 +208,7 @@ class NodeActions extends ChangeNotifier {
     final place = code.isEmpty
         ? strings.galaxyUnlocated
         : countryName(code, language);
-    return '$place · ${node.endpoint?.label ?? node.addr}';
+    final endpoint = state.endpointOf(node, state.carrierFor(node));
+    return '$place · ${endpoint?.label ?? node.addr}';
   }
 }

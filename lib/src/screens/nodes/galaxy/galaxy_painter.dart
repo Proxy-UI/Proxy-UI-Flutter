@@ -689,7 +689,7 @@ class _Frame {
     if (!emphasis && !node.current && radius < 3.6) return;
     if (!lit && !emphasis) return;
     final latency = node.health.isAvailable && node.latencyMs != null
-        ? ' · ${node.testedOverQuic ? 'QUIC ' : ''}${node.latencyMs}ms'
+        ? ' · ${node.overQuic ? 'QUIC ' : ''}${node.latencyMs}ms'
         : '';
     final address = emphasis ? node.address : node.host;
     pending.add(

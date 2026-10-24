@@ -1212,9 +1212,8 @@
       }
     }
   },
-  "noQuic": "No QUIC",
-  "testOver": "Test over",
-  "testAllOver": "Test all over {carrier}",
+  "carrierChoice": "Carrier for tests and connections",
+  "testAllOver": "Test all, over {carrier} where served",
   "@testAllOver": {
     "placeholders": {
       "carrier": {
@@ -1222,27 +1221,20 @@
       }
     }
   },
-  "testedOverQuic": "Tested {count} over QUIC: {reachable} reachable, {failed} failed",
-  "@testedOverQuic": {
+  "connectOver": "Connect over {carrier}",
+  "@connectOver": {
     "placeholders": {
-      "count": {
-        "type": "String"
-      },
-      "reachable": {
-        "type": "String"
-      },
-      "failed": {
+      "carrier": {
         "type": "String"
       }
     }
   },
-  "withoutQuic": "{count} without QUIC",
-  "@withoutQuic": {
+  "overQuicCount": "{count} over QUIC",
+  "@overQuicCount": {
     "placeholders": {
       "count": {
         "type": "String"
       }
     }
-  },
-  "noNodeServesQuic": "None of these nodes serves QUIC"
+  }
 }

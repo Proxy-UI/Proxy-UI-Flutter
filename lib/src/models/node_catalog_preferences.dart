@@ -1,4 +1,5 @@
 import 'node_model.dart';
+import 'upstream_endpoint.dart';
 
 /// Persisted settings and latency samples for the node catalog.
 class NodeCatalogPreferences {
@@ -15,8 +16,19 @@ class NodeCatalogPreferences {
   final List<NodeInfo> nodes;
   final DateTime? fetchedAt;
 
-  /// Egress verifications, keyed by [NodeInfo.storageKey].
+  /// Egress verifications over each node's own address, keyed by
+  /// [NodeInfo.storageKey]: TCP, or QUIC for a `quic://` entry. Older builds
+  /// read this map and nothing else.
   final Map<String, NodeVerification> verifications;
+
+  /// Verifications over the QUIC endpoint a TCP entry reported, kept apart
+  /// so the two carriers' latencies can be compared rather than one
+  /// replacing the other.
+  final Map<String, NodeVerification> quicVerifications;
+
+  /// The carrier the node map tests and connects over where a node serves
+  /// both; null until the user picks one.
+  final UpstreamTransport? carrier;
 
   const NodeCatalogPreferences({
     this.serverHost = '',
@@ -27,6 +39,8 @@ class NodeCatalogPreferences {
     this.nodes = const [],
     this.fetchedAt,
     this.verifications = const {},
+    this.quicVerifications = const {},
+    this.carrier,
   });
 
   factory NodeCatalogPreferences.fromJson(Map<String, dynamic> json) {
@@ -54,15 +68,38 @@ class NodeCatalogPreferences {
       }
     }
 
-    final verifications = <String, NodeVerification>{};
-    final rawVerifications = json['verifications'];
-    if (rawVerifications is Map) {
-      for (final entry in rawVerifications.entries) {
-        final key = entry.key;
-        final verification = NodeVerification.fromJson(entry.value);
-        if (key is String && verification != null) {
-          verifications[key] = verification;
+    Map<String, NodeVerification> verificationsAt(String field) {
+      final verifications = <String, NodeVerification>{};
+      final raw = json[field];
+      if (raw is Map) {
+        for (final entry in raw.entries) {
+          final key = entry.key;
+          final verification = NodeVerification.fromJson(entry.value);
+          if (key is String && verification != null) {
+            verifications[key] = verification;
+          }
         }
+      }
+      return verifications;
+    }
+
+    final verifications = verificationsAt('verifications');
+    final quicVerifications = verificationsAt('quicVerifications');
+    // The build before the second slot kept one result per node, and a QUIC
+    // test of a TCP entry replaced its TCP result there, latency included.
+    // A `quic://` entry's results are its own whatever they say: builds
+    // older still recorded no carrier, which reads as TCP.
+    for (final key in [...verifications.keys]) {
+      final verification = verifications[key]!;
+      final address = key.substring(key.indexOf('\u0000') + 1);
+      final own =
+          UpstreamEndpoint.tryParse(address)?.transport ??
+          UpstreamTransport.tcp;
+      if (verification.carrier == UpstreamTransport.quic &&
+          own == UpstreamTransport.tcp) {
+        verifications.remove(key);
+        latencies.remove(key);
+        quicVerifications.putIfAbsent(key, () => verification);
       }
     }
 
@@ -80,6 +117,10 @@ class NodeCatalogPreferences {
       fetchedAt: DateTime.tryParse(json['fetchedAt']?.toString() ?? '')
           ?.toLocal(),
       verifications: Map.unmodifiable(verifications),
+      quicVerifications: Map.unmodifiable(quicVerifications),
+      carrier: UpstreamTransport.values
+          .where((carrier) => carrier.name == json['carrier'])
+          .firstOrNull,
     );
   }
 
@@ -115,6 +156,11 @@ class NodeCatalogPreferences {
       for (final entry in verifications.entries)
         entry.key: entry.value.toJson(),
     },
+    'quicVerifications': {
+      for (final entry in quicVerifications.entries)
+        entry.key: entry.value.toJson(),
+    },
+    'carrier': carrier?.name,
   };
 
   NodeCatalogPreferences copyWith({
@@ -126,6 +172,8 @@ class NodeCatalogPreferences {
     List<NodeInfo>? nodes,
     DateTime? fetchedAt,
     Map<String, NodeVerification>? verifications,
+    Map<String, NodeVerification>? quicVerifications,
+    UpstreamTransport? carrier,
   }) => NodeCatalogPreferences(
     serverHost: serverHost ?? this.serverHost,
     serverPort: serverPort ?? this.serverPort,
@@ -135,27 +183,42 @@ class NodeCatalogPreferences {
     nodes: nodes ?? this.nodes,
     fetchedAt: fetchedAt ?? this.fetchedAt,
     verifications: verifications ?? this.verifications,
+    quicVerifications: quicVerifications ?? this.quicVerifications,
+    carrier: carrier ?? this.carrier,
   );
 
   /// Replaces the cached catalogue, dropping verifications for nodes the server
   /// no longer lists so the store cannot grow without bound.
   NodeCatalogPreferences withCatalog(List<NodeInfo> catalog, DateTime at) {
     final live = catalog.map((node) => node.storageKey).toSet();
+    Map<String, NodeVerification> listed(Map<String, NodeVerification> all) =>
+        Map.unmodifiable({
+          for (final entry in all.entries)
+            if (live.contains(entry.key)) entry.key: entry.value,
+        });
     return copyWith(
       nodes: List.unmodifiable(catalog),
       fetchedAt: at,
-      verifications: Map.unmodifiable({
-        for (final entry in verifications.entries)
-          if (live.contains(entry.key)) entry.key: entry.value,
-      }),
+      verifications: listed(verifications),
+      quicVerifications: listed(quicVerifications),
     );
   }
 
-  NodeVerification? verificationFor(NodeInfo node) =>
-      verifications[node.storageKey];
+  /// [node]'s last result over [carrier], by default its own address's.
+  /// A `quic://` entry has no TCP address, so nothing over TCP.
+  NodeVerification? verificationFor(
+    NodeInfo node, [
+    UpstreamTransport? carrier,
+  ]) {
+    carrier ??= node.carrier;
+    if (carrier == node.carrier) return verifications[node.storageKey];
+    return carrier == UpstreamTransport.quic
+        ? quicVerifications[node.storageKey]
+        : null;
+  }
 
-  /// Records how each node in [results] answered, copying the stores once
-  /// for the whole batch.
+  /// Records how each node in [results] answered, each under the carrier
+  /// that carried it, copying the stores once for the whole batch.
   ///
   /// A failed test leaves a node's previous latency alone rather than
   /// replacing it with a number that measured nothing.
@@ -163,8 +226,14 @@ class NodeCatalogPreferences {
     Iterable<(NodeInfo, NodeVerification)> results,
   ) {
     final verifications = {...this.verifications};
+    final quicVerifications = {...this.quicVerifications};
     final latencies = {...this.latencies};
     for (final (node, verification) in results) {
+      if (verification.carrier == UpstreamTransport.quic &&
+          node.carrier == UpstreamTransport.tcp) {
+        quicVerifications[node.storageKey] = verification;
+        continue;
+      }
       verifications[node.storageKey] = verification;
       final latency = verification.latencyMs;
       if (verification.isVerified && latency != null) {
@@ -173,10 +242,12 @@ class NodeCatalogPreferences {
     }
     return copyWith(
       verifications: Map.unmodifiable(verifications),
+      quicVerifications: Map.unmodifiable(quicVerifications),
       latencies: Map.unmodifiable(latencies),
     );
   }
 
+  /// The latency last measured over [node]'s own address.
   int? latencyFor(NodeInfo node) =>
       latencies[_latencyKey(node)] ?? latencies[node.addr];
 
