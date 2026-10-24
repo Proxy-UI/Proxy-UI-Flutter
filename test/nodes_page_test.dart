@@ -7,6 +7,7 @@ import 'package:proxy_ui/l10n/app_language.dart';
 import 'package:proxy_ui/src/ffi/proxy_ffi.dart';
 import 'package:proxy_ui/src/ffi/proxy_service.dart';
 import 'package:proxy_ui/src/models/quic_support.dart';
+import 'package:proxy_ui/src/models/upstream_endpoint.dart';
 import 'package:proxy_ui/src/providers/proxy_provider.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_canvas.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_model.dart';
@@ -165,9 +166,8 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('nodes serving QUIC are marked and can be tested over it', (
-    tester,
-  ) async {
+  testWidgets('a node serving QUIC is tested and connected over the carrier '
+      'picked, with each carrier\'s result apart', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     tester.platformDispatcher.accessibilityFeaturesTestValue =
@@ -187,44 +187,57 @@ void main() {
     );
     final state = await _state(tester, service);
     final serving = state.nodes[0];
+    Finder tile(UpstreamTransport carrier, String text) => find.descendant(
+      of: find.byKey(Key('carrier-${carrier.name}')),
+      matching: find.text(text),
+    );
+    GalaxyNode planet() => tester
+        .widget<GalaxyCanvas>(find.byType(GalaxyCanvas))
+        .scene
+        .planetOf(serving.storageKey)!
+        .planet
+        .node;
 
-    await tester.pumpWidget(_app(state, selection: systemIdFor('US')));
+    await tester.pumpWidget(_app(state, selection: serving.storageKey));
     await tester.pumpAndSettle();
     // Asked once, for the whole catalogue, as soon as nodes were shown.
     expect(service.calls.where((call) => call.startsWith('quic ')).length, 1);
-    final planets = tester
-        .widget<GalaxyCanvas>(find.byType(GalaxyCanvas))
-        .scene
-        .systemOf(systemIdFor('US'))!
-        .planets;
-    expect(planets.where((planet) => planet.node.quic).map((p) => p.id), [
-      serving.storageKey,
-    ]);
+    expect(planet().quic, isTrue);
 
-    // The choice appears where it means something, and TCP stays the default.
-    expect(find.byKey(const Key('test-carrier')), findsOneWidget);
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const Key('test-carrier')),
-        matching: find.text('QUIC'),
-      ),
-    );
+    // The configured server is TCP, so the map starts there; both carriers
+    // show their own result.
+    expect(find.byKey(const Key('toolbar-carrier')), findsOneWidget);
+    expect(tile(UpstreamTransport.tcp, 'Fast · 131 ms'), findsOneWidget);
+    expect(tile(UpstreamTransport.quic, 'Untested'), findsOneWidget);
+    expect(find.text('Connect over TCP'), findsOneWidget);
+    expect(find.textContaining('TCP 1081 · QUIC 10811'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('carrier-quic')));
     await tester.pump();
     service.calls.clear();
-    await tester.tap(find.text('Test these nodes'));
+    await tester.tap(find.text('Test'));
     await tester.pumpAndSettle();
     expect(service.calls.where((call) => call.startsWith('probe ')), [
       'probe quic://203.0.113.10:10811',
     ]);
-    // The rest were left out, not failed: their TCP results stand.
-    expect(find.text('No QUIC'), findsWidgets);
-    expect(state.verificationFor(state.nodes[1])?.isVerified, isTrue);
-    expect(find.text('QUIC 60 ms'), findsOneWidget);
+    // The QUIC answer sits beside the TCP one, which it did not replace,
+    // and the galaxy now shows the carrier the map uses.
+    expect(tile(UpstreamTransport.quic, 'Fast · 60 ms'), findsOneWidget);
+    expect(tile(UpstreamTransport.tcp, 'Fast · 131 ms'), findsOneWidget);
+    expect(planet().carrier, UpstreamTransport.quic);
+    expect(planet().latencyMs, 60);
 
-    await tester.tap(find.text('203.0.113.10:1081'));
+    await tester.tap(find.text('Connect over QUIC'));
     await tester.pumpAndSettle();
-    expect(find.text('QUIC · 60 ms'), findsOneWidget);
-    expect(find.textContaining('TCP 1081 · QUIC 10811'), findsOneWidget);
+    expect(service.calls, contains('start quic://203.0.113.10:10811'));
+    expect(planet().current, isTrue);
+    expect(find.widgetWithText(FilledButton, 'In use'), findsOneWidget);
+
+    // The current node over the other carrier is a switch like any other.
+    await tester.tap(find.byKey(const Key('carrier-tcp')));
+    await tester.pump();
+    expect(find.text('Connect over TCP'), findsOneWidget);
+    expect(planet().current, isTrue);
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpWidget(const SizedBox());
   });

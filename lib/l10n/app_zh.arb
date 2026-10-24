@@ -501,10 +501,8 @@
   "macosAsksForPassword": "macOS 会要求输入密码。",
   "connectRestartsTun": "连接（将重启 {capture}）",
   "quicOnUdpPort": "QUIC 使用 UDP {port}",
-  "noQuic": "无 QUIC",
-  "testOver": "测试协议",
-  "testAllOver": "全部通过 {carrier} 测试",
-  "testedOverQuic": "已通过 QUIC 测试 {count} 个节点：{reachable} 个可连接，{failed} 个失败",
-  "withoutQuic": "{count} 个不支持 QUIC",
-  "noNodeServesQuic": "这些节点都不支持 QUIC"
+  "carrierChoice": "测试和连接使用的协议",
+  "testAllOver": "测试全部，支持时使用 {carrier}",
+  "connectOver": "通过 {carrier} 连接",
+  "overQuicCount": "{count} 个经 QUIC"
 }

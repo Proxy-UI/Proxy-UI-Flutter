@@ -33,7 +33,11 @@ final _earlier = NodeVerification(
   latencyMs: 90,
 );
 
-Future<ProxyState> _state(FakeProxyService service) async {
+/// A state over the four nodes, configured for [server] when given.
+Future<ProxyState> _state(
+  FakeProxyService service, {
+  ({String host, int port})? server,
+}) async {
   SharedPreferences.setMockInitialValues({
     'node_catalog_preferences': jsonEncode(
       NodeCatalogPreferences(
@@ -43,6 +47,12 @@ Future<ProxyState> _state(FakeProxyService service) async {
         latencies: {_without.storageKey: 90},
       ).toJson(),
     ),
+    if (server != null)
+      'proxy_config': jsonEncode({
+        'serverHost': server.host,
+        'serverPort': server.port,
+        'setSystemProxy': false,
+      }),
   });
   final state = ProxyState(service: service);
   addTearDown(state.dispose);
@@ -138,53 +148,125 @@ void main() {
       final state = await _state(_service(rejects: true));
       await state.lookUpQuicSupport();
       expect(state.quicSupportOf(_serving), QuicSupport.unknown);
-      expect(state.testEndpointOf(_serving, UpstreamTransport.quic), isNull);
-      // Its own address is still QUIC.
+      expect(state.endpointOf(_serving, UpstreamTransport.quic), isNull);
+      // Its own address is still QUIC, and it has no other.
       expect(
-        state.testEndpointOf(_addressed, UpstreamTransport.quic)?.qualifiedHost,
+        state.endpointOf(_addressed, UpstreamTransport.quic)?.qualifiedHost,
         'quic://c.example',
       );
+      expect(state.endpointOf(_addressed, UpstreamTransport.tcp), isNull);
     },
   );
 
+  test('each carrier keeps its own result', () async {
+    final service = _service();
+    final state = await _state(service);
+    await state.lookUpQuicSupport();
+    service.calls.clear();
+
+    final results = await state.verifyNodes([
+      _serving,
+      _without,
+      _addressed,
+      _unknown,
+    ], carrier: UpstreamTransport.quic);
+
+    expect(service.calls.where((call) => call.startsWith('probe ')).toSet(), {
+      'probe quic://a.example:10811',
+      'probe quic://c.example:10811',
+    });
+    expect(results[0]?.latencyMs, 70);
+    expect(results[1], isNull);
+    expect(results[2]?.error, contains('certificate'));
+    expect(results[3], isNull);
+
+    // A QUIC answer sits beside the TCP one instead of replacing it, and
+    // lacking QUIC says nothing about the TCP result a node already had.
+    expect(
+      state.verificationFor(_serving, UpstreamTransport.quic)?.latencyMs,
+      70,
+    );
+    expect(state.verificationFor(_serving, UpstreamTransport.tcp), isNull);
+    expect(state.latencyOf(_serving, UpstreamTransport.tcp), isNull);
+    expect(state.verificationFor(_without)?.latencyMs, 90);
+    expect(state.verificationFor(_unknown), isNull);
+
+    final saved = NodeCatalogPreferences.fromJson(
+      jsonDecode(
+        (await SharedPreferences.getInstance()).getString(
+          'node_catalog_preferences',
+        )!,
+      ),
+    );
+    expect(
+      saved.verificationFor(_serving, UpstreamTransport.quic)?.latencyMs,
+      70,
+    );
+    expect(saved.verificationFor(_serving), isNull);
+    expect(saved.verificationFor(_addressed)?.carrier, UpstreamTransport.quic);
+  });
+
+  test('a QUIC result the last build kept as the only one moves aside', () {
+    final quic = NodeVerification(
+      status: NodeVerificationStatus.verified,
+      checkedAt: DateTime.now(),
+      latencyMs: 70,
+      carrier: UpstreamTransport.quic,
+    );
+    // Builds older still recorded a `quic://` entry's results as TCP.
+    final unlabelled = quic.toJson()..remove('carrier');
+    final restored = NodeCatalogPreferences.fromJson({
+      'verifications': {
+        _serving.storageKey: quic.toJson(),
+        _addressed.storageKey: unlabelled,
+      },
+      'latencies': {_serving.storageKey: 70, _addressed.storageKey: 70},
+    });
+
+    expect(restored.verificationFor(_serving), isNull);
+    expect(restored.latencyFor(_serving), isNull);
+    expect(
+      restored.verificationFor(_serving, UpstreamTransport.quic)?.latencyMs,
+      70,
+    );
+    expect(restored.verificationFor(_addressed)?.latencyMs, 70);
+    expect(restored.latencyFor(_addressed), 70);
+  });
+
   test(
-    'a QUIC test skips nodes without QUIC and keeps their results',
+    'the node in use is found over QUIC, and connecting follows the carrier',
     () async {
       final service = _service();
-      final state = await _state(service);
+      // The port a carrier switch used to leave behind: a.example's TCP one.
+      final state = await _state(
+        service,
+        server: (host: 'quic://a.example', port: 1081),
+      );
+
+      // No other node shares the host, so it is found before QUIC is known.
+      expect(state.isCurrentNode(_serving), isTrue);
+      expect(state.isCurrentNode(_without), isFalse);
       await state.lookUpQuicSupport();
-      service.calls.clear();
+      expect(state.isCurrentNode(_serving), isTrue);
+      // Until one is picked, the map uses the configured server's carrier.
+      expect(state.preferredCarrier, UpstreamTransport.quic);
+      expect(state.carrierFor(_serving), UpstreamTransport.quic);
+      expect(state.carrierFor(_without), UpstreamTransport.tcp);
+      // UDP 1081 is not where it serves QUIC, so connecting still means
+      // something.
+      expect(state.isInUse(_serving), isFalse);
 
-      final results = await state.verifyNodes([
-        _serving,
-        _without,
-        _addressed,
-        _unknown,
-      ], carrier: UpstreamTransport.quic);
+      expect(await state.switchToNode(_serving), isTrue);
+      expect(service.calls.last, 'start quic://a.example:10811');
+      expect(state.isInUse(_serving), isTrue);
 
-      expect(service.calls.where((call) => call.startsWith('probe ')).toSet(), {
-        'probe quic://a.example:10811',
-        'probe quic://c.example:10811',
-      });
-      expect(results[0]?.carrier, UpstreamTransport.quic);
-      expect(results[0]?.latencyMs, 70);
-      expect(results[1], isNull);
-      expect(results[2]?.error, contains('certificate'));
-      expect(results[3], isNull);
-
-      // Lacking QUIC said nothing about the TCP result it already had.
-      expect(state.verificationFor(_without)?.isVerified, isTrue);
-      expect(state.verificationFor(_without)?.latencyMs, 90);
-      expect(state.verificationFor(_without)?.carrier, UpstreamTransport.tcp);
-      expect(state.verificationFor(_unknown), isNull);
-      expect(state.testedCarrierOf(_serving), UpstreamTransport.quic);
-
-      final saved = (await SharedPreferences.getInstance()).getString(
-        'node_catalog_preferences',
-      )!;
-      final verification = NodeCatalogPreferences.fromJson(jsonDecode(saved))
-          .verificationFor(_serving);
-      expect(verification?.carrier, UpstreamTransport.quic);
+      state.setPreferredCarrier(UpstreamTransport.tcp);
+      expect(state.isInUse(_serving), isFalse);
+      expect(state.switchImpactOf(_serving), SwitchImpact.newSessions);
+      expect(await state.switchToNode(_serving), isTrue);
+      expect(service.calls.last, 'switch a.example:1081');
+      expect(state.isCurrentNode(_serving), isTrue);
+      expect(state.currentCarrier, UpstreamTransport.tcp);
     },
   );
 }

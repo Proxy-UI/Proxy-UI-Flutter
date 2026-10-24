@@ -133,7 +133,7 @@ class _GalaxyDashboardState extends State<_GalaxyDashboard> {
               a.current == b.current &&
               a.latencyMs == b.latencyMs &&
               a.quic == b.quic &&
-              a.testedOverQuic == b.testedOverQuic &&
+              a.carrier == b.carrier &&
               identical(a.node, b.node);
         })) {
       return;
@@ -263,7 +263,7 @@ class _ControlPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final rows = [
-      _CurrentNodeRow(nodes: nodes, onOpenNodes: onOpenNodes),
+      _CurrentNodeRow(state: state, nodes: nodes, onOpenNodes: onOpenNodes),
       const Divider(height: 1, indent: 20, endIndent: 20),
       _CaptureRow(state: state),
       const Divider(height: 1, indent: 20, endIndent: 20),
@@ -614,16 +614,24 @@ class _PanelRow extends StatelessWidget {
   }
 }
 
-/// The node traffic goes through; opens it on the node map.
+/// The node traffic goes through, with how it last answered over the
+/// carrier in use; opens it on the node map.
 class _CurrentNodeRow extends StatelessWidget {
-  const _CurrentNodeRow({required this.nodes, required this.onOpenNodes});
+  const _CurrentNodeRow({
+    required this.state,
+    required this.nodes,
+    required this.onOpenNodes,
+  });
 
+  final ProxyState state;
   final List<GalaxyNode> nodes;
   final void Function(String? selection) onOpenNodes;
 
   @override
   Widget build(BuildContext context) {
     final current = nodes.where((node) => node.current).firstOrNull;
+    // The map may be showing the other carrier; this row is the connection.
+    final carrier = state.currentCarrier ?? UpstreamTransport.tcp;
     return _PanelRow(
       key: const Key('current-node'),
       onTap: () => onOpenNodes(current?.id),
@@ -631,13 +639,20 @@ class _CurrentNodeRow extends StatelessWidget {
       title: current == null
           ? context.l10n.currentNodeTitle
           : placeName(context, current.country),
-      detail: current == null ? context.l10n.noCurrentNode : current.label,
+      // The status above and the chip beside already name the carrier.
+      detail: current == null
+          ? context.l10n.noCurrentNode
+          : UpstreamEndpoint.tryFromHost(
+                  state.config.serverHost,
+                  state.config.serverPort,
+                )?.address ??
+                current.address,
       trailing: [
         if (current != null)
           HealthChip(
-            health: current.health,
-            latencyMs: current.latencyMs,
-            overQuic: current.testedOverQuic,
+            health: state.healthOf(current.node, carrier),
+            latencyMs: state.latencyOf(current.node, carrier),
+            overQuic: carrier == UpstreamTransport.quic,
           ),
         Icon(
           Icons.chevron_right,

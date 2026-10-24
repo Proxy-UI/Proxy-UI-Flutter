@@ -168,7 +168,7 @@ class _NodeTile extends StatelessWidget {
     final node = planet.node;
     final info = node.node;
     final color = StatusColors.of(context).health(node.health, scheme);
-    final verification = actions.state.verificationFor(info);
+    final verification = actions.state.verificationFor(info, node.carrier);
     final details = [
       if (verification?.egressIp.isNotEmpty ?? false)
         '${context.l10n.nodeEgressIp} ${verification!.egressIp}',
@@ -199,7 +199,6 @@ class _NodeTile extends StatelessWidget {
                     NodeAddressText(
                       info.addr,
                       quic: actions.state.quicSupportOf(info),
-                      withoutQuic: actions.skippedWithoutQuic(info),
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w500,
                         fontFeatures: const [FontFeature.tabularFigures()],
@@ -221,10 +220,10 @@ class _NodeTile extends StatelessWidget {
               HealthChip(
                 health: node.health,
                 latencyMs: node.latencyMs,
-                overQuic: node.testedOverQuic,
+                overQuic: node.overQuic,
               ),
               const SizedBox(width: 6),
-              if (node.current && actions.state.isRunning)
+              if (actions.inUse(info))
                 Tooltip(
                   message: context.l10n.nodeInUse,
                   child: Padding(

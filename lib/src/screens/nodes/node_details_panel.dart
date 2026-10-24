@@ -7,6 +7,7 @@ import 'package:proxy_ui/l10n/app_language.dart';
 
 import '../../models/country_atlas.dart';
 import '../../models/node_health.dart';
+import '../../models/node_model.dart';
 import '../../models/upstream_endpoint.dart';
 import '../../providers/proxy_provider.dart';
 import '../../services/build_capabilities.dart';
@@ -252,32 +253,18 @@ class _CountryDetails extends StatelessWidget {
         const SizedBox(height: 16),
         _HealthBar(counts: system.counts, total: total),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: actions.testingMany
-                    ? null
-                    : () => actions.testMany(context, nodes),
-                icon: actions.testingMany
-                    ? TestingRing(size: 18, progress: actions.testProgress)
-                    : const Icon(Icons.network_check),
-                label: Text(context.l10n.testRegion),
-              ),
-            ),
-            if (actions.offersQuicTest(nodes)) ...[
-              const SizedBox(width: 8),
-              _TestCarrierChoice(actions: actions),
-            ],
-          ],
+        FilledButton.tonalIcon(
+          onPressed: actions.testingMany
+              ? null
+              : () => actions.testMany(context, nodes),
+          icon: actions.testingMany
+              ? TestingRing(size: 18, progress: actions.testProgress)
+              : const Icon(Icons.network_check),
+          label: Text(context.l10n.testRegion),
         ),
         const SizedBox(height: 12),
         for (final planet in planets)
-          _NodeRow(
-            planet: planet,
-            actions: actions,
-            onTap: () => onSelect(planet.id),
-          ),
+          _NodeRow(planet: planet, onTap: () => onSelect(planet.id)),
       ],
     );
   }
@@ -350,11 +337,10 @@ class _HealthBar extends StatelessWidget {
 
 /// A node as one row: its health, address and latency.
 class _NodeRow extends StatelessWidget {
-  const _NodeRow({required this.planet, required this.onTap, this.actions});
+  const _NodeRow({required this.planet, required this.onTap});
 
   final NodePlanet planet;
   final VoidCallback onTap;
-  final NodeActions? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -375,7 +361,6 @@ class _NodeRow extends StatelessWidget {
               child: NodeAddressText(
                 node.node.addr,
                 quic: context.watch<ProxyState>().quicSupportOf(node.node),
-                withoutQuic: actions?.skippedWithoutQuic(node.node) ?? false,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontFeatures: const [FontFeature.tabularFigures()],
                   fontWeight: node.current ? FontWeight.w600 : null,
@@ -391,12 +376,12 @@ class _NodeRow extends StatelessWidget {
                   ? latencyText(
                       context,
                       node.latencyMs!,
-                      overQuic: node.testedOverQuic,
+                      overQuic: node.overQuic,
                     )
                   : quicFailureText(
                       context,
                       node.health,
-                      overQuic: node.testedOverQuic,
+                      overQuic: node.overQuic,
                     ),
               style: theme.textTheme.labelMedium?.copyWith(
                 color: node.health.isAvailable
@@ -441,15 +426,18 @@ class _NodeDetails extends StatelessWidget {
     final scheme = theme.colorScheme;
     final node = planet.node;
     final info = node.node;
-    final verification = state.verificationFor(info);
+    final carrier = node.carrier;
+    final verification = state.verificationFor(info, carrier);
     final color = StatusColors.of(context).health(node.health, scheme);
     final switching = actions.isSwitching(info);
-    final testing = state.isVerifyingNode(info);
+    final testing = state.isVerifyingNode(info, carrier);
     final endpoint = info.endpoint;
     final quicPort = endpoint?.isQuic == false
         ? state.quicSupportOf(info).port
         : null;
-    final testedOver = state.testedCarrierOf(info) ?? UpstreamTransport.tcp;
+    // Where the node serves both, each carrier shows its own result and the
+    // one picked is what the buttons below use.
+    final both = state.servesBothCarriers(info);
     final restartsTun = actions.restartsTun(info);
     final switchError = actions.switchError(info);
     final drift =
@@ -467,7 +455,6 @@ class _NodeDetails extends StatelessWidget {
             if (endpoint != null)
               '${endpoint.transport.label} ${endpoint.port}',
             if (quicPort != null) '${UpstreamTransport.quic.label} $quicPort',
-            if (actions.skippedWithoutQuic(info)) context.l10n.noQuic,
             placeName(context, system.code),
           ].join(' · '),
           onClose: onClose,
@@ -483,18 +470,23 @@ class _NodeDetails extends StatelessWidget {
               label: Text(placeName(context, system.code)),
               onPressed: () => onSelect(system.id),
             ),
-            HealthChip(
-              health: node.health,
-              latencyMs: node.latencyMs,
-              overQuic: node.testedOverQuic,
-            ),
+            if (!both)
+              HealthChip(
+                health: node.health,
+                latencyMs: node.latencyMs,
+                overQuic: node.overQuic,
+              ),
           ],
         ),
+        if (both) ...[
+          const SizedBox(height: 12),
+          _CarrierTiles(node: info, enabled: !actions.testingMany),
+        ],
         const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
-              child: node.current && state.isRunning
+              child: actions.inUse(info)
                   ? FilledButton.tonalIcon(
                       onPressed: null,
                       icon: const Icon(Icons.check),
@@ -518,7 +510,11 @@ class _NodeDetails extends StatelessWidget {
                                   ? Icons.restart_alt
                                   : Icons.power_settings_new,
                             ),
-                      label: Text(context.l10n.nodeConnect),
+                      label: Text(
+                        both
+                            ? context.l10n.connectOver(carrier.label)
+                            : context.l10n.nodeConnect,
+                      ),
                     ),
             ),
             const SizedBox(width: 8),
@@ -552,23 +548,6 @@ class _NodeDetails extends StatelessWidget {
             ),
           ],
         ),
-        // Only where the node serves both does the carrier mean anything.
-        if (actions.offersQuicTest([info])) ...[
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Text(
-                context.l10n.testOver,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 8),
-              _TestCarrierChoice(actions: actions),
-            ],
-          ),
-        ],
         // Said before the click: TUN routes are built around the current
         // host, so outside Windows another host means restarting capture.
         if (restartsTun && !switching) ...[
@@ -610,19 +589,22 @@ class _NodeDetails extends StatelessWidget {
             label: context.l10n.nodeEgressIp,
             value: verification!.egressIp,
           ),
-        _InfoRow(
-          label: context.l10n.latency,
-          value: node.latencyMs == null
-              ? context.l10n.nA
-              : '${testedOver.label} · '
-                    '${context.l10n.latencyValue(node.latencyMs!)}',
-        ),
-        _InfoRow(
-          label: context.l10n.nodeChecked,
-          value: verification == null
-              ? context.l10n.nodeNeverTested
-              : timeAgo(context, verification.checkedAt),
-        ),
+        // The tiles already say both for each carrier.
+        if (!both) ...[
+          _InfoRow(
+            label: context.l10n.latency,
+            value: node.latencyMs == null
+                ? context.l10n.nA
+                : '${carrier.label} · '
+                      '${context.l10n.latencyValue(node.latencyMs!)}',
+          ),
+          _InfoRow(
+            label: context.l10n.nodeChecked,
+            value: verification == null
+                ? context.l10n.nodeNeverTested
+                : timeAgo(context, verification.checkedAt),
+          ),
+        ],
         _InfoRow(
           label: context.l10n.nodeLastSeen,
           value: info.lastSeen.millisecondsSinceEpoch == 0
@@ -668,33 +650,182 @@ class _NodeDetails extends StatelessWidget {
   }
 }
 
-/// TCP or QUIC for the tests started here, shared with every other test
-/// button through [NodeActions.testCarrier].
-class _TestCarrierChoice extends StatelessWidget {
-  const _TestCarrierChoice({required this.actions});
+/// TCP or QUIC for every test and connection made from the node map where a
+/// node serves both: [ProxyState.preferredCarrier].
+class CarrierChoice extends StatelessWidget {
+  const CarrierChoice({super.key, this.enabled = true});
 
-  final NodeActions actions;
+  final bool enabled;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: context.l10n.testOver,
-    child: SegmentedButton<UpstreamTransport>(
-      key: const Key('test-carrier'),
-      showSelectedIcon: false,
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  Widget build(BuildContext context) {
+    final state = context.watch<ProxyState>();
+    return Tooltip(
+      message: context.l10n.carrierChoice,
+      child: SegmentedButton<UpstreamTransport>(
+        showSelectedIcon: false,
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        segments: [
+          for (final carrier in UpstreamTransport.values)
+            ButtonSegment(value: carrier, label: Text(carrier.label)),
+        ],
+        selected: {state.preferredCarrier},
+        onSelectionChanged: enabled
+            ? (selection) => state.setPreferredCarrier(selection.single)
+            : null,
       ),
-      segments: [
-        for (final carrier in UpstreamTransport.values)
-          ButtonSegment(value: carrier, label: Text(carrier.label)),
+    );
+  }
+}
+
+/// A node's two carriers side by side, each with how it last answered over
+/// it. Picking one is the [CarrierChoice] for the whole map.
+class _CarrierTiles extends StatelessWidget {
+  const _CarrierTiles({required this.node, required this.enabled});
+
+  final NodeInfo node;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<ProxyState>();
+    return Row(
+      children: [
+        for (final carrier in UpstreamTransport.values) ...[
+          if (carrier != UpstreamTransport.values.first)
+            const SizedBox(width: 8),
+          Expanded(
+            child: _CarrierTile(
+              node: node,
+              carrier: carrier,
+              selected: state.carrierFor(node) == carrier,
+              onTap: enabled ? () => state.setPreferredCarrier(carrier) : null,
+            ),
+          ),
+        ],
       ],
-      selected: {actions.testCarrier},
-      onSelectionChanged: actions.testingMany
-          ? null
-          : (selection) => actions.testCarrier = selection.single,
-    ),
-  );
+    );
+  }
+}
+
+class _CarrierTile extends StatelessWidget {
+  const _CarrierTile({
+    required this.node,
+    required this.carrier,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final NodeInfo node;
+  final UpstreamTransport carrier;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<ProxyState>();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final health = state.healthOf(node, carrier);
+    final latency = state.latencyOf(node, carrier);
+    final verification = state.verificationFor(node, carrier);
+    final port = state.endpointOf(node, carrier)?.port;
+    final color = StatusColors.of(context).health(health, scheme);
+    final inUse = state.isRunning && state.isInUse(node, carrier);
+    final muted = theme.textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        key: Key('carrier-${carrier.name}'),
+        color: selected
+            ? scheme.secondaryContainer
+            : scheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      carrier.label,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    if (port != null) ...[
+                      const SizedBox(width: 6),
+                      Text('$port', style: muted),
+                    ],
+                    const Spacer(),
+                    if (inUse)
+                      Tooltip(
+                        message: context.l10n.nodeInUse,
+                        child: Icon(
+                          Icons.link,
+                          size: 16,
+                          color: scheme.primary,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    if (health == NodeHealth.testing)
+                      TestingRing(size: 12, strokeWidth: 1.6, color: color)
+                    else
+                      PlanetGlyph(color: color, size: 12),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        health.isAvailable && latency != null
+                            ? '${healthLabel(context, health)} · '
+                                  '${latencyText(context, latency)}'
+                            : healthLabel(context, health),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  verification == null
+                      ? context.l10n.nodeNeverTested
+                      : timeAgo(context, verification.checkedAt),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: muted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _InfoRow extends StatelessWidget {

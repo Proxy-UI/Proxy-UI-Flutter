@@ -3,7 +3,7 @@ import 'package:proxy_ui/src/models/node_model.dart';
 
 void main() {
   group('NodeInfo', () {
-    test('QUIC node selection preserves the carrier through configuration', () {
+    test('a QUIC address keeps its carrier in the host', () {
       final node = NodeInfo(
         nodeId: 'quic',
         addr: 'quic://[::1]:10811',
@@ -13,7 +13,6 @@ void main() {
       );
       expect(node.host, 'quic://[::1]');
       expect(node.port, 10811);
-      expect(node.toProxyConfig().serverHost, 'quic://[::1]');
     });
     test('parses IPv4 host and port', () {
       final node = NodeInfo(
@@ -26,8 +25,6 @@ void main() {
 
       expect(node.host, '192.168.1.10');
       expect(node.port, 1081);
-      expect(node.toProxyConfig().tunFakeIp, isFalse);
-      expect(node.toProxyConfig(tunFakeIp: true).tunFakeIp, isTrue);
     });
 
     test('parses bracketed IPv6 host and port', () {

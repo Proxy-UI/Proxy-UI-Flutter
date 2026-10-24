@@ -169,13 +169,10 @@ class HealthChip extends StatelessWidget {
 /// A protocol's name as a small tag beside an address: QUIC on a node, UDP
 /// on a SOCKS5 link. Lists show it only for the exception, never for TCP.
 class ProtocolTag extends StatelessWidget {
-  const ProtocolTag(this.label, {super.key, this.tooltip, this.muted = false});
+  const ProtocolTag(this.label, {super.key, this.tooltip});
 
   final String label;
   final String? tooltip;
-
-  /// Outlined rather than filled, for an absence such as "No QUIC".
-  final bool muted;
 
   @override
   Widget build(BuildContext context) {
@@ -184,14 +181,13 @@ class ProtocolTag extends StatelessWidget {
     final tag = Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: muted ? null : scheme.tertiaryContainer,
-        border: muted ? Border.all(color: scheme.outlineVariant) : null,
+        color: scheme.tertiaryContainer,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
         style: theme.textTheme.labelSmall?.copyWith(
-          color: muted ? scheme.onSurfaceVariant : scheme.onTertiaryContainer,
+          color: scheme.onTertiaryContainer,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.4,
         ),
@@ -209,7 +205,6 @@ class NodeAddressText extends StatelessWidget {
     super.key,
     this.style,
     this.quic = QuicSupport.unknown,
-    this.withoutQuic = false,
   });
 
   /// The catalogue's address, with or without `quic://`.
@@ -218,9 +213,6 @@ class NodeAddressText extends StatelessWidget {
 
   /// What the node said about QUIC; nothing is shown while unknown.
   final QuicSupport quic;
-
-  /// Marks a node a QUIC test just left out for having no QUIC endpoint.
-  final bool withoutQuic;
 
   @override
   Widget build(BuildContext context) {
@@ -239,8 +231,6 @@ class NodeAddressText extends StatelessWidget {
                 ? null
                 : context.l10n.quicOnUdpPort(quicPort.toString()),
           )
-        : withoutQuic
-        ? ProtocolTag(context.l10n.noQuic, muted: true)
         : null;
     if (tag == null) return text;
     return Row(

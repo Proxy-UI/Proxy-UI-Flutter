@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import '../../../models/country_atlas.dart';
 import '../../../models/node_health.dart';
 import '../../../models/node_model.dart';
+import '../../../models/upstream_endpoint.dart';
 import '../../../ffi/proxy_ffi.dart';
 import 'galaxy_layout.dart';
 
@@ -84,7 +85,7 @@ class GalaxyNode {
     this.current = false,
     this.latencyMs,
     this.quic = false,
-    this.testedOverQuic = false,
+    this.carrier = UpstreamTransport.tcp,
   });
 
   final NodeInfo node;
@@ -113,8 +114,11 @@ class GalaxyNode {
   /// endpoint. False while unknown.
   final bool quic;
 
-  /// Whether [latencyMs] was measured over QUIC.
-  final bool testedOverQuic;
+  /// The carrier [health] and [latencyMs] describe, which is also the one a
+  /// test or a connection from the node map uses.
+  final UpstreamTransport carrier;
+
+  bool get overQuic => carrier == UpstreamTransport.quic;
 }
 
 /// One node, orbiting its country.

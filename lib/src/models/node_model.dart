@@ -1,5 +1,4 @@
 import 'upstream_endpoint.dart';
-import 'proxy_config.dart';
 
 /// Outcome of asking an echo service, through a node, where its traffic leaves
 /// from.
@@ -26,7 +25,8 @@ class NodeVerification {
   final DateTime checkedAt;
 
   /// What carried the test: TCP to the catalogue address, or QUIC. Results
-  /// recorded before the choice existed were all TCP.
+  /// recorded before the choice existed read as TCP, even for a `quic://`
+  /// entry, whose results always travelled over QUIC.
   final UpstreamTransport carrier;
 
   const NodeVerification({
@@ -135,8 +135,13 @@ class NodeInfo {
     );
   }
 
-  /// The address with its carrier, or null when it does not parse.
-  UpstreamEndpoint? get endpoint => UpstreamEndpoint.tryParse(addr);
+  /// The address with its carrier, or null when it does not parse. Parsed
+  /// once: every carrier, health and current-node check starts here.
+  late final UpstreamEndpoint? endpoint = UpstreamEndpoint.tryParse(addr);
+
+  /// The carrier its own address names: QUIC for a `quic://` entry, TCP
+  /// otherwise, including an address that does not parse.
+  UpstreamTransport get carrier => endpoint?.transport ?? UpstreamTransport.tcp;
 
   // Parse host and port from addr (format: "ip:port")
   String get host => _parseHostAndPort().$1;
@@ -145,46 +150,5 @@ class NodeInfo {
   (String, int) _parseHostAndPort() {
     final endpoint = UpstreamEndpoint.parse(addr);
     return (endpoint.qualifiedHost, endpoint.port);
-  }
-
-  // Generate ProxyConfigModel for this node
-  ProxyConfigModel toProxyConfig({
-    int localPort = 1080,
-    bool allowLan = false,
-    String? sessionKey,
-    bool autoProxy = true,
-    bool udpEnabled = false,
-    bool udpDirectFallback = true,
-    bool tunEnabled = false,
-    bool tunFakeIp = false,
-    String tunDnsServer = '223.5.5.5',
-    List<String> tunBypassProcesses = const [],
-    bool? tunBypassWeGame,
-    AndroidVpnRoutingMode androidVpnRoutingMode = AndroidVpnRoutingMode.all,
-    List<String> androidVpnPackages = const [],
-    bool reverseGeo = false,
-    bool secureTransport = false,
-    bool? setSystemProxy,
-  }) {
-    return ProxyConfigModel(
-      serverHost: host,
-      serverPort: port,
-      localPort: localPort,
-      allowLan: allowLan,
-      sessionKey: sessionKey,
-      autoProxy: autoProxy,
-      udpEnabled: udpEnabled,
-      udpDirectFallback: udpDirectFallback,
-      tunEnabled: tunEnabled,
-      tunFakeIp: tunFakeIp,
-      tunDnsServer: tunDnsServer,
-      tunBypassProcesses: tunBypassProcesses,
-      tunBypassWeGame: tunBypassWeGame,
-      androidVpnRoutingMode: androidVpnRoutingMode,
-      androidVpnPackages: androidVpnPackages,
-      reverseGeo: reverseGeo,
-      secureTransport: secureTransport,
-      setSystemProxy: setSystemProxy,
-    );
   }
 }
