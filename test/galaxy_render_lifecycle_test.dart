@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proxy_ui/src/models/node_health.dart';
 import 'package:proxy_ui/src/models/node_model.dart';
@@ -7,7 +6,6 @@ import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_canvas.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_model.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_painter.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_view.dart';
-import 'package:proxy_ui/src/widgets/app_render_activity.dart';
 
 GalaxyScene scene({int count = 80, String country = 'US'}) => buildGalaxyScene([
   for (var i = 0; i < count; i++)
@@ -32,11 +30,6 @@ final text = GalaxyText(
   countryStats: (total, available) => '$available / $total',
 );
 
-const desktopPlatforms = TargetPlatformVariant({
-  TargetPlatform.windows,
-  TargetPlatform.macOS,
-  TargetPlatform.linux,
-});
 const supportedPlatforms = TargetPlatformVariant({
   TargetPlatform.windows,
   TargetPlatform.macOS,
@@ -47,19 +40,17 @@ const supportedPlatforms = TargetPlatformVariant({
 
 Widget app(GalaxyScene scene, {bool enabled = true, bool visible = true}) =>
     MaterialApp(
-      home: AppRenderActivity(
-        child: TickerMode(
-          enabled: enabled,
-          child: Scaffold(
-            body: visible
-                ? GalaxyCanvas(
-                    scene: scene,
-                    text: text,
-                    selected: null,
-                    onSelect: (_) {},
-                  )
-                : const SizedBox(),
-          ),
+      home: TickerMode(
+        enabled: enabled,
+        child: Scaffold(
+          body: visible
+              ? GalaxyCanvas(
+                  scene: scene,
+                  text: text,
+                  selected: null,
+                  onSelect: (_) {},
+                )
+              : const SizedBox(),
         ),
       ),
     );
@@ -91,39 +82,6 @@ void main() {
       AppLifecycleState.resumed,
     );
   });
-
-  testWidgets(
-    'desktop blur and minimize mute the active galaxy until focus returns',
-    (tester) async {
-      await tester.pumpWidget(app(scene()));
-      await tester.pump();
-      final view = viewOf(tester);
-      final listeners = windowManager.listeners.toList();
-      for (final listener in listeners) {
-        listener.onWindowBlur();
-      }
-      await tester.pump();
-      final time = view.time;
-      await frames(tester, 120);
-      expect(view.time, time);
-      expect(tester.binding.transientCallbackCount, 0);
-      for (final listener in listeners) {
-        listener.onWindowFocus();
-      }
-      await frames(tester, 5);
-      expect(view.time, greaterThan(time));
-      for (final listener in listeners) {
-        listener.onWindowMinimize();
-      }
-      await tester.pump();
-      final minimizedTime = view.time;
-      await frames(tester, 120);
-      expect(view.time, minimizedTime);
-      expect(tester.binding.transientCallbackCount, 0);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: desktopPlatforms,
-  );
 
   testWidgets(
     'a populated connected galaxy rests without scheduling idle frames',

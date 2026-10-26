@@ -20,10 +20,14 @@ no blur pass per frame. All canvas drawing is clipped to its viewport. These
 changes apply to every platform, including Windows; GPU submission and CPU
 geometry are both reduced.
 
-Application lifecycle and desktop focus/minimize events mute decorative work.
-Desktop show/hide calls also publish explicit visibility through
-`WindowStateService`, so tray hiding does not depend on shell blur events.
-They do not stop the proxy or VPN. The connected power button pulses once,
+The galaxy mutes itself from the application lifecycle, which every desktop
+embedder derives from the native window: hidden to the tray or minimized is
+`hidden`, unfocused is `inactive`. Hidden engines draw no frames at all. There
+is no app-wide animation gate and no visibility flag kept in Dart. An earlier
+one muted every ticker under the navigator, and its flag went stale when the
+macOS Dock reopened the window natively: page switches and dialogs then never
+appeared, so the whole window looked frozen. Muting does not stop the proxy or
+VPN. The connected power button pulses once,
 instead of animating for the entire connection lifetime.
 
 Each canvas owns its backdrop and sprite atlas. Flags are shared only while
@@ -40,22 +44,20 @@ from invalidating the map.
 From `ui/flutter`:
 
 ```sh
-fvm flutter test test/galaxy_geometry_test.dart test/app_render_activity_test.dart test/galaxy_render_lifecycle_test.dart test/galaxy_cache_test.dart test/planet_atlas_test.dart test/home_render_lifecycle_test.dart
+fvm flutter test test/galaxy_geometry_test.dart test/galaxy_render_lifecycle_test.dart test/galaxy_cache_test.dart test/planet_atlas_test.dart test/home_render_lifecycle_test.dart
 fvm flutter test tool/render_galaxy_test.dart
 ```
 
 The tests cover a populated connected map at rest, vsync interaction repaint
-frequency, background/detached engines, desktop minimize/focus, page disposal,
+frequency, background/detached engines, navigation while unfocused, page disposal,
 sprite release on hiding and theme change, sprites against vectors, the
 atlas's memory bound, concurrent differently sized canvases, and unrelated
 provider notifications. The render harness writes desktop/phone and dark/light
 screenshots to `build/ui-shots/`.
 
 Lifecycle and resting-map tests run with Windows, macOS, Linux, Android and iOS
-platform variants. Desktop variants additionally cover minimize/blur and tray
-hide without a native focus event, including a failed native hide. These tests
-exercise shared Dart behavior; they do not replace native builds on macOS,
-Linux or iOS. Local native execution was verified on Windows and Android.
+platform variants. These tests exercise shared Dart behavior; they do not
+replace native builds on macOS, Linux or iOS. Local native execution was verified on Windows and Android.
 
 `tool/galaxy_resource_probe.dart` is a separate benchmark entry point with 240
 synthetic nodes in 12 countries and no proxy/network activity. Run on a dedicated

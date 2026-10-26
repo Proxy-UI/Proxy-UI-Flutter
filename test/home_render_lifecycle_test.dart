@@ -9,7 +9,6 @@ import 'package:proxy_ui/src/screens/home_screen.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_canvas.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_painter.dart';
 import 'package:proxy_ui/src/services/desktop_settings.dart';
-import 'package:proxy_ui/src/widgets/app_render_activity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/fake_proxy_service.dart';
@@ -62,7 +61,7 @@ void main() {
             locale: Locale('en'),
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: AppRenderActivity(child: HomeScreen()),
+            home: HomeScreen(),
           ),
         ),
       );
@@ -95,6 +94,14 @@ void main() {
       expect(painter().shouldRepaint(previous), isFalse);
       expect(paints, 0);
       expect(tester.binding.transientCallbackCount, 0);
+      // Unfocused, or just reopened from the Dock before focus arrives: muting
+      // decorative work must not freeze navigation.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
       await tester.tap(find.text('Logs').last);
       await tester.pumpAndSettle(const Duration(milliseconds: 40));
       expect(find.byType(GalaxyCanvas), findsNothing);
