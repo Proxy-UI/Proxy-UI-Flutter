@@ -15,8 +15,6 @@ import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_model.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/galaxy_painter.dart';
 import 'package:proxy_ui/src/screens/nodes/galaxy/planet_atlas.dart';
 import 'package:proxy_ui/src/theme/app_theme.dart';
-import 'package:proxy_ui/src/widgets/app_render_activity.dart';
-import 'package:proxy_ui/src/services/window_state_service.dart';
 import 'package:window_manager/window_manager.dart';
 
 const _output = String.fromEnvironment('GALAXY_PROBE_OUTPUT');
@@ -61,10 +59,7 @@ Future<void> main() async {
       valueListenable: _brightness,
       builder: (context, brightness, _) => MaterialApp(
         theme: buildAppTheme(Colors.indigo, brightness),
-        // Nor does the raster suite mute the galaxy on window blur.
-        home: _suiteName == 'raster'
-            ? const _Probe()
-            : const AppRenderActivity(child: _Probe()),
+        home: const _Probe(),
       ),
     ),
   );
@@ -394,22 +389,22 @@ class _ProbeState extends State<_Probe> with WidgetsBindingObserver {
       await settle();
       await sample('windows-minimized');
       await windowManager.restore();
-      await WindowStateService.instance.show();
+      await windowManager.show();
       await windowManager.focus();
       await settle(10);
       await sample('windows-restored-idle');
       _controller.reset();
-      await WindowStateService.instance.hide();
+      await windowManager.hide();
       await settle();
       await sample('windows-tray-hidden');
-      await WindowStateService.instance.show();
+      await windowManager.show();
       await windowManager.focus();
       await settle(10);
       await sample('windows-shown-idle');
     } finally {
       if (mounted) {
         await windowManager.restore();
-        await WindowStateService.instance.show();
+        await windowManager.show();
         setState(() => _suite = false);
         _log({'event': 'suite-complete'});
       }
