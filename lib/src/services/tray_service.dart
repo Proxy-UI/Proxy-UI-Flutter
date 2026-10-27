@@ -52,10 +52,11 @@ class TrayService {
   Image? _iconImage;
   _TrayMenu? _menu;
 
-  /// The menu replaced most recently. A click made in it may still be queued
-  /// for delivery, and its listener has to exist when it arrives, so it is
-  /// freed only at the next replacement.
-  _TrayMenu? _retiredMenu;
+  /// The menu shown by the latest opening. A click made in it is delivered
+  /// after the opening returns, possibly after the menu has been replaced, and
+  /// its listener has to exist then, so it is kept until the next opening. A
+  /// menu replaced without having been shown is freed at once.
+  _TrayMenu? _shownMenu;
 
   /// The context menu is on screen. The native menu loop keeps using its
   /// handles until it closes, so a rebuild that falls due meanwhile waits for
@@ -132,7 +133,10 @@ class TrayService {
       _iconRebuildPending = true;
       return;
     }
+    final menu = _menu;
+    _menu = null;
     _destroyTrayIcon();
+    _releaseMenu(menu);
     _applyTray();
   }
 
@@ -167,16 +171,21 @@ class TrayService {
         // shell has just taken it.
         case TrayIconClickedEvent():
           unawaited(showWindow());
-        case TrayIconRightClickedEvent():
+        case TrayIconRightClickedEvent() when !Platform.isLinux:
           _openMenu();
         default:
       }
     });
-    // The menu is opened from here rather than by a native trigger, so this
-    // side always knows whether it is on screen. Linux panels never report
-    // clicks and show the published menu themselves.
+    // On Windows and macOS the menu is opened from here rather than by a
+    // native trigger, so this side always knows whether it is on screen. Linux
+    // panels draw their own copy of the menu, which nativeapi publishes only
+    // under a native trigger, and nothing native stays open to track.
     trayIcon
-      ..setContextMenuTrigger(ContextMenuTrigger.none)
+      ..setContextMenuTrigger(
+        Platform.isLinux
+            ? ContextMenuTrigger.rightClicked
+            : ContextMenuTrigger.none,
+      )
       ..setVisible(true);
     _trayIcon = trayIcon;
     return trayIcon;
@@ -195,11 +204,6 @@ class TrayService {
     _trayIconListener = null;
     _iconImage?.dispose();
     _iconImage = null;
-    // An exit that follows must not find handles still alive (see [shutdown]).
-    _menu?.dispose();
-    _menu = null;
-    _retiredMenu?.dispose();
-    _retiredMenu = null;
     _menuOpen = false;
     _menuRebuildPending = false;
     _iconRebuildPending = false;
@@ -358,17 +362,29 @@ class TrayService {
     // Setting the menu also republishes it to Linux panels, which draw their
     // own copy.
     trayIcon.setContextMenu(menu.root);
-    _retiredMenu?.dispose();
-    _retiredMenu = _menu;
+    final previous = _menu;
     _menu = menu;
+    _releaseMenu(previous);
     _appliedMenuSignature = menuSignature;
+  }
+
+  /// Frees a menu that is no longer current, unless the latest opening showed
+  /// it (see [_shownMenu]).
+  void _releaseMenu(_TrayMenu? menu) {
+    if (menu == null || identical(menu, _shownMenu)) return;
+    menu.dispose();
   }
 
   /// Opens the context menu and returns once it has closed: the native menu
   /// loop blocks this call on Windows and macOS.
   void _openMenu() {
     final trayIcon = _trayIcon;
-    if (trayIcon == null || _menu == null || _menuOpen) return;
+    final menu = _menu;
+    if (trayIcon == null || menu == null || _menuOpen) return;
+    // Every click from the previous opening has been delivered by now.
+    final previous = _shownMenu;
+    _shownMenu = menu;
+    if (previous != null && !identical(previous, menu)) previous.dispose();
     _menuOpen = true;
     try {
       trayIcon.openContextMenu();
@@ -588,6 +604,13 @@ class TrayService {
     _isShutDown = true;
     dispose();
     _destroyTrayIcon();
+    // An exit that follows must not find menu handles still alive either.
+    final menu = _menu;
+    final shown = _shownMenu;
+    _menu = null;
+    _shownMenu = null;
+    menu?.dispose();
+    if (shown != null && !identical(shown, menu)) shown.dispose();
   }
 
   void dispose() {
