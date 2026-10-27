@@ -58,6 +58,13 @@ class TrayService {
   /// menu replaced without having been shown is freed at once.
   _TrayMenu? _shownMenu;
 
+  /// Menus replaced on Linux, freed after [_linuxMenuGrace]. The panel draws
+  /// its own copy of the menu and keeps naming the old items until it has
+  /// fetched the new layout, and nativeapi resolves those names to the old
+  /// GTK widgets, so they must stay valid until then.
+  final List<_TrayMenu> _lingeringMenus = [];
+  static const Duration _linuxMenuGrace = Duration(seconds: 10);
+
   /// The context menu is on screen. The native menu loop keeps using its
   /// handles until it closes, so a rebuild that falls due meanwhile waits for
   /// the close. Set and cleared around the blocking open in [_openMenu], so
@@ -372,6 +379,13 @@ class TrayService {
   /// it (see [_shownMenu]).
   void _releaseMenu(_TrayMenu? menu) {
     if (menu == null || identical(menu, _shownMenu)) return;
+    if (Platform.isLinux) {
+      _lingeringMenus.add(menu);
+      Timer(_linuxMenuGrace, () {
+        if (_lingeringMenus.remove(menu)) menu.dispose();
+      });
+      return;
+    }
     menu.dispose();
   }
 
@@ -611,6 +625,10 @@ class TrayService {
     _shownMenu = null;
     menu?.dispose();
     if (shown != null && !identical(shown, menu)) shown.dispose();
+    for (final lingering in _lingeringMenus) {
+      lingering.dispose();
+    }
+    _lingeringMenus.clear();
   }
 
   void dispose() {
