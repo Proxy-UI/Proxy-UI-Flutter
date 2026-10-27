@@ -15,14 +15,13 @@ import 'package:tray_manager/tray_manager.dart'
         ImageAsset,
         ListenerId,
         Menu,
-        MenuClosedEvent,
         MenuItem,
         MenuItemClickedEvent,
         MenuItemState,
         MenuItemType,
-        MenuOpenedEvent,
         TrayIcon,
         TrayIconClickedEvent,
+        TrayIconRightClickedEvent,
         TrayManager;
 import 'package:window_manager/window_manager.dart';
 
@@ -53,9 +52,15 @@ class TrayService {
   Image? _iconImage;
   _TrayMenu? _menu;
 
+  /// The menu replaced most recently. A click made in it may still be queued
+  /// for delivery, and its listener has to exist when it arrives, so it is
+  /// freed only at the next replacement.
+  _TrayMenu? _retiredMenu;
+
   /// The context menu is on screen. The native menu loop keeps using its
-  /// handles until it closes, so a menu is never replaced or freed while open:
-  /// a rebuild that falls due meanwhile waits for the close.
+  /// handles until it closes, so a rebuild that falls due meanwhile waits for
+  /// the close. Set and cleared around the blocking open in [_openMenu], so
+  /// it never lags behind the real menu.
   bool _menuOpen = false;
   bool _menuRebuildPending = false;
   bool _iconRebuildPending = false;
@@ -154,18 +159,24 @@ class TrayService {
       return null;
     }
     _trayIconListener = trayIcon.addListener((event) {
-      // Always raise. Toggling needed to know whether the window was already
-      // in front, and the only signal for that — focus — is unreliable at
-      // exactly the moment the tray is clicked, because the shell has just
-      // taken it.
-      if (event is TrayIconClickedEvent && !_isDisposed) {
-        unawaited(showWindow());
+      if (_isDisposed) return;
+      switch (event) {
+        // Always raise. Toggling needed to know whether the window was
+        // already in front, and the only signal for that — focus — is
+        // unreliable at exactly the moment the tray is clicked, because the
+        // shell has just taken it.
+        case TrayIconClickedEvent():
+          unawaited(showWindow());
+        case TrayIconRightClickedEvent():
+          _openMenu();
+        default:
       }
     });
-    // The menu opens natively at the cursor. Linux panels never report clicks
-    // and open the menu themselves.
+    // The menu is opened from here rather than by a native trigger, so this
+    // side always knows whether it is on screen. Linux panels never report
+    // clicks and show the published menu themselves.
     trayIcon
-      ..setContextMenuTrigger(ContextMenuTrigger.rightClicked)
+      ..setContextMenuTrigger(ContextMenuTrigger.none)
       ..setVisible(true);
     _trayIcon = trayIcon;
     return trayIcon;
@@ -187,6 +198,8 @@ class TrayService {
     // An exit that follows must not find handles still alive (see [shutdown]).
     _menu?.dispose();
     _menu = null;
+    _retiredMenu?.dispose();
+    _retiredMenu = null;
     _menuOpen = false;
     _menuRebuildPending = false;
     _iconRebuildPending = false;
@@ -331,40 +344,44 @@ class TrayService {
     ];
 
     _appliedMenuSignature = null;
-    final trayIcon = _ensureTrayIcon();
-    if (trayIcon == null) return;
-    final current = _menu;
-    if (current != null &&
-        current.structure == _TrayMenu.structureOf(entries)) {
-      // Labels, check marks and enabled states change in place, which is safe
-      // while the menu is on screen.
-      current.update(entries);
-    } else if (_menuOpen) {
+    if (_menuOpen) {
       _menuRebuildPending = true;
       return;
-    } else {
-      final menu = _TrayMenu.build(
-        entries,
-        onClick: _onMenuClick,
-        onOpenChanged: _onMenuOpenChanged,
-      );
-      if (menu == null) {
-        debugPrint('Could not create the tray menu');
-        return;
-      }
-      trayIcon.setContextMenu(menu.root);
-      // Item clicks reach Dart asynchronously, after the native callback has
-      // returned, so the replaced menu can be freed even from a click handler.
-      current?.dispose();
-      _menu = menu;
     }
+    final trayIcon = _ensureTrayIcon();
+    if (trayIcon == null) return;
+    final menu = _TrayMenu.build(entries, onClick: _onMenuClick);
+    if (menu == null) {
+      debugPrint('Could not create the tray menu');
+      return;
+    }
+    // Setting the menu also republishes it to Linux panels, which draw their
+    // own copy.
+    trayIcon.setContextMenu(menu.root);
+    _retiredMenu?.dispose();
+    _retiredMenu = _menu;
+    _menu = menu;
     _appliedMenuSignature = menuSignature;
   }
 
-  void _onMenuOpenChanged(_TrayMenu menu, bool open) {
-    if (!identical(menu, _menu)) return;
-    _menuOpen = open;
-    if (open || _isDisposed) return;
+  /// Opens the context menu and returns once it has closed: the native menu
+  /// loop blocks this call on Windows and macOS.
+  void _openMenu() {
+    final trayIcon = _trayIcon;
+    if (trayIcon == null || _menu == null || _menuOpen) return;
+    _menuOpen = true;
+    try {
+      trayIcon.openContextMenu();
+    } finally {
+      _menuOpen = false;
+    }
+    // A click that closed the menu is delivered after this returns; let it
+    // arrive before work that waited for the close.
+    if (_iconRebuildPending || _menuRebuildPending) Timer.run(_applyDeferred);
+  }
+
+  void _applyDeferred() {
+    if (_isDisposed || _menuOpen) return;
     if (_iconRebuildPending) {
       _iconRebuildPending = false;
       _menuRebuildPending = false;
@@ -618,76 +635,33 @@ class _MenuEntry {
   final List<_MenuEntry> children;
 }
 
-/// A native menu item, with the check state the menu should show.
-class _ItemBinding {
-  _ItemBinding(this.item, this.checked);
-
-  final MenuItem item;
-  bool? checked;
-  ListenerId? listener;
-}
-
 /// A native context menu and every wrapper it depends on.
 ///
 /// nativeapi frees a handle when its Dart wrapper is collected, and a click
 /// listener lasts only as long as the item it was added to, so the whole tree
-/// is held here until the menu is replaced.
+/// is held here until the menu is freed.
 class _TrayMenu {
-  _TrayMenu._(this.structure);
+  _TrayMenu._();
 
-  /// The kind and key of every line, in order. Two menus with the same
-  /// structure differ only in what [update] changes in place.
-  final String structure;
   final List<Menu> _menus = [];
-  final List<_ItemBinding> _items = [];
+  final List<(MenuItem, ListenerId?)> _items = [];
   late final Menu root;
-  ListenerId? _rootListener;
-
-  static String structureOf(List<_MenuEntry> entries) {
-    final out = StringBuffer();
-    void visit(List<_MenuEntry> level) {
-      for (final entry in level) {
-        if (entry.label == null) {
-          out.write('-');
-        } else {
-          out
-            ..write(entry.key ?? '')
-            ..write(entry.checked == null ? '' : '?');
-          if (entry.children.isNotEmpty) {
-            out.write('[');
-            visit(entry.children);
-            out.write(']');
-          }
-        }
-        out.write('\n');
-      }
-    }
-
-    visit(entries);
-    return out.toString();
-  }
 
   /// Null when the platform refused to create part of the menu.
   static _TrayMenu? build(
     List<_MenuEntry> entries, {
     required void Function(String key) onClick,
-    required void Function(_TrayMenu menu, bool open) onOpenChanged,
   }) {
-    final menu = _TrayMenu._(structureOf(entries));
+    final menu = _TrayMenu._();
     final root = menu._build(entries, onClick);
     if (root == null) {
       menu.dispose();
       return null;
     }
     menu.root = root;
-    menu._rootListener = root.addListener((event) {
-      if (event is MenuOpenedEvent) onOpenChanged(menu, true);
-      if (event is MenuClosedEvent) onOpenChanged(menu, false);
-    });
     return menu;
   }
 
-  /// Items are recorded in pre-order, the order [update] walks the entries.
   Menu? _build(List<_MenuEntry> entries, void Function(String key) onClick) {
     final menu = Menu.create();
     if (menu == null) return null;
@@ -707,8 +681,6 @@ class _TrayMenu {
           : MenuItemType.normal;
       final item = MenuItem.createWithLabelAndType(label, type);
       if (item == null) return null;
-      final binding = _ItemBinding(item, checked);
-      _items.add(binding);
       item.isEnabled = entry.enabled;
       if (checked != null) item.state = _stateOf(checked);
       if (entry.children.isNotEmpty) {
@@ -718,56 +690,29 @@ class _TrayMenu {
       }
 
       final key = entry.key;
-      if (key != null) {
-        binding.listener = item.addListener((event) {
-          if (event is! MenuItemClickedEvent) return;
-          // GTK ticks a check item by itself when it is clicked. The menu
-          // shows the state, not the request; an update follows the change.
-          final shown = binding.checked;
-          if (shown != null) item.state = _stateOf(shown);
-          onClick(key);
-        });
-      }
+      final listener = key == null
+          ? null
+          : item.addListener((event) {
+              if (event is! MenuItemClickedEvent) return;
+              // GTK ticks a check item by itself when it is clicked. The menu
+              // shows the state, not the request; a rebuild follows the
+              // change.
+              if (checked != null) item.state = _stateOf(checked);
+              onClick(key);
+            });
+      _items.add((item, listener));
       menu.addItem(item);
     }
     return menu;
-  }
-
-  /// Applies labels, enabled states and check marks of `entries`, which must
-  /// have this menu's [structure].
-  void update(List<_MenuEntry> entries) {
-    var index = 0;
-    void visit(List<_MenuEntry> level) {
-      for (final entry in level) {
-        final label = entry.label;
-        if (label == null) continue;
-        final binding = _items[index++];
-        binding.item
-          ..label = label
-          ..isEnabled = entry.enabled;
-        final checked = entry.checked;
-        if (checked != null) {
-          binding.checked = checked;
-          binding.item.state = _stateOf(checked);
-        }
-        visit(entry.children);
-      }
-    }
-
-    visit(entries);
   }
 
   static MenuItemState _stateOf(bool checked) =>
       checked ? MenuItemState.checked : MenuItemState.unchecked;
 
   void dispose() {
-    final rootListener = _rootListener;
-    if (rootListener != null) root.removeListener(rootListener);
-    _rootListener = null;
-    for (final binding in _items) {
-      final listener = binding.listener;
-      if (listener != null) binding.item.removeListener(listener);
-      binding.item.dispose();
+    for (final (item, listener) in _items) {
+      if (listener != null) item.removeListener(listener);
+      item.dispose();
     }
     _items.clear();
     for (final menu in _menus) {
