@@ -49,9 +49,8 @@ dependencies:
   # Draws the same flag assets country_flags ships straight onto the galaxy
   # canvas, so a country's star wears the flag the lists show.
   jovial_svg: ^1.1.31
-  # Harmonises status colours with the seed colour. The Flutter SDK pins the
-  # exact version; the constraint names the API this code is written against.
-  material_color_utilities: ^0.13.0
+  # Pinned by the Flutter SDK; harmonises status colours with the seed colour.
+  material_color_utilities: any
   toastification: ^3.2.2
   # The running build's version, compared with the release manifest when the
   # user checks for an update.
