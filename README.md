@@ -191,7 +191,7 @@ restored before terminating the process.
 - Visual Studio 2022 with the Desktop development with C++ workload (Windows)
 - Rust toolchain from the parent `proxy-everything` repository
 
-Flutter is pinned to 3.47.7 in `.fvmrc`. Do not invoke a globally installed
+Flutter is pinned to 3.47.8 in `.fvmrc`. Do not invoke a globally installed
 `flutter` or `dart`; use `fvm flutter` and `fvm dart` so local and CI builds use
 the same SDK.
 

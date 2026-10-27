@@ -22,7 +22,7 @@ on:
 env:
   # Keep in step with `.fvmrc`: the local builds are validated on that SDK, and
   # a release built on a different one is a release nobody tested.
-  FLUTTER_VERSION: '3.47.7'
+  FLUTTER_VERSION: '3.47.8'
   PRIVATE_REPO: acking-you/proxy-everything
 
 permissions:
