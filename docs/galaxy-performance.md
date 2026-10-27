@@ -20,15 +20,15 @@ no blur pass per frame. All canvas drawing is clipped to its viewport. These
 changes apply to every platform, including Windows; GPU submission and CPU
 geometry are both reduced.
 
-The galaxy mutes itself from the application lifecycle, which every desktop
-embedder derives from the native window: hidden to the tray or minimized is
-`hidden`, unfocused is `inactive`. Hidden engines draw no frames at all. There
-is no app-wide animation gate and no visibility flag kept in Dart. An earlier
-one muted every ticker under the navigator, and its flag went stale when the
-macOS Dock reopened the window natively: page switches and dialogs then never
-appeared, so the whole window looked frozen. Muting does not stop the proxy or
-VPN. The connected power button pulses once,
-instead of animating for the entire connection lifetime.
+The galaxy mutes itself from the application lifecycle. Every desktop embedder
+derives that state from the native window: hidden to the tray or minimized is
+`hidden`, unfocused is `inactive`, and a hidden engine draws no frames at all.
+Nothing else is muted. An app-wide `TickerMode` gate with its own visibility
+flag in Dart used to sit above the navigator. When the macOS Dock reopened the
+window natively the flag stayed false, so page switches and dialogs never
+appeared and the whole window looked frozen. Muting does not stop the proxy or
+VPN. The connected power button pulses once, instead of animating for the
+entire connection lifetime.
 
 Each canvas owns its backdrop and sprite atlas. Flags are shared only while
 at least one visible canvas uses them. A late backdrop or flag rasterization
@@ -49,15 +49,16 @@ fvm flutter test tool/render_galaxy_test.dart
 ```
 
 The tests cover a populated connected map at rest, vsync interaction repaint
-frequency, background/detached engines, navigation while unfocused, page disposal,
-sprite release on hiding and theme change, sprites against vectors, the
-atlas's memory bound, concurrent differently sized canvases, and unrelated
+frequency, background/detached engines, navigation while unfocused, page
+disposal, sprite release on hiding and theme change, sprites against vectors,
+the atlas's memory bound, concurrent differently sized canvases, and unrelated
 provider notifications. The render harness writes desktop/phone and dark/light
 screenshots to `build/ui-shots/`.
 
 Lifecycle and resting-map tests run with Windows, macOS, Linux, Android and iOS
 platform variants. These tests exercise shared Dart behavior; they do not
-replace native builds on macOS, Linux or iOS. Local native execution was verified on Windows and Android.
+replace native builds on macOS, Linux or iOS. Local native execution was
+verified on Windows and Android.
 
 `tool/galaxy_resource_probe.dart` is a separate benchmark entry point with 240
 synthetic nodes in 12 countries and no proxy/network activity. Run on a dedicated

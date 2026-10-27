@@ -15,7 +15,8 @@ import 'support/fake_proxy_service.dart';
 
 void main() {
   testWidgets(
-    'phone home is lazy, connected dashboard settles, leaving the map stops its frames',
+    'phone home is lazy, connected dashboard settles, leaving the map while '
+    'unfocused stops its frames',
     (tester) async {
       tester.view.physicalSize = const Size(500, 1000);
       tester.view.devicePixelRatio = 1;
