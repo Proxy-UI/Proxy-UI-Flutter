@@ -38,8 +38,7 @@ dependencies:
   path_provider: ^2.1.6
   provider: ^6.1.5+1
   shared_preferences: ^2.5.6
-  # The service retains its serialized update queue through the 0.8 compatibility
-  # bridge while tray icons and menus are now provided by nativeapi.
+  # Tray icon and context menu through nativeapi's synchronous native API.
   tray_manager: ^0.8.0
   window_manager: ^0.5.2
   # Validates a remembered window frame against the displays that are actually

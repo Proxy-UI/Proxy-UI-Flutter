@@ -8,8 +8,20 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:tray_manager/legacy.dart';
+import 'package:tray_manager/tray_manager.dart'
+    show
+        ContextMenuTrigger,
+        Image,
+        ImageAsset,
+        ListenerId,
+        Menu,
+        MenuItem,
+        MenuItemClickedEvent,
+        MenuItemState,
+        MenuItemType,
+        TrayIcon,
+        TrayIconClickedEvent,
+        TrayManager;
 import 'package:window_manager/window_manager.dart';
 
 import '../models/node_model.dart';
@@ -23,14 +35,21 @@ enum _TrayStatus { connected, disconnected, error }
 /// Owns the desktop notification icon and keeps it consistent with
 /// [ProxyState].
 ///
-/// Every shell call is funnelled through a single queue. `ProxyState` notifies
-/// on a 100 ms log cadence while traffic flows, and overlapping
-/// `Shell_NotifyIcon` calls on Windows race on the same notification icon.
-class TrayService with TrayListener {
+/// nativeapi applies every tray call synchronously on the calling isolate, so
+/// updates cannot overlap and need no queue of their own.
+class TrayService {
   static TrayService? _instance;
   ProxyState? _proxyState;
   bool _initialized = false;
   bool _isDisposed = false;
+  bool _isShutDown = false;
+
+  /// Kept for as long as the icon should be shown: nativeapi releases a handle
+  /// when its Dart wrapper is collected, and that removes the icon.
+  TrayIcon? _trayIcon;
+  ListenerId? _trayIconListener;
+  Image? _iconImage;
+  _TrayMenu? _menu;
 
   /// State the shell has actually accepted. Both are cleared before a platform
   /// call and only restored after it succeeds, so a failed call can never leave
@@ -39,21 +58,10 @@ class TrayService with TrayListener {
   String? _appliedIconLanguage;
   int? _appliedMenuSignature;
 
-  Future<void> _queue = Future<void>.value();
-  Future<void>? _shutdown;
-  bool _needsRebuild = false;
-
-  /// Latched off when a platform reports a tray call as unimplemented, so a
-  /// desktop without a system tray is asked once instead of on every update.
-  bool _trayAvailable = true;
-
   /// Catches the case no event reports: the shell dropping the icon while the
   /// app has nothing to react to. A re-assert is a single `NIM_MODIFY`.
   Timer? _healthCheckTimer;
   static const Duration _healthCheckInterval = Duration(seconds: 20);
-
-  /// A wedged shell must not stall the queue behind it forever.
-  static const Duration _callTimeout = Duration(seconds: 2);
 
   TrayService._();
 
@@ -62,33 +70,30 @@ class TrayService with TrayListener {
     return _instance!;
   }
 
-  Future<void> initialize(ProxyState proxyState) async {
-    if (_initialized || _shutdown != null) return;
+  void initialize(ProxyState proxyState) {
+    if (_initialized || _isShutDown) return;
+    if (!TrayManager.instance.isSupported()) {
+      debugPrint('No system tray on this desktop; tray stays off');
+      return;
+    }
     _initialized = true;
     _isDisposed = false;
-    _trayAvailable = true;
 
     _proxyState = proxyState;
-    trayManager.addListener(this);
-    proxyState.addListener(_onProxyStateChanged);
+    proxyState.addListener(_applyTray);
     AppLanguage.instance.addListener(_onLanguageChanged);
 
-    await _enqueue(_applyTray);
+    _applyTray();
     _startHealthCheck();
   }
 
   void _startHealthCheck() {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = Timer.periodic(_healthCheckInterval, (_) {
-      if (_isDisposed || !_trayAvailable) return;
-      unawaited(
-        _enqueue(() async {
-          _appliedIconStatus = null;
-          _appliedMenuSignature = null;
-          await _applyIcon();
-          await _applyMenu();
-        }),
-      );
+      if (_isDisposed) return;
+      _appliedIconStatus = null;
+      _appliedMenuSignature = null;
+      _applyTray();
     });
   }
 
@@ -97,104 +102,75 @@ class TrayService with TrayListener {
   /// Resume is the one moment where the shell is most likely to have dropped
   /// the icon, and a plain re-assert cannot bring back an icon that is gone —
   /// only a delete and re-add can.
-  Future<void> handleSystemResume() async {
+  void handleSystemResume() {
     if (_isDisposed || !_initialized) return;
-    await rebuild();
-  }
-
-  /// Redraws the context menu from the current state.
-  Future<void> refreshMenu() {
-    return _enqueue(() async {
-      _appliedMenuSignature = null;
-      await _applyMenu();
-    });
+    rebuild();
   }
 
   /// Deletes and re-adds the notification icon.
   ///
   /// `NIM_MODIFY` silently fails once the shell has dropped an icon, so a
   /// disappeared icon can only be recovered by adding it again.
-  Future<void> rebuild() {
-    _needsRebuild = true;
-    return _enqueue(_applyTray);
+  void rebuild() {
+    if (_isDisposed || !_initialized) return;
+    _destroyTrayIcon();
+    _applyTray();
   }
 
   void _onLanguageChanged() {
     _appliedMenuSignature = null;
     _appliedIconStatus = null;
-    _onProxyStateChanged();
+    _applyTray();
   }
 
-  void _onProxyStateChanged() {
-    unawaited(_enqueue(_applyTray));
+  void _applyTray() {
+    if (_isDisposed) return;
+    _applyIcon();
+    _applyMenu();
   }
 
-  /// Serializes tray work and keeps the queue alive across failures.
-  Future<void> _enqueue(Future<void> Function() action) {
-    _queue = _queue
-        .then((_) async {
-          if (_isDisposed) return;
-          await action();
-        })
-        .catchError((Object error) {
-          // The shell rejected the update. Recreate the icon on the next pass
-          // rather than leaving the tray stuck on whatever it last accepted.
-          _needsRebuild = true;
-          debugPrint('Tray update failed: $error');
-        });
-    return _queue;
-  }
-
-  /// Runs one tray call, bounded in time and tolerant of platforms that do not
-  /// implement a tray at all.
-  ///
-  /// Returns false when the call did not take effect, so callers keep their
-  /// "applied" state cleared and retry on the next pass.
-  ///
-  /// [bounded] applies the shared timeout. Pass false for a call that blocks
-  /// for as long as the user takes, which is not the same thing as a call that
-  /// has hung.
-  Future<bool> _call(
-    Future<void> Function() action,
-    String name, {
-    bool bounded = true,
-  }) async {
-    if (!_trayAvailable) return false;
-    try {
-      await (bounded ? action().timeout(_callTimeout) : action());
-      return true;
-    } on TimeoutException {
-      debugPrint('Tray call "$name" timed out');
-      return false;
-    } on MissingPluginException {
-      _trayAvailable = false;
-      debugPrint('No tray implementation available; disabling tray updates');
-      return false;
-    } on UnimplementedError {
-      _trayAvailable = false;
-      debugPrint('Tray is unimplemented on this platform');
-      return false;
-    } on PlatformException catch (error) {
-      final code = error.code.toLowerCase();
-      if (code.contains('unimplemented') || code.contains('missing')) {
-        _trayAvailable = false;
-        debugPrint('Tray is unsupported here: ${error.code}');
-        return false;
+  /// The icon, created on first use. Null when the platform refused one; the
+  /// next update asks again.
+  TrayIcon? _ensureTrayIcon() {
+    final existing = _trayIcon;
+    if (existing != null) return existing;
+    final trayIcon = TrayIcon.create();
+    if (trayIcon == null) {
+      debugPrint('Could not create the tray icon');
+      return null;
+    }
+    _trayIconListener = trayIcon.addListener((event) {
+      // Always raise. Toggling needed to know whether the window was already
+      // in front, and the only signal for that — focus — is unreliable at
+      // exactly the moment the tray is clicked, because the shell has just
+      // taken it.
+      if (event is TrayIconClickedEvent && !_isDisposed) {
+        unawaited(showWindow());
       }
-      debugPrint('Tray call "$name" failed: ${error.code} ${error.message}');
-      return false;
-    }
+    });
+    // The menu opens natively at the cursor. Linux panels never report clicks
+    // and open the menu themselves.
+    trayIcon
+      ..setContextMenuTrigger(ContextMenuTrigger.rightClicked)
+      ..setVisible(true);
+    _trayIcon = trayIcon;
+    return trayIcon;
   }
 
-  Future<void> _applyTray() async {
-    if (_needsRebuild) {
-      _needsRebuild = false;
-      _appliedIconStatus = null;
-      _appliedMenuSignature = null;
-      await _call(trayManager.destroy, 'destroy');
+  void _destroyTrayIcon() {
+    final trayIcon = _trayIcon;
+    _trayIcon = null;
+    _appliedIconStatus = null;
+    _appliedMenuSignature = null;
+    if (trayIcon != null) {
+      final listener = _trayIconListener;
+      if (listener != null) trayIcon.removeListener(listener);
+      trayIcon.dispose();
     }
-    await _applyIcon();
-    await _applyMenu();
+    _trayIconListener = null;
+    _iconImage?.dispose();
+    _iconImage = null;
+    _replaceMenu(null);
   }
 
   _TrayStatus _statusFor(ProxyState proxyState) {
@@ -203,7 +179,7 @@ class TrayService with TrayListener {
     return _TrayStatus.disconnected;
   }
 
-  Future<void> _applyIcon() async {
+  void _applyIcon() {
     final proxyState = _proxyState;
     if (proxyState == null) return;
 
@@ -228,9 +204,9 @@ class TrayService with TrayListener {
     // highlighted. The colour icons the other platforms use would be flattened
     // into one silhouette, so those carry the state in the badge shape instead.
     //
-    // The 2x file is named directly because the plugin reads the asset with
-    // rootBundle.load, which takes an exact key and never resolves a resolution
-    // variant, then pins the image to 18pt.
+    // The 2x file is named directly because ImageAsset reads the bundled file
+    // by its exact name and never resolves a resolution variant; nativeapi
+    // then draws the image at 18pt.
     final iconPath = switch (defaultTargetPlatform) {
       TargetPlatform.windows => 'assets/tray/$iconName.ico',
       TargetPlatform.macOS => 'assets/tray/${iconName}_macos@2x.png',
@@ -238,23 +214,24 @@ class TrayService with TrayListener {
     };
 
     _appliedIconStatus = null;
-    if (!await _call(
-      () => trayManager.setIcon(iconPath, isTemplate: Platform.isMacOS),
-      'setIcon',
-    )) {
+    final trayIcon = _ensureTrayIcon();
+    if (trayIcon == null) return;
+    final image = ImageAsset.fromAsset(iconPath);
+    if (image == null) {
+      debugPrint('Could not load the tray icon $iconPath');
       return;
     }
-    if (!await _call(
-      () => trayManager.setToolTip('${AppBrand.name} - $tooltipStatus'),
-      'setToolTip',
-    )) {
-      return;
-    }
+    trayIcon
+      ..isIconTemplate = Platform.isMacOS
+      ..icon = image
+      ..setTooltip('${AppBrand.name} - $tooltipStatus');
+    _iconImage?.dispose();
+    _iconImage = image;
     _appliedIconStatus = status;
     _appliedIconLanguage = language;
   }
 
-  Future<void> _applyMenu() async {
+  void _applyMenu() {
     final proxyState = _proxyState;
     if (proxyState == null) return;
 
@@ -291,96 +268,69 @@ class TrayService with TrayListener {
           };
     final serverLabel = endpointLabel(config.serverHost, config.serverPort);
 
-    final menu = Menu(
-      items: [
-        // The two lines the tray exists to answer: is it on, and through what.
-        MenuItem(key: 'status', label: statusLabel, disabled: true),
-        MenuItem(key: 'server', label: serverLabel, disabled: true),
-        MenuItem.separator(),
-        // Checkboxes rather than a Start/Stop pair, one half of which was
-        // always greyed out and told the user nothing about the current state.
-        MenuItem.checkbox(
-          key: 'proxy',
-          label: appStrings.proxy,
-          checked: isRunning,
-          disabled: isBusy || config.serverHost.isEmpty,
+    final entries = [
+      // The two lines the tray exists to answer: is it on, and through what.
+      _MenuEntry.info(statusLabel),
+      _MenuEntry.info(serverLabel),
+      const _MenuEntry.separator(),
+      // Checkboxes rather than a Start/Stop pair, one half of which was
+      // always greyed out and told the user nothing about the current state.
+      _MenuEntry(
+        'proxy',
+        appStrings.proxy,
+        checked: isRunning,
+        enabled: !isBusy && config.serverHost.isNotEmpty,
+      ),
+      if (!BuildCapabilities.isMacAppStore)
+        _MenuEntry(
+          'tun',
+          appStrings.tunMode2,
+          checked: isTunRunning,
+          // TUN captures through the local listener, so it cannot outlive it.
+          enabled: !isBusy && isRunning,
         ),
-        if (!BuildCapabilities.isMacAppStore)
-          MenuItem.checkbox(
-            key: 'tun',
-            label: appStrings.tunMode2,
-            checked: isTunRunning,
-            // TUN captures through the local listener, so it cannot outlive it.
-            disabled: isBusy || !isRunning,
-          ),
-        if (nodes.isNotEmpty) ...[
-          MenuItem.separator(),
-          MenuItem.submenu(
-            key: 'nodes',
-            label: appStrings.switchNode,
-            disabled: isBusy,
-            submenu: Menu(
-              items: [
-                for (final node in nodes)
-                  MenuItem.checkbox(
-                    key: 'node:${node.nodeId}',
-                    label: _nodeLabel(node),
-                    checked: proxyState.isCurrentNode(node),
-                  ),
-              ],
+      if (nodes.isNotEmpty) ...[
+        const _MenuEntry.separator(),
+        _MenuEntry.submenu(appStrings.switchNode, enabled: !isBusy, [
+          for (final node in nodes)
+            _MenuEntry(
+              'node:${node.nodeId}',
+              _nodeLabel(node),
+              checked: proxyState.isCurrentNode(node),
             ),
-          ),
-        ],
-        MenuItem.separator(),
-        MenuItem(key: 'show', label: appStrings.showWindow),
-        if (proxyState.hasLocalLogStorage)
-          MenuItem(key: 'logs', label: appStrings.openLogFolder),
-        MenuItem.separator(),
-        MenuItem(key: 'quit', label: appStrings.quit),
+        ]),
       ],
-    );
+      const _MenuEntry.separator(),
+      _MenuEntry('show', appStrings.showWindow),
+      if (proxyState.hasLocalLogStorage)
+        _MenuEntry('logs', appStrings.openLogFolder),
+      const _MenuEntry.separator(),
+      _MenuEntry('quit', appStrings.quit),
+    ];
 
     _appliedMenuSignature = null;
-    if (!await _call(
-      () => trayManager.setContextMenu(menu),
-      'setContextMenu',
-    )) {
+    final trayIcon = _ensureTrayIcon();
+    if (trayIcon == null) return;
+    final menu = _TrayMenu.build(entries, onClick: _onMenuClick);
+    if (menu == null) {
+      debugPrint('Could not create the tray menu');
       return;
     }
+    trayIcon.setContextMenu(menu.root);
+    _replaceMenu(menu);
     _appliedMenuSignature = menuSignature;
   }
 
-  @override
-  void onTrayIconMouseDown() {
-    // Always raise. Toggling needed to know whether the window was already in
-    // front, and the only signal for that — focus — is unreliable at exactly
-    // the moment the tray is clicked, because the shell has just taken it.
-    unawaited(showWindow());
+  /// Releases the previous menu once the current event has finished: a click
+  /// can rebuild the menu from inside the clicked item's own callback, and the
+  /// item has to outlive that call.
+  void _replaceMenu(_TrayMenu? menu) {
+    final previous = _menu;
+    _menu = menu;
+    if (previous != null) Timer.run(previous.dispose);
   }
 
-  @override
-  void onTrayIconRightMouseDown() {
-    unawaited(_popUpContextMenu());
-  }
-
-  @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
-    final key = menuItem.key;
-    if (key != null) unawaited(_handleMenuClick(key));
-  }
-
-  Future<void> _popUpContextMenu() async {
-    await _enqueue(_applyMenu);
-    // nativeapi owns foreground handling for the native popup menu.
-    // Unbounded because `TrackPopupMenu` is modal: the call does not return
-    // until the menu closes, so the shared timeout would fire on any menu a
-    // person actually reads before choosing.
-    await _call(
-      () => trayManager.popUpContextMenu(),
-      'popUpContextMenu',
-      bounded: false,
-    );
-  }
+  void _onMenuClick(String key) => unawaited(_handleMenuClick(key));
 
   Future<void> showWindow() async {
     if (await windowManager.isMinimized()) {
@@ -561,39 +511,21 @@ class TrayService with TrayListener {
       );
       return;
     }
-    try {
-      await shutdown().timeout(_callTimeout);
-    } catch (error) {
-      await showWindow();
-      ToastUtils.showError(
-        '${appStrings.shutdownFailedRetryFromWindow}\n$error',
-      );
-      return;
-    }
+    await shutdown();
     await WindowStateService.instance.saveNow();
     await proxyState.flushDesktopLogs();
     exit(0);
   }
 
-  /// Stop updates, drain in-flight work, and explicitly free the native tray.
+  /// Stop updates and explicitly free the native tray.
   /// cnativeapi 0.5.2 destroys its taskbar callback table before retained tray
   /// handles during ExitProcess; leaving the tray alive causes an access
   /// violation in TrayIcon::Impl's destructor. Dart finalizers cannot fix that
   /// ordering after exit has begun.
-  Future<void> shutdown() {
-    return _shutdown ??= _releaseNativeTray().onError<Object>((
-      error,
-      stackTrace,
-    ) {
-      _shutdown = null;
-      Error.throwWithStackTrace(error, stackTrace);
-    });
-  }
-
-  Future<void> _releaseNativeTray() async {
+  Future<void> shutdown() async {
+    _isShutDown = true;
     dispose();
-    await _queue;
-    await trayManager.destroy();
+    _destroyTrayIcon();
   }
 
   void dispose() {
@@ -601,10 +533,129 @@ class TrayService with TrayListener {
     _isDisposed = true;
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
-    trayManager.removeListener(this);
-    _proxyState?.removeListener(_onProxyStateChanged);
+    _proxyState?.removeListener(_applyTray);
     AppLanguage.instance.removeListener(_onLanguageChanged);
     _proxyState = null;
     _initialized = false;
+  }
+}
+
+/// One line of the tray menu, described before any native object exists.
+class _MenuEntry {
+  /// A clickable line; a non-null [checked] makes it a checkbox.
+  const _MenuEntry(this.key, this.label, {this.checked, this.enabled = true})
+    : children = const [];
+
+  /// A line that only reports state.
+  const _MenuEntry.info(this.label)
+    : key = null,
+      checked = null,
+      enabled = false,
+      children = const [];
+
+  const _MenuEntry.submenu(this.label, this.children, {this.enabled = true})
+    : key = null,
+      checked = null;
+
+  const _MenuEntry.separator()
+    : key = null,
+      label = null,
+      checked = null,
+      enabled = false,
+      children = const [];
+
+  final String? key;
+
+  /// Null for a separator.
+  final String? label;
+  final bool? checked;
+  final bool enabled;
+  final List<_MenuEntry> children;
+}
+
+/// A native context menu and every wrapper it depends on.
+///
+/// nativeapi frees a handle when its Dart wrapper is collected, and a click
+/// listener lasts only as long as the item it was added to, so the whole tree
+/// is held here until the menu is replaced.
+class _TrayMenu {
+  _TrayMenu._(this._onClick);
+
+  final void Function(String key) _onClick;
+  final List<Menu> _menus = [];
+  final List<(MenuItem, ListenerId?)> _items = [];
+  late final Menu root;
+
+  /// Null when the platform refused to create part of the menu.
+  static _TrayMenu? build(
+    List<_MenuEntry> entries, {
+    required void Function(String key) onClick,
+  }) {
+    final menu = _TrayMenu._(onClick);
+    final root = menu._build(entries);
+    if (root == null) {
+      menu.dispose();
+      return null;
+    }
+    menu.root = root;
+    return menu;
+  }
+
+  Menu? _build(List<_MenuEntry> entries) {
+    final menu = Menu.create();
+    if (menu == null) return null;
+    _menus.add(menu);
+
+    for (final entry in entries) {
+      final label = entry.label;
+      if (label == null) {
+        menu.addSeparator();
+        continue;
+      }
+      final checked = entry.checked;
+      final type = entry.children.isNotEmpty
+          ? MenuItemType.submenu
+          : checked != null
+          ? MenuItemType.checkbox
+          : MenuItemType.normal;
+      final item = MenuItem.createWithLabelAndType(label, type);
+      if (item == null) return null;
+      item.isEnabled = entry.enabled;
+      if (checked != null) item.state = _stateOf(checked);
+      if (entry.children.isNotEmpty) {
+        final submenu = _build(entry.children);
+        if (submenu == null) return null;
+        item.submenu = submenu;
+      }
+
+      final key = entry.key;
+      final listener = key == null
+          ? null
+          : item.addListener((event) {
+              if (event is! MenuItemClickedEvent) return;
+              // GTK ticks a check item by itself when it is clicked. The menu
+              // shows the state, not the request; a rebuild follows the change.
+              if (checked != null) item.state = _stateOf(checked);
+              _onClick(key);
+            });
+      _items.add((item, listener));
+      menu.addItem(item);
+    }
+    return menu;
+  }
+
+  static MenuItemState _stateOf(bool checked) =>
+      checked ? MenuItemState.checked : MenuItemState.unchecked;
+
+  void dispose() {
+    for (final (item, listener) in _items) {
+      if (listener != null) item.removeListener(listener);
+      item.dispose();
+    }
+    _items.clear();
+    for (final menu in _menus) {
+      menu.dispose();
+    }
+    _menus.clear();
   }
 }
