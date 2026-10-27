@@ -214,7 +214,7 @@ class _ProxyAppState extends State<ProxyApp>
       return;
     }
     if (state == AppLifecycleState.resumed) {
-      unawaited(TrayService.instance.handleSystemResume());
+      TrayService.instance.handleSystemResume();
     }
   }
 

@@ -122,11 +122,10 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   final bool _enableTunOnStartup;
 
   ProxyState({
-    bool enableTunOnStartup = false,
+    this._enableTunOnStartup = false,
     ProxyService? service,
     DesktopLogService? desktopLogService,
-  }) : _enableTunOnStartup = enableTunOnStartup,
-       _service =
+  }) : _service =
            service ??
            (BuildCapabilities.usesPacketTunnel
                ? ApplePacketTunnelProxyService()

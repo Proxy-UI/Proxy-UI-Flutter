@@ -76,7 +76,7 @@ Actions Secrets 和变量。公证同时覆盖应用、原生库及 TUN helper�
 - Visual Studio 2022，并安装“使用 C++ 的桌面开发”工作负载（Windows）
 - 父级 `proxy-everything` 仓库指定的 Rust 工具链
 
-项目通过 `.fvmrc` 固定使用 Flutter 3.47.7。请勿直接调用全局安装的
+项目通过 `.fvmrc` 固定使用 Flutter 3.47.8。请勿直接调用全局安装的
 `flutter` 或 `dart`，统一使用 `fvm flutter` 和 `fvm dart`，确保本地与
 CI 使用同一 SDK。
 

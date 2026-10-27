@@ -7,7 +7,7 @@ runs:
       shell: bash
       run: |
         # This Dart invocation installs FVM itself; project commands use FVM.
-        dart pub global activate fvm 4.1.0
+        dart pub global activate fvm 4.3.2
         python - <<'PYTHON'
         import os
         from pathlib import Path

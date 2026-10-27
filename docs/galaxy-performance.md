@@ -101,7 +101,7 @@ dependencies:
     sdk: flutter
   proxy_ui:
     path: ../..
-  window_manager: ^0.5.1
+  window_manager: ^0.5.2
 flutter:
   uses-material-design: true
   shaders:

@@ -32,27 +32,26 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  intl: ^0.20.2
+  intl: ^0.20.3
   cupertino_icons: ^2.0.0
-  ffi: ^2.1.0
-  path_provider: ^2.1.0
-  provider: ^6.1.0
-  shared_preferences: ^2.2.0
-  # The service retains its serialized update queue through the 0.8 compatibility
-  # bridge while tray icons and menus are now provided by nativeapi.
+  ffi: ^2.2.0
+  path_provider: ^2.1.6
+  provider: ^6.1.5+1
+  shared_preferences: ^2.5.6
+  # Tray icon and context menu through nativeapi's synchronous native API.
   tray_manager: ^0.8.0
-  window_manager: ^0.5.1
+  window_manager: ^0.5.2
   # Validates a remembered window frame against the displays that are actually
   # connected, so a saved position on an unplugged monitor cannot strand the
   # window off-screen.
-  screen_retriever: ^0.2.0
+  screen_retriever: ^0.2.2
   country_flags: ^4.1.2
   # Draws the same flag assets country_flags ships straight onto the galaxy
   # canvas, so a country's star wears the flag the lists show.
-  jovial_svg: ^1.1.25
+  jovial_svg: ^1.1.31
   # Pinned by the Flutter SDK; harmonises status colours with the seed colour.
   material_color_utilities: any
-  toastification: ^3.0.3
+  toastification: ^3.2.2
   # The running build's version, compared with the release manifest when the
   # user checks for an update.
   package_info_plus: ^10.2.2
@@ -61,13 +60,13 @@ dependencies:
   # Picks an app for App proxies. Only the desktop implementations are listed,
   # so mobile builds carry no file-picker plugin for a feature they lack.
   file_selector_platform_interface: ^2.7.0
-  file_selector_macos: ^0.9.5
-  file_selector_windows: ^0.9.3
+  file_selector_macos: ^0.9.5+2
+  file_selector_windows: ^0.9.3+6
 
 dev_dependencies:
   # Independent reference implementations for native crypto integration tests.
   cryptography: ^2.9.0
-  crypto: ^3.0.7
+  crypto: ^3.0.8
   flutter_test:
     sdk: flutter
 

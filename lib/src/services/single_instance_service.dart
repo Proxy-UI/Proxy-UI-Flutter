@@ -45,6 +45,6 @@ class SingleInstanceService {
     }
     // Relaunching the app is how users react to a missing tray icon, so treat
     // it as a request to recreate the notification icon as well.
-    unawaited(TrayService.instance.rebuild());
+    TrayService.instance.rebuild();
   }
 }

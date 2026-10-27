@@ -15,7 +15,7 @@ on:
 env:
   PRIVATE_REPO: acking-you/proxy-everything
   LIB_VERSION: '0.6.13'
-  FLUTTER_VERSION: '3.47.7'
+  FLUTTER_VERSION: '3.47.8'
 
 jobs:
   # App-proxy logic, launchers and routing are tested natively in the core
