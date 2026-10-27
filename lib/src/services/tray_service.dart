@@ -170,7 +170,11 @@ class TrayService {
     _trayIconListener = null;
     _iconImage?.dispose();
     _iconImage = null;
-    _replaceMenu(null);
+    // Freed now, not deferred like a replacement: teardown never runs inside a
+    // menu item's own callback, and an exit that follows must not find handles
+    // still alive (see [shutdown]).
+    _menu?.dispose();
+    _menu = null;
   }
 
   _TrayStatus _statusFor(ProxyState proxyState) {
@@ -324,7 +328,7 @@ class TrayService {
   /// Releases the previous menu once the current event has finished: a click
   /// can rebuild the menu from inside the clicked item's own callback, and the
   /// item has to outlive that call.
-  void _replaceMenu(_TrayMenu? menu) {
+  void _replaceMenu(_TrayMenu menu) {
     final previous = _menu;
     _menu = menu;
     if (previous != null) Timer.run(previous.dispose);
