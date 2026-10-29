@@ -100,7 +100,14 @@ install(CODE "
   file(REMOVE_RECURSE \"${INSTALL_BUNDLE_DATA_DIR}/${FLUTTER_ASSET_DIR_NAME}\")
   " COMPONENT Runtime)
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
-  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime
+  CONFIGURATIONS Debug)
+# The shared asset output can retain a kernel from a previous Debug build.
+# Profile and Release execute app.so and must not ship that stale kernel.
+install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime
+  CONFIGURATIONS Profile;Release
+  PATTERN "kernel_blob.bin" EXCLUDE)
 
 # Install the AOT library on non-Debug builds only.
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
