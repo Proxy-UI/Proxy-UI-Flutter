@@ -59,12 +59,29 @@ particular node over TCP or QUIC. Rules persist when the app restarts.
 [Rule editor screenshot](docs/images/local-controller/website-rule-editor.png)
 
 On desktop, **Subscription → Local control API** exposes a loopback address and
-a separate bearer token, both kept across restarts. **Connect an agent** copies
-ready-made MCP setup for Claude Code, Codex or a JSON client, after which an
-agent reads the proxy state, switches nodes and edits website rules through
-three tools. Scripts can also use the REST API described by
-`GET /v1/openapi.json`. See the native repository's
-[MCP guide](https://github.com/acking-you/proxy-everything/blob/dev/docs/mcp.md).
+a separate bearer token, both kept across restarts. Agents connect to its MCP
+server at `http://127.0.0.1:<PORT>/mcp`; **Connect an agent** copies the setup
+below with your port and token filled in.
+
+```sh
+# Claude Code
+claude mcp add --transport http --scope user cipherrelay http://127.0.0.1:<PORT>/mcp --header "Authorization: Bearer <TOKEN>"
+```
+
+```toml
+# Codex: ~/.codex/config.toml
+[mcp_servers.cipherrelay]
+url = "http://127.0.0.1:<PORT>/mcp"
+http_headers = { Authorization = "Bearer <TOKEN>" }
+```
+
+JSON clients such as Cursor or a project's `.mcp.json` take an entry with
+`"type": "http"`, the same `url`, and the `Authorization` header under
+`headers`. Three tools — `get_proxy_state`, `switch_node` and
+`set_website_rule` — read the proxy state, switch nodes and edit website rules,
+and each returns the resulting state. Scripts can also use the REST API that
+`GET /v1/openapi.json` describes. Keep the token out of URLs, logs and prompts;
+**Issue a new token** on the card replaces it.
 
 ## App proxies
 
