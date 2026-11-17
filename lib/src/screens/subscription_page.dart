@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
 import '../theme/app_theme.dart';
+import '../services/local_controller.dart';
 import '../utils/toast_utils.dart';
 
 /// Serves Clash and Shadowrocket subscriptions that point other devices on
@@ -103,6 +104,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   ),
                 ),
               ),
+              if (LocalController.supported) ...[
+                const SizedBox(height: 12),
+                _controllerCard(context, state.localController),
+              ],
               if (running) ...[
                 const SizedBox(height: 12),
                 _buildSubscriptionCard(
@@ -160,6 +165,55 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _controllerCard(BuildContext context, LocalController service) {
+    final strings = context.l10n;
+    final url = 'http://127.0.0.1:${service.port}';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(strings.localController),
+              subtitle: Text(strings.localControllerHint),
+              value: service.running,
+              onChanged: service.busy
+                  ? null
+                  : (enabled) => enabled ? service.start() : service.stop(),
+            ),
+            if (service.error case final error?)
+              Text(
+                error,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            if (service.running) ...[
+              SelectableText(url),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.copy),
+                    label: Text(strings.copyUrl),
+                    onPressed: () =>
+                        Clipboard.setData(ClipboardData(text: url)),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.key),
+                    label: Text(strings.copyControllerToken),
+                    onPressed: () =>
+                        Clipboard.setData(ClipboardData(text: service.token!)),
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );

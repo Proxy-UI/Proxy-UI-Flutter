@@ -102,6 +102,25 @@ class FakeProxyService extends ProxyService {
   }
 
   @override
+  Stream<(int, NodeProbe)> probeNodes(
+    List<NodeProbeTarget> targets, {
+    bool secureTransport = false,
+    int timeoutMs = 10000,
+  }) async* {
+    for (final (index, target) in targets.indexed) {
+      yield (
+        index,
+        await probeNode(
+          serverHost: target.host,
+          serverPort: target.port,
+          secureTransport: secureTransport,
+          timeoutMs: timeoutMs,
+        ),
+      );
+    }
+  }
+
+  @override
   Future<NodeProbe> probeNode({
     required String serverHost,
     required int serverPort,

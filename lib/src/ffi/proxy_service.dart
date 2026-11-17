@@ -411,6 +411,22 @@ class ProxyService {
     });
   });
 
+  Future<Map<String, dynamic>> websiteRules({
+    Map<String, Object?>? edit,
+  }) async {
+    final directory = await getApplicationSupportDirectory();
+    return NativeProxyOperations.shared.run(
+      'site_rules',
+      arguments: {'directory': directory.path, 'edit': edit},
+    );
+  }
+
+  Future<int> closeListenerSessions() => _withHandle(() async {
+    final handle = _handle;
+    if (handle == null) return ProxyResult.notRunning;
+    return _nativeCode('close_listener_sessions', handle);
+  });
+
   /// Enable TUN only after the local proxy listener has started. Native setup
   /// can wait for adapter and route readiness, so it runs outside the UI isolate.
   Future<int> startTun(List<String> processes) => _withHandle(() async {

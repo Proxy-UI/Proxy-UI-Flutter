@@ -2,6 +2,15 @@
 
 跨平台加密代理客户端的 Flutter 图形界面。
 
+## 网站规则与本机控制
+
+在 Windows、Linux、macOS 直装版和 Android 中打开「网站规则」，即可为域名或
+`*.example.com:443` 指定直连，或选择节点及其 TCP、QUIC 端口。保存后对新连接生效，
+重启后仍然保留。[查看编辑界面](docs/images/local-controller/website-rule-editor.png)
+
+桌面端可在「订阅 → 本机控制 API」开启服务并复制地址和令牌。脚本可以读取
+`GET /v1/openapi.json`，组合查询节点、切换出口和编辑网站规则等操作。
+
 ## macOS 两个版本
 
 CipherRelay（密流）是 Proxy UI 的新名称。直装版继续生成 `CipherRelay.app`，

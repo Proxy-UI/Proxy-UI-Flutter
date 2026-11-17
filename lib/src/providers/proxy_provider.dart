@@ -1,4 +1,5 @@
 import '../models/upstream_endpoint.dart';
+import '../models/website_rule.dart';
 
 import 'package:proxy_ui/l10n/app_language.dart';
 
@@ -27,6 +28,7 @@ import '../models/socks5_link.dart';
 import '../services/desktop_log_service.dart';
 import '../services/android_vpn_service.dart';
 import '../services/subscription_service.dart';
+import '../services/local_controller.dart';
 
 /// What applying a configuration or selecting a node does to a running proxy.
 enum SwitchImpact {
@@ -73,6 +75,10 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   int _minLogLevel = ProxyService.defaultLogLevel;
 
   // Subscription service
+  List<WebsiteRule> websiteRules = const [];
+  bool websiteRulesBusy = false;
+
+  late final localController = LocalController(_control, _safeNotifyListeners);
   SubscriptionService? _subscriptionService;
   bool _subscriptionServiceRunning = false;
   bool _subscriptionServiceBusy = false;
@@ -994,6 +1000,135 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _safeNotifyListeners();
   }
 
+  Map<String, Object?> _controlEndpoint(UpstreamEndpoint e) => {
+    'host': e.host,
+    'port': e.port,
+    'transport': e.transport.name,
+  };
+
+  Map<String, Object?> _controlStatus() {
+    final endpoint = _configuredEndpoint;
+    return {
+      'running': _isRunning,
+      'local_port': _isRunning ? _config.localPort : null,
+      'active': _isRunning && endpoint != null
+          ? {
+              'node_id': _nodes
+                  .where((node) => isInUse(node, endpoint.transport))
+                  .firstOrNull
+                  ?.nodeId,
+              'endpoint': _controlEndpoint(endpoint),
+            }
+          : null,
+    };
+  }
+
+  Future<Map<String, Object?>> _control(Map<String, dynamic> command) async {
+    if (_isDisposed) return {'Err': 'unavailable'};
+    switch (command['operation']) {
+      case 'nodes':
+        return {
+          'Ok': {
+            'nodes': [
+              for (final node in _nodes)
+                if (node.endpoint != null)
+                  {
+                    'id': node.nodeId,
+                    'endpoints': [
+                      for (final carrier in UpstreamTransport.values)
+                        if (endpointOf(node, carrier) case final address?)
+                          _controlEndpoint(address),
+                    ],
+                  },
+            ],
+          },
+        };
+      case 'rules':
+        return manageWebsiteRule();
+      case 'remove_rule':
+        return manageWebsiteRule(site: command['site'] as String);
+      case 'set_rule':
+        final target = command['target'] as Map;
+        return manageWebsiteRule(
+          site: command['site'] as String,
+          direct: target['action'] == 'direct',
+          nodeId: target['node_id'] as String?,
+          transport: target['transport'] as String?,
+        );
+      case 'status':
+        return {'Ok': _controlStatus()};
+      case 'switch':
+        if (_isProxyTransitioning || _isTunBusy) return {'Err': 'busy'};
+        if (!_isRunning) return {'Err': 'not_running'};
+        final node = _nodes
+            .where((n) => n.nodeId == command['node_id'])
+            .firstOrNull;
+        if (node == null) return {'Err': 'unknown_node'};
+        final carrier = UpstreamTransport.values.byName(
+          command['transport'] as String,
+        );
+        if (endpointOf(node, carrier) == null) {
+          return {'Err': 'unsupported_transport'};
+        }
+        final ok = await switchToNode(
+          node,
+          carrier: carrier,
+          closeExisting: command['close_existing'] == true,
+        );
+        return ok ? {'Ok': _controlStatus()} : {'Err': 'switch_failed'};
+      default:
+        return {'Err': 'invalid_request'};
+    }
+  }
+
+  /// The HTTP API and rule editor resolve the same catalogue entry before saving.
+  /// A saved node rule pins the selected endpoint, including its transport port.
+  Future<Map<String, dynamic>> manageWebsiteRule({
+    String? site,
+    bool? direct,
+    String? nodeId,
+    String? transport,
+  }) async {
+    if (websiteRulesBusy || _isDisposed) return {'Err': 'busy'};
+    Map<String, Object?>? target;
+    if (direct == true) {
+      target = {'action': 'direct'};
+    } else if (direct == false) {
+      final node = _nodes.where((n) => n.nodeId == nodeId).firstOrNull;
+      if (node == null) return {'Err': 'unknown_node'};
+      final carrier = UpstreamTransport.values
+          .where((t) => t.name == transport)
+          .firstOrNull;
+      final e = carrier == null ? null : endpointOf(node, carrier);
+      if (e == null) return {'Err': 'unsupported_transport'};
+      target = {
+        'action': 'node',
+        'node_id': node.nodeId,
+        'endpoint': '${e.transport.name}://${e.address}',
+      };
+    }
+    websiteRulesBusy = true;
+    _safeNotifyListeners();
+    try {
+      final result = await _service.websiteRules(
+        edit: site == null ? null : {'site': site, 'target': target},
+      );
+      if (result['Ok'] case final Map success) {
+        websiteRules = [
+          for (final row in success['rules'] as List)
+            WebsiteRule.fromJson(row as Map),
+        ];
+      }
+      return result;
+    } catch (error, stack) {
+      debugPrint('Website rule operation failed: $error\n$stack');
+      return {'Err': 'rule_storage'};
+    } finally {
+      websiteRulesBusy = false;
+      _safeNotifyListeners();
+    }
+  }
+
   Future<void> startSubscriptionService({int port = 8080}) async {
     if (BuildCapabilities.usesPacketTunnel) {
       throw UnsupportedError(
@@ -1546,7 +1681,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Connect through [node] over [carrier], by default the one [carrierFor]
   /// picks.
-  Future<bool> switchToNode(NodeInfo node, {UpstreamTransport? carrier}) async {
+  Future<bool> switchToNode(
+    NodeInfo node, {
+    UpstreamTransport? carrier,
+    bool closeExisting = false,
+  }) async {
     if (_isProxyTransitioning) {
       throw StateError(appStrings.proxyOperationIsAlreadyInProgress);
     }
@@ -1572,11 +1711,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
           newConfig.serverHost,
           newConfig.serverPort,
         )) {
-      return _switchLiveNode(node, _supportedConfig(newConfig));
+      return _switchLiveNode(node, _supportedConfig(newConfig), closeExisting);
     }
 
     if (_isRunning && _isTunRunning && !BuildCapabilities.usesPacketTunnel) {
-      return _hotSwitchTunNode(node, endpoint, newConfig);
+      return _hotSwitchTunNode(node, endpoint, newConfig, closeExisting);
     }
 
     if (BuildCapabilities.usesPacketTunnel) {
@@ -1694,6 +1833,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   Future<bool> _switchLiveNode(
     NodeInfo node,
     ProxyConfigModel newConfig,
+    bool closeExisting,
   ) async {
     if (_isTunBusy) return false;
     _isTunBusy = true;
@@ -1709,11 +1849,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         _lastError = _service.lastError ?? ProxyResult.message(result);
         return false;
       }
-      _config = newConfig;
-      _currentNodeId = node.nodeId;
-      _lastError = null;
-      await _saveConfig();
-      return true;
+      return await _commitSwitchedNode(node, newConfig, closeExisting);
     } catch (error) {
       _lastError = appStrings.failedToSwitchUpstream(error.toString());
       return false;
@@ -1723,6 +1859,27 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       _isTunBusy = false;
       _isProxyTransitioning = false;
       _safeNotifyListeners();
+    }
+  }
+
+  Future<bool> _commitSwitchedNode(
+    NodeInfo node,
+    ProxyConfigModel config,
+    bool closeExisting,
+  ) async {
+    _config = config;
+    _currentNodeId = node.nodeId;
+    try {
+      if (closeExisting) {
+        final result = await _service.closeListenerSessions();
+        if (result != ProxyResult.ok) {
+          _lastError = _service.lastError ?? ProxyResult.message(result);
+          return false;
+        }
+      }
+      return true;
+    } finally {
+      await _saveConfig();
     }
   }
 
@@ -1737,6 +1894,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     NodeInfo node,
     UpstreamEndpoint endpoint,
     ProxyConfigModel newConfig,
+    bool closeExisting,
   ) async {
     if (_isTunBusy) {
       _lastError = appStrings.waitForTheCurrentTunOperationToFinish;
@@ -1813,11 +1971,12 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
 
-      _config = newConfig.copyWith(tunEnabled: true);
-      _currentNodeId = node.nodeId;
       _isTunRunning = true;
-      await _saveConfig();
-      return true;
+      return await _commitSwitchedNode(
+        node,
+        newConfig.copyWith(tunEnabled: true),
+        closeExisting,
+      );
     } finally {
       _isTunBusy = false;
       _safeNotifyListeners();
@@ -1882,6 +2041,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _logSubscription?.cancel();
     _connectionSubscription?.cancel();
     unawaited(_desktopLogService.dispose());
+    localController.dispose();
     _service.dispose();
     unawaited(_subscriptionService?.stop() ?? Future<void>.value());
     logRevision.dispose();

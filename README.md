@@ -51,6 +51,17 @@ Android retains `com.proxyui.proxy_ui`, Apple direct apps retain
 `com.proxyui.proxyUi`, and the Mac App Store edition retains
 `com.proxyui.proxyUi.store`.
 
+## Website rules and local control
+
+Open **Website rules** on Windows, Linux, direct-download macOS or Android to
+send new connections for a domain or `*.domain:port` directly or through a
+particular node over TCP or QUIC. Rules persist when the app restarts.
+[Rule editor screenshot](docs/images/local-controller/website-rule-editor.png)
+
+On desktop, **Subscription → Local control API** exposes a loopback address and
+a separate bearer token. Scripts can read `GET /v1/openapi.json`, inspect nodes,
+switch the active endpoint, and edit the same website rules.
+
 ## App proxies
 
 The **App proxies** sidebar configures Claude natively and creates per-app
