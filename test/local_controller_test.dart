@@ -161,10 +161,37 @@ void main() {
         expect((await request('status')).$2['active']['node_id'], next.nodeId);
         expect(proxy.calls.where((call) => call == 'drain'), hasLength(1));
 
-        final old = controller.token!;
+        // The same operations as MCP tools, answered by this provider.
+        final mcp = await client.postUrl(Uri.parse(controller.mcpUrl!));
+        mcp.headers
+          ..set(HttpHeaders.authorizationHeader, 'Bearer ${controller.token}')
+          ..set(HttpHeaders.acceptHeader, 'application/json, text/event-stream')
+          ..contentType = ContentType.json;
+        mcp.write(
+          jsonEncode({
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'tools/call',
+            'params': {
+              'name': 'set_website_rule',
+              'arguments': {'site': 'mcp.example', 'route': 'direct'},
+            },
+          }),
+        );
+        final called = jsonDecode(
+          await utf8.decoder.bind(await mcp.close()).join(),
+        ) as Map;
+        final mcpState = called['result']['structuredContent'] as Map;
+        expect(mcpState['active']['node_id'], next.nodeId);
+        expect(state.websiteRules.rules.single.site, 'mcp.example');
+
+        // Restarting keeps the address and token an agent was set up with.
+        final (url, token) = (controller.url, controller.token!);
         await controller.stop();
         await controller.start();
-        expect((await request('nodes', token: old)).$1, 401);
+        expect((controller.url, controller.token), (url, token));
+        await controller.issueNewToken();
+        expect((await request('nodes', token: token)).$1, 401);
         expect((await request('status')).$1, 200);
       }, _Network());
     },

@@ -8,8 +8,10 @@
 `*.example.com:443` 指定直连，或选择节点及其 TCP、QUIC 端口。保存后对新连接生效，
 重启后仍然保留。[查看编辑界面](docs/images/local-controller/website-rule-editor.png)
 
-桌面端可在「订阅 → 本机控制 API」开启服务并复制地址和令牌。脚本可以读取
-`GET /v1/openapi.json`，组合查询节点、切换出口和编辑网站规则等操作。
+桌面端可在「订阅 → 本机控制 API」开启服务，地址和令牌在重启后保持不变。「连接智能体」
+可复制适用于 Claude Code、Codex 或 JSON 客户端的 MCP 配置，配置后智能体即可通过三个工具
+读取代理状态、切换节点和编辑网站规则。脚本也可以使用 `GET /v1/openapi.json` 描述的
+REST 接口。详见原生仓库的 [MCP 指南](https://github.com/acking-you/proxy-everything/blob/dev/docs/mcp.md)。
 
 ## macOS 两个版本
 

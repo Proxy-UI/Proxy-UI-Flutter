@@ -412,6 +412,15 @@ class _LocalControllerCardState extends State<_LocalControllerCard> {
                       color: scheme.error,
                     ),
                   ),
+                  // Most often the saved port has been taken meanwhile.
+                  if (!controller.running && !controller.busy)
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton(
+                        onPressed: controller.useNewPort,
+                        child: Text(strings.useNewControllerPort),
+                      ),
+                    ),
                 ],
                 if (running) ...[
                   const SizedBox(height: 16),
@@ -452,6 +461,13 @@ class _LocalControllerCardState extends State<_LocalControllerCard> {
                         icon: const Icon(Icons.copy, size: 20),
                         onPressed: () => _copy(token, strings.copied),
                       ),
+                      IconButton(
+                        tooltip: strings.issueControllerToken,
+                        icon: const Icon(Icons.autorenew, size: 20),
+                        onPressed: controller.busy
+                            ? null
+                            : controller.issueNewToken,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -459,21 +475,20 @@ class _LocalControllerCardState extends State<_LocalControllerCard> {
                     children: [
                       Expanded(
                         child: Text(
-                          '${strings.localControllerTokenHint} '
-                          '${strings.localControllerDocs}',
+                          strings.localControllerTokenHint,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      TextButton.icon(
-                        icon: const Icon(Icons.code, size: 18),
-                        label: Text(strings.copyCurlExample),
-                        onPressed: () => _copy(
-                          "curl --noproxy '*' -H 'Authorization: Bearer "
-                          "$token' $url/v1/status",
-                          strings.copied,
+                      FilledButton.tonalIcon(
+                        icon: const Icon(Icons.smart_toy_outlined, size: 18),
+                        label: Text(strings.connectAgent),
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (_) =>
+                              _ConnectAgentDialog(url: url, token: token),
                         ),
                       ),
                     ],
@@ -484,6 +499,104 @@ class _LocalControllerCardState extends State<_LocalControllerCard> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Ready-to-paste setup for the common MCP clients, with the token masked on
+/// screen and copied in full.
+class _ConnectAgentDialog extends StatefulWidget {
+  const _ConnectAgentDialog({required this.url, required this.token});
+
+  final String url;
+  final String token;
+
+  @override
+  State<_ConnectAgentDialog> createState() => _ConnectAgentDialogState();
+}
+
+class _ConnectAgentDialogState extends State<_ConnectAgentDialog> {
+  AgentSetup _setup = AgentSetup.claudeCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.l10n;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final shown = _setup.snippet(widget.url, '•' * 12);
+    return AlertDialog(
+      icon: const Icon(Icons.smart_toy_outlined),
+      title: Text(strings.connectAgent),
+      scrollable: true,
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              strings.connectAgentHint,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SegmentedButton<AgentSetup>(
+              segments: [
+                for (final setup in AgentSetup.values)
+                  ButtonSegment(value: setup, label: Text(setup.label)),
+              ],
+              selected: {_setup},
+              showSelectedIcon: false,
+              onSelectionChanged: (selected) =>
+                  setState(() => _setup = selected.first),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              switch (_setup) {
+                AgentSetup.claudeCode => strings.connectAgentClaudeCode,
+                AgentSetup.codex => strings.connectAgentCodex,
+                AgentSetup.json => strings.connectAgentJson,
+                AgentSetup.curl => strings.connectAgentCurl,
+              },
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                shown,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(MaterialLocalizations.of(context).closeButtonLabel),
+        ),
+        FilledButton.icon(
+          icon: const Icon(Icons.copy, size: 18),
+          label: Text(strings.copy),
+          onPressed: () {
+            Clipboard.setData(
+              ClipboardData(text: _setup.snippet(widget.url, widget.token)),
+            );
+            ToastUtils.showInfo(strings.copied);
+          },
+        ),
+      ],
     );
   }
 }

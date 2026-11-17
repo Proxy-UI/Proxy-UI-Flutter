@@ -59,8 +59,12 @@ particular node over TCP or QUIC. Rules persist when the app restarts.
 [Rule editor screenshot](docs/images/local-controller/website-rule-editor.png)
 
 On desktop, **Subscription → Local control API** exposes a loopback address and
-a separate bearer token. Scripts can read `GET /v1/openapi.json`, inspect nodes,
-switch the active endpoint, and edit the same website rules.
+a separate bearer token, both kept across restarts. **Connect an agent** copies
+ready-made MCP setup for Claude Code, Codex or a JSON client, after which an
+agent reads the proxy state, switches nodes and edits website rules through
+three tools. Scripts can also use the REST API described by
+`GET /v1/openapi.json`. See the native repository's
+[MCP guide](https://github.com/acking-you/proxy-everything/blob/dev/docs/mcp.md).
 
 ## App proxies
 

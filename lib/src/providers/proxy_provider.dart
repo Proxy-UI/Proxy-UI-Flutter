@@ -215,6 +215,8 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         (_) => _reconcileConnection(),
       );
       _reconcileConnection();
+      // Agents configured against the API expect it back after a restart.
+      unawaited(localController.restore());
     } catch (error, stackTrace) {
       debugPrint('ProxyState init failed: $error');
       debugPrintStack(stackTrace: stackTrace);

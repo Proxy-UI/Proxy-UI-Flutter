@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../ffi/proxy_service.dart';
 import '../models/node_model.dart';
@@ -18,18 +19,26 @@ class _Refused implements Exception {
   final String kind;
 }
 
-/// The desktop app's loopback control API.
+/// The desktop app's loopback control API, as REST under `/v1` and as MCP
+/// tools at `/mcp`.
 ///
 /// Native code serves HTTP, checks the token and keeps website rules. What
 /// only the app knows — its node catalogue, whether the proxy runs, and how
 /// to switch — is asked here: [_serve] collects each call with `next` and
 /// hands back the answer with the following `next`.
+///
+/// Whether the API is on, its port and its token persist, so an agent
+/// configured once stays connected across restarts.
 class LocalController extends ChangeNotifier {
   LocalController(this._service, this._proxy, this._rules);
 
   final ProxyService _service;
   final ProxyState _proxy;
   final WebsiteRules _rules;
+
+  static const _enabledKey = 'local_controller_enabled';
+  static const _portKey = 'local_controller_port';
+  static const _tokenKey = 'local_controller_token';
 
   static bool get supported =>
       !BuildCapabilities.usesPacketTunnel &&
@@ -48,35 +57,84 @@ class LocalController extends ChangeNotifier {
 
   /// `http://127.0.0.1:<port>` while running.
   String? get url => _port == null ? null : 'http://127.0.0.1:$_port';
+
+  /// Where MCP clients connect while running.
+  String? get mcpUrl => url == null ? null : '$url/mcp';
   String? get token => _token;
 
+  /// Start the API at launch if it was on when the app last closed.
+  Future<void> restore() async {
+    if (!supported) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_enabledKey) ?? false) await start();
+  }
+
+  /// Start on the saved port with the saved token, or pick both the first
+  /// time.
   Future<void> start() async {
     if (_busy || running || _disposed || !supported) return;
     _setBusy(true, clearError: true);
     try {
-      final random = Random.secure();
-      final token = base64UrlEncode([
-        for (var i = 0; i < 32; i++) random.nextInt(256),
-      ]).replaceAll('=', '');
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(_tokenKey) ?? _newToken();
       final started = await _service.localController({
         'action': 'start',
-        'port': 0,
+        'port': prefs.getInt(_portKey) ?? 0,
         'token': token,
       });
       final id = started['id'] as int;
+      final port = started['port'] as int;
       _id = id;
-      _port = started['port'] as int;
+      _port = port;
       _token = token;
+      await prefs.setString(_tokenKey, token);
+      await prefs.setInt(_portKey, port);
+      await prefs.setBool(_enabledKey, true);
       unawaited(_serve(id));
     } catch (error) {
       _error = _message(error);
     } finally {
       _setBusy(false);
     }
-    if (_disposed) await stop();
+    if (_disposed) await _halt();
   }
 
+  /// Stop, and stay off at the next launch.
   Future<void> stop() async {
+    if (!running || _busy) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enabledKey, false);
+    await _halt();
+  }
+
+  /// Start on a free port when the saved one is taken. Agents need the new
+  /// address.
+  Future<void> useNewPort() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_portKey);
+    await start();
+  }
+
+  /// Replace the token. Agents configured with the old one stop working.
+  Future<void> issueNewToken() async {
+    if (_busy) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, _newToken());
+    if (running) {
+      await _halt();
+      await start();
+    } else {
+      _notify();
+    }
+  }
+
+  static String _newToken() {
+    final random = Random.secure();
+    return base64UrlEncode([for (var i = 0; i < 32; i++) random.nextInt(256)])
+        .replaceAll('=', '');
+  }
+
+  Future<void> _halt() async {
     final id = _id;
     if (id == null || _busy) return;
     _setBusy(true);
@@ -221,7 +279,44 @@ class LocalController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    unawaited(stop());
+    // Quitting is not turning the API off: it starts again at the next launch.
+    unawaited(_halt());
     super.dispose();
   }
+}
+
+/// Ways to connect a client to the API, each with the text to paste.
+enum AgentSetup {
+  claudeCode('Claude Code'),
+  codex('Codex'),
+  json('JSON'),
+  curl('curl');
+
+  const AgentSetup(this.label);
+
+  /// The client's own name, which needs no translation.
+  final String label;
+
+  /// What to paste for the API at [url] with [token]. These match
+  /// `docs/mcp.md` in the native repository.
+  String snippet(String url, String token) => switch (this) {
+    claudeCode =>
+      'claude mcp add --transport http --scope user cipherrelay $url/mcp '
+          '--header "Authorization: Bearer $token"',
+    codex =>
+      '[mcp_servers.cipherrelay]\n'
+          'url = "$url/mcp"\n'
+          'http_headers = { Authorization = "Bearer $token" }',
+    json => const JsonEncoder.withIndent('  ').convert({
+      'mcpServers': {
+        'cipherrelay': {
+          'type': 'http',
+          'url': '$url/mcp',
+          'headers': {'Authorization': 'Bearer $token'},
+        },
+      },
+    }),
+    curl =>
+      "curl --noproxy '*' -H 'Authorization: Bearer $token' $url/v1/status",
+  };
 }
