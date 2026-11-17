@@ -7,6 +7,7 @@ import '../providers/proxy_provider.dart';
 import '../theme/app_theme.dart';
 import '../services/local_controller.dart';
 import '../utils/toast_utils.dart';
+import '../widgets/link_tile.dart';
 
 /// Serves Clash and Shadowrocket subscriptions that point other devices on
 /// the network at this device's proxy.
@@ -104,10 +105,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   ),
                 ),
               ),
-              if (LocalController.supported) ...[
-                const SizedBox(height: 12),
-                _controllerCard(context, state.localController),
-              ],
               if (running) ...[
                 const SizedBox(height: 12),
                 _buildSubscriptionCard(
@@ -163,57 +160,12 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   ),
                 ),
               ],
+              if (LocalController.supported) ...[
+                const SizedBox(height: 24),
+                _LocalControllerCard(state.localController),
+              ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _controllerCard(BuildContext context, LocalController service) {
-    final strings = context.l10n;
-    final url = 'http://127.0.0.1:${service.port}';
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(strings.localController),
-              subtitle: Text(strings.localControllerHint),
-              value: service.running,
-              onChanged: service.busy
-                  ? null
-                  : (enabled) => enabled ? service.start() : service.stop(),
-            ),
-            if (service.error case final error?)
-              Text(
-                error,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            if (service.running) ...[
-              SelectableText(url),
-              Wrap(
-                spacing: 8,
-                children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.copy),
-                    label: Text(strings.copyUrl),
-                    onPressed: () =>
-                        Clipboard.setData(ClipboardData(text: url)),
-                  ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.key),
-                    label: Text(strings.copyControllerToken),
-                    onPressed: () =>
-                        Clipboard.setData(ClipboardData(text: service.token!)),
-                  ),
-                ],
-              ),
-            ],
-          ],
         ),
       ),
     );
@@ -353,6 +305,185 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The loopback control API: a switch, then the address and token a script
+/// needs, each with its own copy button.
+class _LocalControllerCard extends StatefulWidget {
+  const _LocalControllerCard(this.controller);
+
+  final LocalController controller;
+
+  @override
+  State<_LocalControllerCard> createState() => _LocalControllerCardState();
+}
+
+class _LocalControllerCardState extends State<_LocalControllerCard> {
+  bool _revealToken = false;
+
+  void _copy(String text, String message) {
+    Clipboard.setData(ClipboardData(text: text));
+    ToastUtils.showInfo(message);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.l10n;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        final controller = widget.controller;
+        final url = controller.url;
+        final token = controller.token;
+        final running = controller.running && url != null && token != null;
+        if (!running) _revealToken = false;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: running
+                            ? scheme.primaryContainer
+                            : scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.terminal,
+                        color: running
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            strings.localController,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            strings.localControllerHint,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    if (controller.busy)
+                      const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      Switch(
+                        value: controller.running,
+                        onChanged: (enabled) =>
+                            enabled ? controller.start() : controller.stop(),
+                      ),
+                  ],
+                ),
+                if (controller.error case final error?) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    error,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.error,
+                    ),
+                  ),
+                ],
+                if (running) ...[
+                  const SizedBox(height: 16),
+                  LinkTile(
+                    icon: Icons.link,
+                    title: strings.localControllerAddress,
+                    value: url,
+                    actions: [
+                      IconButton(
+                        tooltip: strings.copyUrl,
+                        icon: const Icon(Icons.copy, size: 20),
+                        onPressed: () =>
+                            _copy(url, strings.urlCopiedToClipboard),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinkTile(
+                    icon: Icons.key,
+                    title: strings.localControllerToken,
+                    value: _revealToken ? token : '•' * 24,
+                    actions: [
+                      IconButton(
+                        tooltip: _revealToken
+                            ? strings.hideControllerToken
+                            : strings.showControllerToken,
+                        icon: Icon(
+                          _revealToken
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 20,
+                        ),
+                        onPressed: () =>
+                            setState(() => _revealToken = !_revealToken),
+                      ),
+                      IconButton(
+                        tooltip: strings.copyControllerToken,
+                        icon: const Icon(Icons.copy, size: 20),
+                        onPressed: () => _copy(token, strings.copied),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${strings.localControllerTokenHint} '
+                          '${strings.localControllerDocs}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      TextButton.icon(
+                        icon: const Icon(Icons.code, size: 18),
+                        label: Text(strings.copyCurlExample),
+                        onPressed: () => _copy(
+                          "curl --noproxy '*' -H 'Authorization: Bearer "
+                          "$token' $url/v1/status",
+                          strings.copied,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

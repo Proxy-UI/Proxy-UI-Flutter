@@ -1,5 +1,4 @@
 import '../models/upstream_endpoint.dart';
-import '../models/website_rule.dart';
 
 import 'package:proxy_ui/l10n/app_language.dart';
 
@@ -29,6 +28,7 @@ import '../services/desktop_log_service.dart';
 import '../services/android_vpn_service.dart';
 import '../services/subscription_service.dart';
 import '../services/local_controller.dart';
+import '../services/website_rules.dart';
 
 /// What applying a configuration or selecting a node does to a running proxy.
 enum SwitchImpact {
@@ -74,11 +74,16 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   final ValueNotifier<int> logRevision = ValueNotifier<int>(0);
   int _minLogLevel = ProxyService.defaultLogLevel;
 
-  // Subscription service
-  List<WebsiteRule> websiteRules = const [];
-  bool websiteRulesBusy = false;
+  /// Website rules and the loopback API keep their own listeners, so their
+  /// changes do not rebuild every screen that watches this state.
+  late final WebsiteRules websiteRules = WebsiteRules(_service);
+  late final LocalController localController = LocalController(
+    _service,
+    this,
+    websiteRules,
+  );
 
-  late final localController = LocalController(_control, _safeNotifyListeners);
+  // Subscription service
   SubscriptionService? _subscriptionService;
   bool _subscriptionServiceRunning = false;
   bool _subscriptionServiceBusy = false;
@@ -1000,135 +1005,6 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _safeNotifyListeners();
   }
 
-  Map<String, Object?> _controlEndpoint(UpstreamEndpoint e) => {
-    'host': e.host,
-    'port': e.port,
-    'transport': e.transport.name,
-  };
-
-  Map<String, Object?> _controlStatus() {
-    final endpoint = _configuredEndpoint;
-    return {
-      'running': _isRunning,
-      'local_port': _isRunning ? _config.localPort : null,
-      'active': _isRunning && endpoint != null
-          ? {
-              'node_id': _nodes
-                  .where((node) => isInUse(node, endpoint.transport))
-                  .firstOrNull
-                  ?.nodeId,
-              'endpoint': _controlEndpoint(endpoint),
-            }
-          : null,
-    };
-  }
-
-  Future<Map<String, Object?>> _control(Map<String, dynamic> command) async {
-    if (_isDisposed) return {'Err': 'unavailable'};
-    switch (command['operation']) {
-      case 'nodes':
-        return {
-          'Ok': {
-            'nodes': [
-              for (final node in _nodes)
-                if (node.endpoint != null)
-                  {
-                    'id': node.nodeId,
-                    'endpoints': [
-                      for (final carrier in UpstreamTransport.values)
-                        if (endpointOf(node, carrier) case final address?)
-                          _controlEndpoint(address),
-                    ],
-                  },
-            ],
-          },
-        };
-      case 'rules':
-        return manageWebsiteRule();
-      case 'remove_rule':
-        return manageWebsiteRule(site: command['site'] as String);
-      case 'set_rule':
-        final target = command['target'] as Map;
-        return manageWebsiteRule(
-          site: command['site'] as String,
-          direct: target['action'] == 'direct',
-          nodeId: target['node_id'] as String?,
-          transport: target['transport'] as String?,
-        );
-      case 'status':
-        return {'Ok': _controlStatus()};
-      case 'switch':
-        if (_isProxyTransitioning || _isTunBusy) return {'Err': 'busy'};
-        if (!_isRunning) return {'Err': 'not_running'};
-        final node = _nodes
-            .where((n) => n.nodeId == command['node_id'])
-            .firstOrNull;
-        if (node == null) return {'Err': 'unknown_node'};
-        final carrier = UpstreamTransport.values.byName(
-          command['transport'] as String,
-        );
-        if (endpointOf(node, carrier) == null) {
-          return {'Err': 'unsupported_transport'};
-        }
-        final ok = await switchToNode(
-          node,
-          carrier: carrier,
-          closeExisting: command['close_existing'] == true,
-        );
-        return ok ? {'Ok': _controlStatus()} : {'Err': 'switch_failed'};
-      default:
-        return {'Err': 'invalid_request'};
-    }
-  }
-
-  /// The HTTP API and rule editor resolve the same catalogue entry before saving.
-  /// A saved node rule pins the selected endpoint, including its transport port.
-  Future<Map<String, dynamic>> manageWebsiteRule({
-    String? site,
-    bool? direct,
-    String? nodeId,
-    String? transport,
-  }) async {
-    if (websiteRulesBusy || _isDisposed) return {'Err': 'busy'};
-    Map<String, Object?>? target;
-    if (direct == true) {
-      target = {'action': 'direct'};
-    } else if (direct == false) {
-      final node = _nodes.where((n) => n.nodeId == nodeId).firstOrNull;
-      if (node == null) return {'Err': 'unknown_node'};
-      final carrier = UpstreamTransport.values
-          .where((t) => t.name == transport)
-          .firstOrNull;
-      final e = carrier == null ? null : endpointOf(node, carrier);
-      if (e == null) return {'Err': 'unsupported_transport'};
-      target = {
-        'action': 'node',
-        'node_id': node.nodeId,
-        'endpoint': '${e.transport.name}://${e.address}',
-      };
-    }
-    websiteRulesBusy = true;
-    _safeNotifyListeners();
-    try {
-      final result = await _service.websiteRules(
-        edit: site == null ? null : {'site': site, 'target': target},
-      );
-      if (result['Ok'] case final Map success) {
-        websiteRules = [
-          for (final row in success['rules'] as List)
-            WebsiteRule.fromJson(row as Map),
-        ];
-      }
-      return result;
-    } catch (error, stack) {
-      debugPrint('Website rule operation failed: $error\n$stack');
-      return {'Err': 'rule_storage'};
-    } finally {
-      websiteRulesBusy = false;
-      _safeNotifyListeners();
-    }
-  }
-
   Future<void> startSubscriptionService({int port = 8080}) async {
     if (BuildCapabilities.usesPacketTunnel) {
       throw UnsupportedError(
@@ -1182,11 +1058,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// The configured server, or null while it does not parse.
-  UpstreamEndpoint? get _configuredEndpoint =>
+  UpstreamEndpoint? get configuredEndpoint =>
       UpstreamEndpoint.tryFromHost(_config.serverHost, _config.serverPort);
 
   /// The carrier the configured server is reached over.
-  UpstreamTransport? get currentCarrier => _configuredEndpoint?.transport;
+  UpstreamTransport? get currentCarrier => configuredEndpoint?.transport;
 
   /// Whether [node] is the server the proxy is configured to use, over
   /// either carrier.
@@ -1199,7 +1075,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// node, so the dashboard and the galaxy keep showing which node traffic
   /// goes through.
   bool isCurrentNode(NodeInfo node) {
-    final current = _configuredEndpoint;
+    final current = configuredEndpoint;
     final endpoint = node.endpoint;
     if (current == null ||
         endpoint == null ||
@@ -1223,7 +1099,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// default the one [carrierFor] picks: exactly that endpoint, so another
   /// carrier, or a QUIC port the node does not report, is not in use.
   bool isInUse(NodeInfo node, [UpstreamTransport? carrier]) {
-    final current = _configuredEndpoint;
+    final current = configuredEndpoint;
     final endpoint = endpointOf(node, carrier ?? carrierFor(node));
     return current != null &&
         endpoint != null &&
@@ -1460,6 +1336,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         ? null
         : UpstreamEndpoint(endpoint.host, port, UpstreamTransport.quic);
   }
+
+  /// Every endpoint [node] is known to serve, TCP first.
+  List<UpstreamEndpoint> endpointsOf(NodeInfo node) => [
+    for (final carrier in UpstreamTransport.values) ?endpointOf(node, carrier),
+  ];
 
   /// The country to show for a node: what its traffic actually says, over
   /// the carrier shown first, falling back to what the catalogue claims.
@@ -2042,6 +1923,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _connectionSubscription?.cancel();
     unawaited(_desktopLogService.dispose());
     localController.dispose();
+    websiteRules.dispose();
     _service.dispose();
     unawaited(_subscriptionService?.stop() ?? Future<void>.value());
     logRevision.dispose();

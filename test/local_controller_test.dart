@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:proxy_ui/src/ffi/proxy_ffi.dart';
 import 'package:proxy_ui/src/ffi/native_proxy_operations.dart';
+import 'package:proxy_ui/src/models/website_rule.dart';
 import 'package:proxy_ui/src/providers/proxy_provider.dart';
 import 'package:proxy_ui/src/services/local_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,14 +15,26 @@ import 'support/fake_proxy_service.dart';
 
 class _Network extends HttpOverrides {}
 
+/// Native rules and controller in a temporary profile; a fake proxy otherwise.
 class _Proxy extends FakeProxyService {
   _Proxy(this.directory);
   final Directory directory;
+
   @override
-  Future<Map<String, dynamic>> websiteRules({Map<String, Object?>? edit}) =>
+  Future<Map<String, dynamic>> websiteRules(Map<String, Object?> change) =>
       NativeProxyOperations.shared.run(
         'site_rules',
-        arguments: {'directory': directory.path, 'edit': edit},
+        arguments: {'directory': directory.path, ...change},
+      );
+
+  @override
+  Future<Map<String, dynamic>> localController(Map<String, Object?> request) =>
+      NativeProxyOperations.shared.run(
+        'local_controller',
+        arguments: {
+          ...request,
+          if (request['action'] == 'start') 'directory': directory.path,
+        },
       );
 
   @override
@@ -35,7 +48,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final library = Platform.environment['CIPHERRELAY_NATIVE_TEST_LIB'];
   test(
-    'authenticated desktop requests use the live catalogue and provider selection',
+    'authenticated requests use the live catalogue, switch through the provider and edit the shown rules',
     () async {
       DynamicLibrary.open(library!);
       final catalogue = sampleCatalogue();
@@ -62,10 +75,10 @@ void main() {
       onChange();
       await initialized.future;
       state.removeListener(onChange);
-      final service = state.localController;
-      await service.start();
-      expect(service.error, isNull);
-      addTearDown(service.stop);
+      final controller = state.localController;
+      await controller.start();
+      expect(controller.error, isNull);
+      addTearDown(controller.stop);
       await HttpOverrides.runWithHttpOverrides(() async {
         final client = HttpClient()..findProxy = (_) => 'DIRECT';
         addTearDown(() => client.close(force: true));
@@ -75,14 +88,14 @@ void main() {
           String? token,
           String? method,
         }) async {
-          final uri = Uri.http('127.0.0.1:${service.port}', '/v1/$path');
+          final uri = Uri.parse('${controller.url}/v1/$path');
           final req = await client.openUrl(
             method ?? (body == null ? 'GET' : 'POST'),
             uri,
           );
           req.headers.set(
             HttpHeaders.authorizationHeader,
-            'Bearer ${token ?? service.token}',
+            'Bearer ${token ?? controller.token}',
           );
           if (body != null) {
             req.headers.contentType = ContentType.json;
@@ -109,8 +122,10 @@ void main() {
           },
         };
         expect((await request('rules', method: 'PUT', body: rule)).$1, 200);
-        expect(state.websiteRules.single.site, 'web.example:443');
-        expect(state.websiteRules.single.endpoint?.port, next.port);
+        // The page shows API edits without reloading.
+        final shown = state.websiteRules.rules.single;
+        expect(shown.site, 'web.example:443');
+        expect((shown.target as NodeTarget).endpoint.port, next.port);
         expect((await request('rules')).$2['rules'], hasLength(1));
         expect(
           (await request(
@@ -120,6 +135,8 @@ void main() {
           )).$2['rules'],
           isEmpty,
         );
+        expect(state.websiteRules.rules, isEmpty);
+
         final selection = {
           'node_id': next.nodeId,
           'transport': 'tcp',
@@ -144,9 +161,9 @@ void main() {
         expect((await request('status')).$2['active']['node_id'], next.nodeId);
         expect(proxy.calls.where((call) => call == 'drain'), hasLength(1));
 
-        final old = service.token!;
-        await service.stop();
-        await service.start();
+        final old = controller.token!;
+        await controller.stop();
+        await controller.start();
         expect((await request('nodes', token: old)).$1, 401);
         expect((await request('status')).$1, 200);
       }, _Network());

@@ -64,10 +64,9 @@ void main() {
             'site_rules',
             arguments: {
               'directory': cache.path,
-              'edit': {
-                'site': '127.0.0.1:${origin.port}',
-                'target': {'action': 'direct'},
-              },
+              'action': 'set',
+              'site': '127.0.0.1:${origin.port}',
+              'target': {'action': 'direct'},
             },
           );
           expect(saved['Ok']['rules'], hasLength(1));

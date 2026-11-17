@@ -1,23 +1,76 @@
 {
   "@@locale": "en",
   "websiteRules": "Website rules",
-  "websiteRulesHint": "Choose how new connections to each website are routed.",
+  "websiteRulesHint": "Send new connections to chosen websites directly or through one node. Every other website keeps your current routing.",
   "websiteAdd": "Add rule",
   "websiteEdit": "Edit rule",
   "websiteRemove": "Delete rule",
+  "websiteRemoveConfirm": "Delete the rule for {site}?",
+  "@websiteRemoveConfirm": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteRemoveHint": "New connections to this website will follow your other routing settings.",
   "websiteEmpty": "No website rules yet",
-  "websiteDefault": "Other websites follow your current routing settings.",
-  "websiteDomain": "Website domain or URL",
-  "websiteMatchHint": "Use *.example.com for subdomains or example.com:443 for one port.",
+  "websiteEmptyHint": "Add a rule to always reach a website directly, or always through the node you pick.",
+  "websiteFilter": "Filter rules",
+  "websiteNoMatches": "No rules match this filter",
+  "websiteSite": "Website",
+  "websiteSiteHint": "example.com · *.example.com for every subdomain · add :443 for one port. Pasted URLs keep their host and port.",
+  "websiteRoute": "Route",
   "websiteDirect": "Direct",
-  "websiteNode": "Proxy node",
-  "websiteNoNodes": "Load the node catalogue on the Nodes page to select an endpoint.",
-  "websiteInvalid": "Enter a valid domain, wildcard subdomain or HTTP(S) URL.",
-  "websiteStoreError": "Could not update website rules. Check the profile directory and rule limit.",
-  "websiteRemoveHint": "New connections to this website will follow the remaining routing rules.",
+  "websiteDirectHint": "Connect without a proxy",
+  "websiteNode": "Node",
+  "websiteNodeHint": "Always use this node",
+  "websiteChooseNode": "Choose a node",
+  "websiteTransport": "Transport",
+  "websiteNoNodes": "Load the node catalogue on the Nodes page to choose a node.",
+  "websiteRoutesVia": "New connections go to {address} over {transport}.",
+  "@websiteRoutesVia": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "transport": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteSubdomains": "All subdomains",
+  "websitePort": "Port {port}",
+  "@websitePort": {
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteNodeMissing": "This node is no longer in the catalogue. Connections still use the saved address.",
+  "websiteEndpointChanged": "The catalogue now lists {address}. Save the rule again to use it.",
+  "@websiteEndpointChanged": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteInvalid": "Enter a domain, *.domain, IP address or http(s) URL, optionally with :port.",
+  "websiteStoreError": "Could not save website rules. Check the profile folder and the limit of 256 rules.",
+  "websiteLoadError": "Could not read the website rules file.",
+  "websiteFooter": "Rules apply to HTTP, HTTPS and SOCKS5 connections opened after a change. The most specific rule wins: an exact host beats *.domain, and a rule with a port beats one without.",
   "localController": "Local control API",
-  "localControllerHint": "Allow local scripts to query the node catalogue and switch the active proxy using a bearer token.",
-  "copyControllerToken": "Copy access token",
+  "localControllerHint": "Let scripts on this computer list nodes, switch the active node and edit website rules, using a bearer token.",
+  "localControllerAddress": "Address",
+  "localControllerToken": "Access token",
+  "localControllerTokenHint": "Each start issues a new token. Keep it out of URLs, logs and prompts.",
+  "localControllerDocs": "GET /v1/openapi.json describes every operation.",
+  "copyControllerToken": "Copy token",
+  "showControllerToken": "Show token",
+  "hideControllerToken": "Hide token",
+  "copyCurlExample": "Copy curl example",
   "proxyOperationIsAlreadyInProgress": "Proxy operation is already in progress",
   "waitForTunSetupToFinish": "Wait for TUN setup to finish",
   "serverHostIsRequired": "Server host is required",

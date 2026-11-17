@@ -411,13 +411,28 @@ class ProxyService {
     });
   });
 
-  Future<Map<String, dynamic>> websiteRules({
-    Map<String, Object?>? edit,
-  }) async {
+  /// List, set or remove a website rule in the profile [start] also loads.
+  /// Answers `{"Ok": {"rules": [...]}}` or `{"Err": kind}`.
+  Future<Map<String, dynamic>> websiteRules(Map<String, Object?> change) async {
     final directory = await getApplicationSupportDirectory();
     return NativeProxyOperations.shared.run(
       'site_rules',
-      arguments: {'directory': directory.path, 'edit': edit},
+      arguments: {'directory': directory.path, ...change},
+    );
+  }
+
+  /// One request to the native local controller. Starting it also names the
+  /// profile whose website rules the API edits.
+  Future<Map<String, dynamic>> localController(
+    Map<String, Object?> request,
+  ) async {
+    if (request['action'] == 'start') {
+      final directory = await getApplicationSupportDirectory();
+      request = {...request, 'directory': directory.path};
+    }
+    return NativeProxyOperations.shared.run(
+      'local_controller',
+      arguments: request,
     );
   }
 
