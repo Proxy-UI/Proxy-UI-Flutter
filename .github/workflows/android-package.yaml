@@ -1,0 +1,145 @@
+name: Build and sign Android APKs
+
+on:
+  workflow_call:
+    inputs:
+      lib_version:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+    secrets:
+      PRIVATE_REPO_PAT:
+        required: true
+      # Sign resolves this from the android-release environment.
+      ANDROID_RELEASE_KEYSTORE:
+        required: true
+    outputs:
+      native_source_commit:
+        value: ${{ jobs.build.outputs.native_source_commit }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      native_source_commit: ${{ steps.native.outputs.source_commit }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require a new Android build number
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^version: //p' pubspec.yaml)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]
+          [[ "$RELEASE_TAG" == "v${VERSION%+*}" ]]
+          WORK=$(mktemp -d)
+          trap 'rm -rf "$WORK"' EXIT
+          gh release download -R "$GITHUB_REPOSITORY" -p release-manifest.json -p release-manifest.json.sig -D "$WORK"
+          python3 scripts/sign_release_manifest.py "$WORK/release-manifest.json" --verify scripts/update_signing_key.pub.pem
+          previous=$(jq -er '[.build, (.android_build // .build)] | map(tonumber) | max' "$WORK/release-manifest.json")
+          if (( ${VERSION#*+} <= previous )); then
+            echo "Android build must exceed the published build $previous" >&2
+            exit 1
+          fi
+      - name: Stage verified Android native libraries
+        id: native
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+          LIB_VERSION: ${{ inputs.lib_version }}
+        run: |
+          set -euo pipefail
+          [[ "$LIB_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          WORK=$(mktemp -d)
+          trap 'rm -rf "$WORK"' EXIT
+          REPO=acking-you/proxy-everything
+          gh release download "$LIB_VERSION" -R "$REPO" -p release-manifest.json -D "$WORK"
+          SOURCE=$(jq -er --arg version "$LIB_VERSION" 'select(.version == $version) | .source_commit | select(test("^[0-9a-f]{40}$"))' "$WORK/release-manifest.json")
+          for pair in aarch64-linux-android:arm64-v8a armv7-linux-androideabi:armeabi-v7a x86_64-linux-android:x86_64; do
+            target=${pair%:*}
+            abi=${pair#*:}
+            name="libhttp_proxy-$LIB_VERSION-$target"
+            archive="$name.tar.gz"
+            sha=$(jq -er --arg name "$archive" --arg target "$target" '
+              [.assets[] | select(.name == $name and .target == $target and .component == "libhttp_proxy")] |
+              select(length == 1) | .[0].sha256 | select(test("^[0-9a-f]{64}$"))' "$WORK/release-manifest.json")
+            gh release download "$LIB_VERSION" -R "$REPO" -p "$archive" -D "$WORK"
+            (cd "$WORK" && printf '%s  %s\n' "$sha" "$archive" | sha256sum --strict -c -)
+            mkdir -p "native/android/$abi"
+            tar -xOzf "$WORK/$archive" "$name/libhttp_proxy.so" > "native/android/$abi/libhttp_proxy.so"
+            test -s "native/android/$abi/libhttp_proxy.so"
+          done
+          echo "source_commit=$SOURCE" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: '3.47.8'
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/setup-fvm
+      - name: Build unsigned split APKs
+        env:
+          CI_ANDROID_UNSIGNED: 'true'
+        run: |
+          fvm flutter pub get
+          fvm flutter build apk --release --split-per-abi --no-pub
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: unsigned-android-apks
+          path: build/app/outputs/flutter-apk/app-*-release.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: android-release
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: unsigned-android-apks
+          path: unsigned
+      - name: Ensure pinned Android build tools
+        run: test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner" || sdkmanager 'build-tools;36.0.0'
+      - name: Align and sign APKs with the installed release identity
+        env:
+          ANDROID_RELEASE_KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE }}
+        run: |
+          set -euo pipefail
+          : "${ANDROID_RELEASE_KEYSTORE:?Missing android-release environment secret}"
+          TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          umask 077
+          WORK=$(mktemp -d)
+          trap 'rm -rf "$WORK"' EXIT
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE" | base64 --decode > "$WORK/signing.keystore"
+          unset ANDROID_RELEASE_KEYSTORE
+          mkdir android-apks
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            input="unsigned/app-$abi-release.apk"
+            output="android-apks/$(python3 scripts/release_artifact_name.py android "$abi" apk)"
+            "$TOOLS/zipalign" -f -P 16 4 "$input" "$WORK/aligned.apk"
+            "$TOOLS/apksigner" sign --ks "$WORK/signing.keystore" --ks-key-alias androiddebugkey \
+              --ks-pass pass:android --key-pass pass:android --v4-signing-enabled false \
+              --out "$output" "$WORK/aligned.apk"
+            "$TOOLS/zipalign" -c -P 16 4 "$output"
+          done
+      - name: Verify each signed APK
+        run: python3 scripts/attach_android_manifest.py --verify-apks android-apks "$ANDROID_HOME/build-tools/36.0.0"
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: android-apks
+          path: android-apks/*.apk
+          if-no-files-found: error
+          retention-days: 1

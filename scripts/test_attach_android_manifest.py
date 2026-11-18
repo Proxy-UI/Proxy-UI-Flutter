@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from attach_android_manifest import ABI_OFFSETS, CERTIFICATE, apk_metadata, attach
 
@@ -36,7 +37,8 @@ class AndroidManifestTest(unittest.TestCase):
             path = directory / 'release-manifest.json'
             path.write_text(json.dumps(original))
             for abi in ABI_OFFSETS:
-                asset(f'cipherrelay-v2.0.8-77-android-{abi}.apk')
+                with ZipFile(directory / f'cipherrelay-v2.0.8-77-android-{abi}.apk', 'w') as archive:
+                    archive.writestr(f'lib/{abi}/libhttp_proxy.so', b'test library')
 
             def inspect(command, **kwargs):
                 abi = next(abi for abi in ABI_OFFSETS if str(command[-1]).endswith(f'-{abi}.apk'))
@@ -47,12 +49,14 @@ class AndroidManifestTest(unittest.TestCase):
 
             with patch('attach_android_manifest.subprocess.check_output', side_effect=inspect):
                 attach(directory, Path('tools'), 'a' * 40, android_build=77,
-                       android_source_commit='b' * 40, android_native_source_commit='c' * 40)
+                       android_source_commit='b' * 40, android_native_source_commit='c' * 40,
+                       build_environment='github-actions')
             updated = json.loads(path.read_text())
             self.assertEqual(updated['build'], 76)
             self.assertEqual(updated['source_commit'], 'a' * 40)
             self.assertEqual(updated['android_build'], 77)
             self.assertEqual(updated['android_source_commit'], 'b' * 40)
+            self.assertEqual(updated['android_build_environment'], 'github-actions')
             self.assertIn(desktop, updated['assets'])
             self.assertEqual(len(updated['assets']), 4)
             with self.assertRaises(ValueError):

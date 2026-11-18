@@ -43,10 +43,10 @@ with `-setup.exe` for the installer. Its `executable_name` points to
 `CipherRelay.exe`. ZIP naming is configured in `distribute_options.yaml`, not
 an unused ZIP `make_config.yaml`.
 
-Android and iOS packages must still be built and signed locally. Copy the
-verified APK/IPA to `build/packages/` using the filename printed above; never
-publish Flutter's generic intermediate filename. Increment Android's build
-number and verify its application ID and signing certificate before delivery.
+The release workflow builds and signs Android APKs for all three supported
+ABIs. Increment the build number before packaging. The signer uses the
+established Android certificate from the `android-release` environment. iOS
+packages are built and signed locally.
 Android retains `com.proxyui.proxy_ui`, Apple direct apps retain
 `com.proxyui.proxyUi`, and the Mac App Store edition retains
 `com.proxyui.proxyUi.store`.
@@ -131,21 +131,11 @@ the update:
 | Android | The package matching the device's ABI is checked and handed to the system installer, which asks the user to confirm. |
 | iOS, Mac App Store | Not offered: the store updates these builds. |
 
-The release workflow signs the manifest with the `UPDATE_SIGNING_KEY` secret
-and verifies it against `scripts/update_signing_key.pub.pem`. After attaching
-locally signed Android packages and updating the manifest, sign it again and
-upload the new signature:
-
-```bash
-python3 scripts/sign_release_manifest.py release-manifest.json --key /path/to/update-signing-ed25519.pem
-gh release upload vX.Y.Z release-manifest.json release-manifest.json.sig --clobber
-```
-
-Alternatively, after uploading the three locally signed split APKs, dispatch
-`attach-android-manifest.yaml` on the same commit as the desktop release. It
-verifies the existing signed manifest, desktop hashes, APK identities and the
-stable local certificate, then signs the updated manifest using the existing
-update-manifest key. It never builds or signs a mobile package.
+The release workflow verifies each APK's application ID, effective version
+code, ABI, native library and certificate before signing the update manifest
+with the separate `UPDATE_SIGNING_KEY` secret. To publish Android for an
+existing release, bump the build in `pubspec.yaml` and run
+`android-hotfix.yaml` from `main` with `release_tag` and `lib_version`.
 
 Debug builds verify an update but never replace themselves. Set
 `CIPHERRELAY_UPDATE_FEED` to a directory URL holding a release's files to try

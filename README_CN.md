@@ -47,7 +47,9 @@ Linux 程序为 `CipherRelay`，iOS/macOS 应用包为 `CipherRelay.app`。
 交付文件统一采用 `cipherrelay-v<版本>-<构建号>-<平台>-<架构>.<扩展名>`，
 Windows 安装器额外带 `-setup`。执行 `python3 scripts/release_artifact_name.py android arm64-v8a apk`
 可生成对应交付文件名；其他平台参数见 [打包命名说明](README.md#application-and-package-names)。
-移动端仍必须本机签名构建，Android 应用 ID 继续使用 `com.proxyui.proxy_ui`。
+发布流水线会构建并签名三种 ABI 的 Android APK，应用 ID 为 `com.proxyui.proxy_ui`。
+发布前提高 `pubspec.yaml` 中的构建号。为已有版本补发 APK 时，从 `main` 运行
+`android-hotfix.yaml`，填写发布标签和原生库版本。iOS 仍在本机构建和签名。
 
 ## 功能特性
 
@@ -56,7 +58,7 @@ Windows 安装器额外带 `-setup`。执行 `python3 scripts/release_artifact_n
 - **安全传输 v2（1.2.18+44）**：需先将客户端和路径上的所有中继、服务端升级到 native 0.4.32。在配置中启用后，TCP、UDP 和控制流量均使用独立的连接与方向密钥，失败不会自动降级。旧配置保留旧协议，需主动迁移；Mac App Store Packet Tunnel 暂不支持 v2。
 - **连接恢复（1.2.17+43）**：配合原生库 0.4.31，Windows 在网络变化后刷新新连接的物理出口。原生句柄操作串行执行，清理在 UI 线程外完成，限制日志积压，并独立于日志检查连接状态。验证范围和限制见父仓库 `docs/network-resilience.md`。
 - **节点星系图**：节点页默认以 3D 星系图展示。每个国家/地区是一颗印着国旗的恒星，按其在地球上的位置（从北极上方俯视）排布；节点作为行星环绕恒星，颜色表示最近一次测试结果（快速、一般、较慢、不可达、未测试），恒星外圈的状态环显示各状态占比，本机与当前节点之间以光弧相连。拖动旋转、滚轮或双指缩放，点击恒星或行星可查看节点 IP、出口 IP 和延迟，并在面板中连接或测试。尚未定位出口的节点聚在“未定位”星团，测试定位后会飞向所属国家。也可切换为按国家分组的列表视图。
-- **主动检查更新**：只有点击标题栏的“检查更新”才会联网检查，不做后台检查、不自动下载。发布清单必须带有效的 Ed25519 签名；确认后：macOS 校验开发者签名与公证后替换并重新打开应用，Windows 安装版静默运行安装程序（一次 UAC），Android 交给系统安装器确认，Windows 便携版与 Linux 下载到“下载”文件夹。补传 Android APK 并更新清单后，需用 `scripts/sign_release_manifest.py` 重新签名并上传 `.sig`
+- **主动检查更新**：点击标题栏的“检查更新”后才会联网。发布流水线会校验 APK 的签名证书、版本和 ABI，并对更新清单做 Ed25519 签名。Android 由系统安装器确认升级，macOS 校验开发者签名与公证后替换并重启应用，Windows 安装版静默安装（一次 UAC），Windows 便携版与 Linux 下载到“下载”文件夹。
 - **代理控制**：概览页和侧边导航栏中的电源按钮可在任意页面一键启停代理
 - **配置管理**：服务器地址、端口、会话密钥、本地端口设置
 - **自动代理**：基于地理位置的路由（国内直连，国外代理）
