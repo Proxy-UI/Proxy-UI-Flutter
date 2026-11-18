@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 
 import '../providers/proxy_provider.dart';
 import '../theme/app_theme.dart';
+import '../services/local_controller.dart';
 import '../utils/toast_utils.dart';
+import '../widgets/link_tile.dart';
 
 /// Serves Clash and Shadowrocket subscriptions that point other devices on
 /// the network at this device's proxy.
@@ -158,6 +160,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   ),
                 ),
               ],
+              if (LocalController.supported) ...[
+                const SizedBox(height: 24),
+                _LocalControllerCard(state.localController),
+              ],
             ],
           ),
         ),
@@ -299,6 +305,345 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The loopback control API: a switch, then the address and token a script
+/// needs, each with its own copy button.
+class _LocalControllerCard extends StatefulWidget {
+  const _LocalControllerCard(this.controller);
+
+  final LocalController controller;
+
+  @override
+  State<_LocalControllerCard> createState() => _LocalControllerCardState();
+}
+
+class _LocalControllerCardState extends State<_LocalControllerCard> {
+  bool _revealToken = false;
+
+  void _copy(String text, String message) {
+    Clipboard.setData(ClipboardData(text: text));
+    ToastUtils.showInfo(message);
+  }
+
+  Future<void> _confirmIssueNewToken(LocalController controller) async {
+    final strings = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.autorenew),
+        title: Text(strings.issueControllerTokenConfirmTitle),
+        content: Text(strings.issueControllerTokenConfirmHint),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(strings.issueControllerTokenAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      setState(() => _revealToken = false);
+      await controller.issueNewToken();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.l10n;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        final controller = widget.controller;
+        final url = controller.url;
+        final token = controller.token;
+        final running = controller.running && url != null && token != null;
+        if (!running) _revealToken = false;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: running
+                            ? scheme.primaryContainer
+                            : scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.terminal,
+                        color: running
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            strings.localController,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            strings.localControllerHint,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    if (controller.busy)
+                      const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      Switch(
+                        value: controller.running,
+                        onChanged: (enabled) =>
+                            enabled ? controller.start() : controller.stop(),
+                      ),
+                  ],
+                ),
+                if (controller.error case final error?) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    error,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.error,
+                    ),
+                  ),
+                  // Most often the saved port has been taken meanwhile.
+                  if (!controller.running && !controller.busy)
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: TextButton(
+                        onPressed: controller.useNewPort,
+                        child: Text(strings.useNewControllerPort),
+                      ),
+                    ),
+                ],
+                if (running) ...[
+                  const SizedBox(height: 16),
+                  LinkTile(
+                    icon: Icons.link,
+                    title: strings.localControllerAddress,
+                    value: url,
+                    actions: [
+                      IconButton(
+                        tooltip: strings.copyUrl,
+                        icon: const Icon(Icons.copy, size: 20),
+                        onPressed: () =>
+                            _copy(url, strings.urlCopiedToClipboard),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinkTile(
+                    icon: Icons.key,
+                    title: strings.localControllerToken,
+                    value: _revealToken ? token : '•' * 24,
+                    actions: [
+                      IconButton(
+                        tooltip: _revealToken
+                            ? strings.hideControllerToken
+                            : strings.showControllerToken,
+                        icon: Icon(
+                          _revealToken
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 20,
+                        ),
+                        onPressed: () =>
+                            setState(() => _revealToken = !_revealToken),
+                      ),
+                      IconButton(
+                        tooltip: strings.copyControllerToken,
+                        icon: const Icon(Icons.copy, size: 20),
+                        onPressed: () => _copy(token, strings.copied),
+                      ),
+                      IconButton(
+                        tooltip: strings.issueControllerToken,
+                        icon: const Icon(Icons.autorenew, size: 20),
+                        onPressed: controller.busy
+                            ? null
+                            : () => _confirmIssueNewToken(controller),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final hint = Text(
+                        strings.localControllerTokenHint,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      );
+                      final connectButton = FilledButton.tonalIcon(
+                        icon: const Icon(Icons.smart_toy_outlined, size: 18),
+                        label: Text(strings.connectAgent),
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (_) =>
+                              _ConnectAgentDialog(url: url, token: token),
+                        ),
+                      );
+                      if (constraints.maxWidth < 460) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            hint,
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: connectButton,
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: hint),
+                          const SizedBox(width: 12),
+                          connectButton,
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Ready-to-paste setup for the common MCP clients, with the token masked on
+/// screen and copied in full.
+class _ConnectAgentDialog extends StatefulWidget {
+  const _ConnectAgentDialog({required this.url, required this.token});
+
+  final String url;
+  final String token;
+
+  @override
+  State<_ConnectAgentDialog> createState() => _ConnectAgentDialogState();
+}
+
+class _ConnectAgentDialogState extends State<_ConnectAgentDialog> {
+  AgentSetup _setup = AgentSetup.claudeCode;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.l10n;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final shown = _setup.snippet(widget.url, '•' * 12);
+    return AlertDialog(
+      icon: const Icon(Icons.smart_toy_outlined),
+      title: Text(strings.connectAgent),
+      scrollable: true,
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              strings.connectAgentHint,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<AgentSetup>(
+                segments: [
+                  for (final setup in AgentSetup.values)
+                    ButtonSegment(value: setup, label: Text(setup.label)),
+                ],
+                selected: {_setup},
+                showSelectedIcon: false,
+                onSelectionChanged: (selected) =>
+                    setState(() => _setup = selected.first),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              switch (_setup) {
+                AgentSetup.claudeCode => strings.connectAgentClaudeCode,
+                AgentSetup.codex => strings.connectAgentCodex,
+                AgentSetup.json => strings.connectAgentJson,
+                AgentSetup.curl => strings.connectAgentCurl,
+              },
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: SelectableText(
+                shown,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(MaterialLocalizations.of(context).closeButtonLabel),
+        ),
+        FilledButton.icon(
+          icon: const Icon(Icons.copy, size: 18),
+          label: Text(strings.copy),
+          onPressed: () {
+            Clipboard.setData(
+              ClipboardData(text: _setup.snippet(widget.url, widget.token)),
+            );
+            ToastUtils.showInfo(strings.copied);
+          },
+        ),
+      ],
     );
   }
 }

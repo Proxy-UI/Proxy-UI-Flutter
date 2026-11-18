@@ -18,8 +18,9 @@ import 'nodes/nodes_page.dart';
 import 'store_demo_screen.dart';
 import 'store_privacy_screen.dart';
 import 'subscription_page.dart';
+import 'website_rules_page.dart';
 
-enum _Destination { proxy, nodes, logs, launchers, subscription }
+enum _Destination { proxy, nodes, logs, launchers, subscription, websiteRules }
 
 /// The application shell: a navigation rail beside the page on wide
 /// windows, a navigation bar beneath it on phones, and a power control that
@@ -43,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _Destination.nodes,
     _Destination.logs,
     if (ProxyLauncherService.isSupported) _Destination.launchers,
+    if (!BuildCapabilities.usesPacketTunnel) _Destination.websiteRules,
     if (!BuildCapabilities.usesPacketTunnel) _Destination.subscription,
   ];
 
@@ -71,6 +73,11 @@ class _HomeScreenState extends State<HomeScreen> {
       selected: Icons.terminal,
       label: context.l10n.logs,
     ),
+    _Destination.websiteRules => (
+      icon: Icons.alt_route_outlined,
+      selected: Icons.alt_route,
+      label: context.l10n.websiteRules,
+    ),
     _Destination.subscription => (
       icon: Icons.cloud_download_outlined,
       selected: Icons.cloud_download,
@@ -95,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ),
     _Destination.subscription => const SubscriptionPage(),
+    _Destination.websiteRules => const WebsiteRulesPage(),
   };
 
   PreferredSizeWidget _appBar() {

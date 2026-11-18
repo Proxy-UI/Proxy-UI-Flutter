@@ -27,6 +27,8 @@ import '../models/socks5_link.dart';
 import '../services/desktop_log_service.dart';
 import '../services/android_vpn_service.dart';
 import '../services/subscription_service.dart';
+import '../services/local_controller.dart';
+import '../services/website_rules.dart';
 
 /// What applying a configuration or selecting a node does to a running proxy.
 enum SwitchImpact {
@@ -71,6 +73,15 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// which is where this app spends most of its life.
   final ValueNotifier<int> logRevision = ValueNotifier<int>(0);
   int _minLogLevel = ProxyService.defaultLogLevel;
+
+  /// Website rules and the loopback API keep their own listeners, so their
+  /// changes do not rebuild every screen that watches this state.
+  late final WebsiteRules websiteRules = WebsiteRules(_service);
+  late final LocalController localController = LocalController(
+    _service,
+    this,
+    websiteRules,
+  );
 
   // Subscription service
   SubscriptionService? _subscriptionService;
@@ -204,6 +215,8 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         (_) => _reconcileConnection(),
       );
       _reconcileConnection();
+      // Agents configured against the API expect it back after a restart.
+      unawaited(localController.restore());
     } catch (error, stackTrace) {
       debugPrint('ProxyState init failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -1047,11 +1060,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// The configured server, or null while it does not parse.
-  UpstreamEndpoint? get _configuredEndpoint =>
+  UpstreamEndpoint? get configuredEndpoint =>
       UpstreamEndpoint.tryFromHost(_config.serverHost, _config.serverPort);
 
   /// The carrier the configured server is reached over.
-  UpstreamTransport? get currentCarrier => _configuredEndpoint?.transport;
+  UpstreamTransport? get currentCarrier => configuredEndpoint?.transport;
 
   /// Whether [node] is the server the proxy is configured to use, over
   /// either carrier.
@@ -1064,7 +1077,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// node, so the dashboard and the galaxy keep showing which node traffic
   /// goes through.
   bool isCurrentNode(NodeInfo node) {
-    final current = _configuredEndpoint;
+    final current = configuredEndpoint;
     final endpoint = node.endpoint;
     if (current == null ||
         endpoint == null ||
@@ -1088,7 +1101,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   /// default the one [carrierFor] picks: exactly that endpoint, so another
   /// carrier, or a QUIC port the node does not report, is not in use.
   bool isInUse(NodeInfo node, [UpstreamTransport? carrier]) {
-    final current = _configuredEndpoint;
+    final current = configuredEndpoint;
     final endpoint = endpointOf(node, carrier ?? carrierFor(node));
     return current != null &&
         endpoint != null &&
@@ -1326,6 +1339,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         : UpstreamEndpoint(endpoint.host, port, UpstreamTransport.quic);
   }
 
+  /// Every endpoint [node] is known to serve, TCP first.
+  List<UpstreamEndpoint> endpointsOf(NodeInfo node) => [
+    for (final carrier in UpstreamTransport.values) ?endpointOf(node, carrier),
+  ];
+
   /// The country to show for a node: what its traffic actually says, over
   /// the carrier shown first, falling back to what the catalogue claims.
   String effectiveCountry(NodeInfo node) {
@@ -1546,7 +1564,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Connect through [node] over [carrier], by default the one [carrierFor]
   /// picks.
-  Future<bool> switchToNode(NodeInfo node, {UpstreamTransport? carrier}) async {
+  Future<bool> switchToNode(
+    NodeInfo node, {
+    UpstreamTransport? carrier,
+    bool closeExisting = false,
+  }) async {
     if (_isProxyTransitioning) {
       throw StateError(appStrings.proxyOperationIsAlreadyInProgress);
     }
@@ -1572,11 +1594,11 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
           newConfig.serverHost,
           newConfig.serverPort,
         )) {
-      return _switchLiveNode(node, _supportedConfig(newConfig));
+      return _switchLiveNode(node, _supportedConfig(newConfig), closeExisting);
     }
 
     if (_isRunning && _isTunRunning && !BuildCapabilities.usesPacketTunnel) {
-      return _hotSwitchTunNode(node, endpoint, newConfig);
+      return _hotSwitchTunNode(node, endpoint, newConfig, closeExisting);
     }
 
     if (BuildCapabilities.usesPacketTunnel) {
@@ -1694,6 +1716,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   Future<bool> _switchLiveNode(
     NodeInfo node,
     ProxyConfigModel newConfig,
+    bool closeExisting,
   ) async {
     if (_isTunBusy) return false;
     _isTunBusy = true;
@@ -1709,11 +1732,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         _lastError = _service.lastError ?? ProxyResult.message(result);
         return false;
       }
-      _config = newConfig;
-      _currentNodeId = node.nodeId;
-      _lastError = null;
-      await _saveConfig();
-      return true;
+      return await _commitSwitchedNode(node, newConfig, closeExisting);
     } catch (error) {
       _lastError = appStrings.failedToSwitchUpstream(error.toString());
       return false;
@@ -1723,6 +1742,28 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
       _isTunBusy = false;
       _isProxyTransitioning = false;
       _safeNotifyListeners();
+    }
+  }
+
+  Future<bool> _commitSwitchedNode(
+    NodeInfo node,
+    ProxyConfigModel config,
+    bool closeExisting,
+  ) async {
+    _config = config;
+    _currentNodeId = node.nodeId;
+    _lastError = null;
+    try {
+      if (closeExisting) {
+        final result = await _service.closeListenerSessions();
+        if (result != ProxyResult.ok) {
+          _lastError = _service.lastError ?? ProxyResult.message(result);
+          return false;
+        }
+      }
+      return true;
+    } finally {
+      await _saveConfig();
     }
   }
 
@@ -1737,6 +1778,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     NodeInfo node,
     UpstreamEndpoint endpoint,
     ProxyConfigModel newConfig,
+    bool closeExisting,
   ) async {
     if (_isTunBusy) {
       _lastError = appStrings.waitForTheCurrentTunOperationToFinish;
@@ -1813,11 +1855,12 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
 
-      _config = newConfig.copyWith(tunEnabled: true);
-      _currentNodeId = node.nodeId;
       _isTunRunning = true;
-      await _saveConfig();
-      return true;
+      return await _commitSwitchedNode(
+        node,
+        newConfig.copyWith(tunEnabled: true),
+        closeExisting,
+      );
     } finally {
       _isTunBusy = false;
       _safeNotifyListeners();
@@ -1882,6 +1925,8 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
     _logSubscription?.cancel();
     _connectionSubscription?.cancel();
     unawaited(_desktopLogService.dispose());
+    localController.dispose();
+    websiteRules.dispose();
     _service.dispose();
     unawaited(_subscriptionService?.stop() ?? Future<void>.value());
     logRevision.dispose();

@@ -1,5 +1,85 @@
 {
   "@@locale": "en",
+  "websiteRules": "Website rules",
+  "websiteRulesHint": "Send new connections to chosen websites directly or through one node. Every other website keeps your current routing.",
+  "websiteAdd": "Add rule",
+  "websiteEdit": "Edit rule",
+  "websiteRemove": "Delete rule",
+  "websiteRemoveConfirm": "Delete the rule for {site}?",
+  "@websiteRemoveConfirm": {
+    "placeholders": {
+      "site": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteRemoveHint": "New connections to this website will follow your other routing settings.",
+  "websiteEmpty": "No website rules yet",
+  "websiteEmptyHint": "Add a rule to always reach a website directly, or always through the node you pick.",
+  "websiteFilter": "Filter rules",
+  "websiteNoMatches": "No rules match this filter",
+  "websiteSite": "Website",
+  "websiteSiteHint": "example.com · *.example.com for every subdomain · add :443 for one port. Pasted URLs keep their host and port.",
+  "websiteRoute": "Route",
+  "websiteDirect": "Direct",
+  "websiteDirectHint": "Connect without a proxy",
+  "websiteNode": "Node",
+  "websiteNodeHint": "Always use this node",
+  "websiteChooseNode": "Choose a node",
+  "websiteTransport": "Transport",
+  "websiteNoNodes": "Load the node catalogue on the Nodes page to choose a node.",
+  "websiteRoutesVia": "New connections go to {address} over {transport}.",
+  "@websiteRoutesVia": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "transport": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteSubdomains": "All subdomains",
+  "websitePort": "Port {port}",
+  "@websitePort": {
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteNodeMissing": "This node is no longer in the catalogue. Connections still use the saved address.",
+  "websiteEndpointChanged": "The catalogue now lists {address}. Save the rule again to use it.",
+  "@websiteEndpointChanged": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "websiteInvalid": "Enter a domain, *.domain, IP address or http(s) URL, optionally with :port.",
+  "websiteStoreError": "Could not save website rules. Check the profile folder and the limit of 256 rules.",
+  "websiteLoadError": "Could not read the website rules file.",
+  "websiteFooter": "Rules apply to HTTP, HTTPS and SOCKS5 connections opened after a change. The most specific rule wins: an exact host beats *.domain, and a rule with a port beats one without.",
+  "localController": "Local control API",
+  "localControllerHint": "Let agents and scripts on this computer list nodes, switch the active node and edit website rules, over MCP or REST, with a bearer token.",
+  "localControllerAddress": "Address",
+  "localControllerToken": "Access token",
+  "localControllerTokenHint": "The address and token stay the same after restarts, so an agent is set up once. Keep the token out of URLs, logs and prompts.",
+  "copyControllerToken": "Copy token",
+  "showControllerToken": "Show token",
+  "hideControllerToken": "Hide token",
+  "issueControllerToken": "Issue a new token. Agents using the old one must be set up again.",
+  "issueControllerTokenConfirmTitle": "Issue a new access token?",
+  "issueControllerTokenConfirmHint": "Agents and scripts configured with the current token will lose access until updated with the new one.",
+  "issueControllerTokenAction": "Issue new token",
+  "useNewControllerPort": "Use a new port",
+  "connectAgent": "Connect an agent",
+  "connectAgentHint": "Add CipherRelay once to your agent's MCP servers. Its tools read the proxy state, switch nodes and edit website rules.",
+  "connectAgentClaudeCode": "Run in a terminal.",
+  "connectAgentCodex": "Add to ~/.codex/config.toml.",
+  "connectAgentJson": "For clients configured with JSON, such as Cursor, VS Code or a project's .mcp.json.",
+  "connectAgentCurl": "REST without MCP. GET /v1/openapi.json describes every operation.",
   "proxyOperationIsAlreadyInProgress": "Proxy operation is already in progress",
   "waitForTunSetupToFinish": "Wait for TUN setup to finish",
   "serverHostIsRequired": "Server host is required",

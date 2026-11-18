@@ -51,6 +51,38 @@ Android retains `com.proxyui.proxy_ui`, Apple direct apps retain
 `com.proxyui.proxyUi`, and the Mac App Store edition retains
 `com.proxyui.proxyUi.store`.
 
+## Website rules and local control
+
+Open **Website rules** on Windows, Linux, direct-download macOS or Android to
+send new connections for a domain or `*.domain:port` directly or through a
+particular node over TCP or QUIC. Rules persist when the app restarts.
+[Rule editor screenshot](docs/images/local-controller/website-rule-editor.png)
+
+On desktop, **Subscription → Local control API** exposes a loopback address and
+a separate bearer token, both kept across restarts. Agents connect to its MCP
+server at `http://127.0.0.1:<PORT>/mcp`; **Connect an agent** copies the setup
+below with your port and token filled in.
+
+```sh
+# Claude Code
+claude mcp add --transport http --scope user cipherrelay http://127.0.0.1:<PORT>/mcp --header "Authorization: Bearer <TOKEN>"
+```
+
+```toml
+# Codex: ~/.codex/config.toml
+[mcp_servers.cipherrelay]
+url = "http://127.0.0.1:<PORT>/mcp"
+http_headers = { Authorization = "Bearer <TOKEN>" }
+```
+
+JSON clients such as Cursor or a project's `.mcp.json` take an entry with
+`"type": "http"`, the same `url`, and the `Authorization` header under
+`headers`. Three tools — `get_proxy_state`, `switch_node` and
+`set_website_rule` — read the proxy state, switch nodes and edit website rules,
+and each returns the resulting state. Scripts can also use the REST API that
+`GET /v1/openapi.json` describes. Keep the token out of URLs, logs and prompts;
+**Issue a new token** on the card replaces it.
+
 ## App proxies
 
 The **App proxies** sidebar configures Claude natively and creates per-app

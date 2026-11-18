@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -51,6 +52,38 @@ void main() {
           },
         );
         expect(started['code'], 0);
+        final origin = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        origin.listen(
+          (request) => request.response
+            ..write('direct website')
+            ..close(),
+        );
+        final client = HttpClient()..findProxy = (_) => 'PROXY 127.0.0.1:$port';
+        try {
+          final saved = await operations.run(
+            'site_rules',
+            arguments: {
+              'directory': cache.path,
+              'action': 'set',
+              'site': '127.0.0.1:${origin.port}',
+              'target': {'action': 'direct'},
+            },
+          );
+          expect(saved['Ok']['rules'], hasLength(1));
+          final request = await client.getUrl(
+            Uri.http('127.0.0.1:${origin.port}', '/'),
+          );
+          final response = await request.close().timeout(
+            const Duration(seconds: 5),
+          );
+          expect(
+            await response.transform(utf8.decoder).join(),
+            'direct website',
+          );
+        } finally {
+          client.close(force: true);
+          await origin.close(force: true);
+        }
         final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
         socket.destroy();
         final pending = operations.run('stop', handle: handle);

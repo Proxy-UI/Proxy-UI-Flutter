@@ -2,6 +2,34 @@
 
 跨平台加密代理客户端的 Flutter 图形界面。
 
+## 网站规则与本机控制
+
+在 Windows、Linux、macOS 直装版和 Android 中打开「网站规则」，即可为域名或
+`*.example.com:443` 指定直连，或选择节点及其 TCP、QUIC 端口。保存后对新连接生效，
+重启后仍然保留。[查看编辑界面](docs/images/local-controller/website-rule-editor.png)
+
+桌面端可在「订阅 → 本机控制 API」开启服务，地址和令牌在重启后保持不变。智能体通过
+`http://127.0.0.1:<PORT>/mcp` 连接其 MCP 服务器；「连接智能体」会复制下面的配置，并自动
+填好端口和令牌。
+
+```sh
+# Claude Code
+claude mcp add --transport http --scope user cipherrelay http://127.0.0.1:<PORT>/mcp --header "Authorization: Bearer <TOKEN>"
+```
+
+```toml
+# Codex：~/.codex/config.toml
+[mcp_servers.cipherrelay]
+url = "http://127.0.0.1:<PORT>/mcp"
+http_headers = { Authorization = "Bearer <TOKEN>" }
+```
+
+Cursor 或项目中的 `.mcp.json` 等 JSON 客户端，使用 `"type": "http"`、相同的 `url`，并在
+`headers` 中加入 `Authorization` 请求头。`get_proxy_state`、`switch_node` 和
+`set_website_rule` 三个工具分别用于读取代理状态、切换节点和编辑网站规则，每次调用都会返回
+最新状态。脚本也可以使用 `GET /v1/openapi.json` 描述的 REST 接口。请勿将令牌写入网址、
+日志或提示词；卡片上的「重新生成令牌」可以替换它。
+
 ## macOS 两个版本
 
 CipherRelay（密流）是 Proxy UI 的新名称。直装版继续生成 `CipherRelay.app`，
