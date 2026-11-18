@@ -1752,6 +1752,7 @@ class ProxyState extends ChangeNotifier with WidgetsBindingObserver {
   ) async {
     _config = config;
     _currentNodeId = node.nodeId;
+    _lastError = null;
     try {
       if (closeExisting) {
         final result = await _service.closeListenerSessions();

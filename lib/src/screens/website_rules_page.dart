@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proxy_ui/l10n/app_language.dart';
 
+import '../models/country_atlas.dart';
 import '../models/node_model.dart';
 import '../models/upstream_endpoint.dart';
 import '../models/website_rule.dart';
@@ -41,13 +42,16 @@ class _WebsiteRulesPageState extends State<WebsiteRulesPage> {
     super.dispose();
   }
 
-  Future<void> _edit([WebsiteRule? rule]) => showDialog<void>(
-    context: context,
-    builder: (_) => ChangeNotifierProvider.value(
-      value: context.read<ProxyState>(),
-      child: _RuleEditor(rule: rule),
-    ),
-  );
+  Future<void> _edit([WebsiteRule? rule]) {
+    final state = context.read<ProxyState>();
+    return showDialog<void>(
+      context: context,
+      builder: (_) => ChangeNotifierProvider.value(
+        value: state,
+        child: _RuleEditor(rule: rule),
+      ),
+    );
+  }
 
   Future<void> _remove(WebsiteRule rule) async {
     final strings = context.l10n;
@@ -86,6 +90,7 @@ class _WebsiteRulesPageState extends State<WebsiteRulesPage> {
   Widget build(BuildContext context) {
     final state = context.watch<ProxyState>();
     final strings = context.l10n;
+    final language = Localizations.localeOf(context).languageCode;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return ListenableBuilder(
@@ -95,7 +100,9 @@ class _WebsiteRulesPageState extends State<WebsiteRulesPage> {
         final query = _filter.text.trim().toLowerCase();
         final shown = [
           for (final rule in store.rules)
-            if (query.isEmpty || _matches(rule, query)) rule,
+            if (query.isEmpty ||
+                _matches(rule, query, state, language, strings))
+              rule,
         ];
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
@@ -105,36 +112,50 @@ class _WebsiteRulesPageState extends State<WebsiteRulesPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.websiteRules,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              strings.websiteRulesHint,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      FilledButton.icon(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final addButton = FilledButton.icon(
                         onPressed: store.isBusy ? null : () => _edit(),
                         icon: const Icon(Icons.add),
                         label: Text(strings.websiteAdd),
-                      ),
-                    ],
+                      );
+                      final heading = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            strings.websiteRules,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            strings.websiteRulesHint,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      );
+                      if (constraints.maxWidth < 420) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            heading,
+                            const SizedBox(height: 12),
+                            addButton,
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: heading),
+                          const SizedBox(width: 16),
+                          addButton,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 20),
                   if (store.loadError != null)
@@ -152,6 +173,12 @@ class _WebsiteRulesPageState extends State<WebsiteRulesPage> {
                         controller: _filter,
                         decoration: InputDecoration(
                           prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _filter.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: _filter.clear,
+                                ),
                           hintText: strings.websiteFilter,
                           isDense: true,
                         ),
@@ -216,14 +243,34 @@ class _WebsiteRulesPageState extends State<WebsiteRulesPage> {
     );
   }
 
-  static bool _matches(WebsiteRule rule, String query) =>
-      rule.site.toLowerCase().contains(query) ||
-      switch (rule.target) {
-        DirectTarget() => false,
-        NodeTarget(:final nodeId, :final endpoint) =>
-          nodeId.toLowerCase().contains(query) ||
-              endpoint.host.toLowerCase().contains(query),
-      };
+  static bool _matches(
+    WebsiteRule rule,
+    String query,
+    ProxyState state,
+    String language,
+    AppLocalizations strings,
+  ) {
+    if (rule.site.toLowerCase().contains(query)) return true;
+    return switch (rule.target) {
+      DirectTarget() =>
+        'direct'.contains(query) ||
+            strings.websiteDirect.toLowerCase().contains(query),
+      NodeTarget(:final nodeId, :final endpoint) => () {
+        if (nodeId.toLowerCase().contains(query) ||
+            endpoint.address.toLowerCase().contains(query) ||
+            endpoint.transport.name.contains(query)) {
+          return true;
+        }
+        final node = state.nodes.where((n) => n.nodeId == nodeId).firstOrNull;
+        if (node == null) return false;
+        final code = state.effectiveCountry(node);
+        return code.toLowerCase().contains(query) ||
+            node.region.toLowerCase().contains(query) ||
+            (code.isNotEmpty &&
+                countryName(code, language).toLowerCase().contains(query));
+      }(),
+    };
+  }
 }
 
 class _RuleRow extends StatelessWidget {
@@ -243,6 +290,7 @@ class _RuleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<ProxyState>();
     final strings = context.l10n;
+    final language = Localizations.localeOf(context).languageCode;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final target = rule.target;
@@ -301,15 +349,7 @@ class _RuleRow extends StatelessWidget {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          switch (target) {
-                            DirectTarget() => strings.websiteDirect,
-                            // A node's ID is often its own TCP address.
-                            NodeTarget(:final nodeId, :final endpoint) => [
-                              nodeId,
-                              endpoint.transport.label,
-                              if (endpoint.address != nodeId) endpoint.address,
-                            ].join(' · '),
-                          },
+                          _routeSummary(state, language, strings, target, node),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium?.copyWith(
@@ -318,32 +358,77 @@ class _RuleRow extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (warning != null) ...[
+                      if (target case NodeTarget(:final endpoint)
+                          when endpoint.isQuic) ...[
                         const SizedBox(width: 6),
-                        Tooltip(
-                          message: warning,
-                          child: Icon(
-                            Icons.warning_amber_rounded,
-                            size: 18,
-                            color: scheme.error,
-                          ),
-                        ),
+                        ProtocolTag(endpoint.transport.label),
                       ],
                     ],
                   ),
+                  if (warning != null) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 16,
+                          color: scheme.error,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            warning,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
             IconButton(
+              tooltip: strings.websiteEdit,
+              onPressed: enabled ? onEdit : null,
+              icon: const Icon(Icons.edit_outlined, size: 20),
+            ),
+            IconButton(
               tooltip: strings.websiteRemove,
               onPressed: enabled ? onRemove : null,
-              icon: const Icon(Icons.delete_outline),
+              icon: const Icon(Icons.delete_outline, size: 20),
             ),
           ],
         ),
       ),
     );
   }
+
+  /// Avoids printing two `host:port` addresses side by side when `nodeId` is
+  /// itself the node's TCP address while the rule uses its QUIC port.
+  static String _routeSummary(
+    ProxyState state,
+    String language,
+    AppLocalizations strings,
+    RuleTarget target,
+    NodeInfo? node,
+  ) => switch (target) {
+    DirectTarget() => strings.websiteDirect,
+    NodeTarget(:final nodeId, :final endpoint) => () {
+      final code = node == null ? '' : state.effectiveCountry(node);
+      final place = code.isEmpty ? '' : countryName(code, language);
+      final idHost = UpstreamEndpoint.tryParse(nodeId)?.host.toLowerCase();
+      final customId = idHost != endpoint.host.toLowerCase();
+      return [
+        if (place.isNotEmpty) place,
+        if (customId) nodeId,
+        endpoint.address,
+        if (!endpoint.isQuic) endpoint.transport.label,
+      ].join(' · ');
+    }(),
+  };
 
   /// Why a node rule may no longer go where the catalogue says, if it may.
   /// Says nothing while the catalogue is not loaded or a port is unknown.
@@ -545,6 +630,47 @@ class _RuleEditorState extends State<_RuleEditor> {
 
   bool get _editing => widget.rule != null;
 
+  bool get _coversSubdomains {
+    final text = _site.text.trim();
+    final afterScheme = switch (text.indexOf('://')) {
+      -1 => text,
+      final index => text.substring(index + 3),
+    };
+    return afterScheme.startsWith('*.');
+  }
+
+  void _toggleSubdomains(bool enabled) {
+    final trimmed = _site.text.trim();
+    String updated;
+    if (trimmed.isEmpty) {
+      updated = enabled ? '*.' : '';
+    } else if (trimmed.indexOf('://') case final schemeIndex
+        when schemeIndex >= 0) {
+      final prefix = trimmed.substring(0, schemeIndex + 3);
+      final rest = trimmed.substring(schemeIndex + 3);
+      if (enabled && !rest.startsWith('*.')) {
+        updated = '$prefix*.$rest';
+      } else if (!enabled && rest.startsWith('*.')) {
+        updated = '$prefix${rest.substring(2)}';
+      } else {
+        updated = trimmed;
+      }
+    } else if (enabled && !trimmed.startsWith('*.')) {
+      updated = '*.$trimmed';
+    } else if (!enabled && trimmed.startsWith('*.')) {
+      updated = trimmed.substring(2);
+    } else {
+      updated = trimmed;
+    }
+    setState(() {
+      _site.value = TextEditingValue(
+        text: updated,
+        selection: TextSelection.collapsed(offset: updated.length),
+      );
+      if (_error == WebsiteRuleError.invalidRule) _error = null;
+    });
+  }
+
   @override
   void dispose() {
     _site.dispose();
@@ -559,6 +685,7 @@ class _RuleEditorState extends State<_RuleEditor> {
     final error = await context.read<ProxyState>().websiteRules.save(
       _site.text.trim(),
       target,
+      previous: widget.rule?.site,
     );
     if (!mounted) return;
     if (error == null) {
@@ -574,6 +701,7 @@ class _RuleEditorState extends State<_RuleEditor> {
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n;
+    final language = Localizations.localeOf(context).languageCode;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final state = context.watch<ProxyState>();
@@ -594,182 +722,260 @@ class _RuleEditorState extends State<_RuleEditor> {
         node.nodeId,
         endpoint,
       ),
-      _Route.node => null,
+      _Route.node => switch (widget.rule?.target) {
+        final NodeTarget pinned when pinned.nodeId == _nodeId => pinned,
+        _ => null,
+      },
     };
-    final canSave = !_saving && _site.text.trim().isNotEmpty && target != null;
-    return AlertDialog(
-      title: Text(_editing ? strings.websiteEdit : strings.websiteAdd),
-      scrollable: true,
-      content: SizedBox(
-        width: 480,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _site,
-              autofocus: !_editing,
-              readOnly: _editing,
-              enabled: !_saving,
-              onChanged: (_) => setState(() {
-                if (_error == WebsiteRuleError.invalidRule) _error = null;
-              }),
-              onSubmitted: canSave ? (_) => _save(target) : null,
-              decoration: InputDecoration(
-                labelText: strings.websiteSite,
-                hintText: '*.example.com:443',
-                prefixIcon: const Icon(Icons.language),
-                helperText: _editing ? null : strings.websiteSiteHint,
-                helperMaxLines: 3,
-                errorText: _error == WebsiteRuleError.invalidRule
-                    ? strings.websiteInvalid
-                    : null,
-                errorMaxLines: 3,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(strings.websiteRoute, style: theme.textTheme.labelLarge),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _RouteOption(
-                    icon: Icons.near_me_outlined,
-                    title: strings.websiteDirect,
-                    subtitle: strings.websiteDirectHint,
-                    selected: _route == _Route.direct,
-                    onTap: _saving
-                        ? null
-                        : () => setState(() => _route = _Route.direct),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _RouteOption(
-                    icon: Icons.hub_outlined,
-                    title: strings.websiteNode,
-                    subtitle: strings.websiteNodeHint,
-                    selected: _route == _Route.node,
-                    onTap: _saving
-                        ? null
-                        : () => setState(() => _route = _Route.node),
-                  ),
-                ),
-              ],
-            ),
-            if (_route == _Route.node) ...[
-              const SizedBox(height: 20),
-              if (nodes.isEmpty)
-                Text(
-                  strings.websiteNoNodes,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                )
-              else ...[
-                DropdownMenu<String>(
-                  initialSelection: node?.nodeId,
-                  enabled: !_saving,
-                  expandedInsets: EdgeInsets.zero,
-                  enableFilter: true,
-                  requestFocusOnTap: true,
-                  menuHeight: 320,
-                  label: Text(strings.websiteChooseNode),
-                  leadingIcon: node == null
-                      ? const Icon(Icons.hub_outlined)
-                      : Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: CountryFlagBadge(
-                            code: state.effectiveCountry(node),
-                            size: 22,
-                          ),
-                        ),
-                  dropdownMenuEntries: [
-                    for (final n in nodes)
-                      DropdownMenuEntry(
-                        value: n.nodeId,
-                        label: n.nodeId,
-                        leadingIcon: CountryFlagBadge(
-                          code: state.effectiveCountry(n),
-                          size: 20,
-                        ),
-                      ),
-                  ],
-                  onSelected: (id) => setState(() {
-                    _nodeId = id;
-                    _transport = null;
-                  }),
-                ),
-                if (endpoints.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    strings.websiteTransport,
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final e in endpoints)
-                        ChoiceChip(
-                          label: Text('${e.transport.label} · ${e.port}'),
-                          selected: e.transport == endpoint?.transport,
-                          onSelected: _saving
-                              ? null
-                              : (_) => setState(() => _transport = e.transport),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ],
-            if (target case NodeTarget(:final endpoint)) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Icon(Icons.route, size: 18, color: scheme.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      strings.websiteRoutesVia(
-                        endpoint.address,
-                        endpoint.transport.label,
-                      ),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (_error == WebsiteRuleError.storage) ...[
-              const SizedBox(height: 16),
-              Text(
-                strings.websiteStoreError,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.error,
-                ),
-              ),
-            ],
-          ],
+    final compactDialog = MediaQuery.sizeOf(context).width < 460;
+    final directOption = _RouteOption(
+      icon: Icons.near_me_outlined,
+      title: strings.websiteDirect,
+      subtitle: strings.websiteDirectHint,
+      selected: _route == _Route.direct,
+      onTap: _saving ? null : () => setState(() => _route = _Route.direct),
+    );
+    final nodeOption = _RouteOption(
+      icon: Icons.hub_outlined,
+      title: strings.websiteNode,
+      subtitle: strings.websiteNodeHint,
+      selected: _route == _Route.node,
+      onTap: _saving ? null : () => setState(() => _route = _Route.node),
+    );
+    final siteText = _site.text.trim();
+    final canSave =
+        !_saving && siteText.isNotEmpty && siteText != '*.' && target != null;
+    final inputFill = scheme.brightness == Brightness.dark
+        ? scheme.surfaceContainer
+        : scheme.surfaceContainerLowest;
+    final dialogTheme = theme.copyWith(
+      inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: inputFill,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          child: Text(strings.cancel),
-        ),
-        FilledButton(
-          onPressed: canSave ? () => _save(target) : null,
-          child: _saving
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+    );
+    return Theme(
+      data: dialogTheme,
+      child: AlertDialog(
+        title: Text(_editing ? strings.websiteEdit : strings.websiteAdd),
+        scrollable: true,
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _site,
+                autofocus: !_editing,
+                enabled: !_saving,
+                onChanged: (_) => setState(() {
+                  if (_error == WebsiteRuleError.invalidRule) _error = null;
+                }),
+                onSubmitted: canSave ? (_) => _save(target) : null,
+                decoration: InputDecoration(
+                  labelText: strings.websiteSite,
+                  hintText: '*.example.com:443',
+                  prefixIcon: const Icon(Icons.language),
+                  helperText: strings.websiteSiteHint,
+                  helperMaxLines: 3,
+                  errorText: _error == WebsiteRuleError.invalidRule
+                      ? strings.websiteInvalid
+                      : null,
+                  errorMaxLines: 3,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilterChip(
+                  label: Text('*. ${strings.websiteSubdomains}'),
+                  selected: _coversSubdomains,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: _saving ? null : _toggleSubdomains,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(strings.websiteRoute, style: theme.textTheme.labelLarge),
+              const SizedBox(height: 8),
+              if (compactDialog)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    directOption,
+                    const SizedBox(height: 10),
+                    nodeOption,
+                  ],
                 )
-              : Text(strings.save),
+              else
+                Row(
+                  children: [
+                    Expanded(child: directOption),
+                    const SizedBox(width: 12),
+                    Expanded(child: nodeOption),
+                  ],
+                ),
+              if (_route == _Route.node) ...[
+                const SizedBox(height: 20),
+                if (nodes.isEmpty)
+                  Text(
+                    strings.websiteNoNodes,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  )
+                else ...[
+                  DropdownMenu<String>(
+                    initialSelection: node?.nodeId,
+                    enabled: !_saving,
+                    expandedInsets: EdgeInsets.zero,
+                    enableFilter: true,
+                    requestFocusOnTap: true,
+                    menuHeight: 320,
+                    label: Text(strings.websiteChooseNode),
+                    leadingIcon: node == null
+                        ? const Icon(Icons.hub_outlined)
+                        : Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: CountryFlagBadge(
+                              code: state.effectiveCountry(node),
+                              size: 22,
+                            ),
+                          ),
+                    dropdownMenuEntries: [
+                      for (final n in nodes)
+                        DropdownMenuEntry(
+                          value: n.nodeId,
+                          label: n.nodeId,
+                          leadingIcon: CountryFlagBadge(
+                            code: state.effectiveCountry(n),
+                            size: 20,
+                          ),
+                          trailingIcon: _NodeEntryMeta(
+                            country: state.effectiveCountry(n),
+                            language: language,
+                            hasQuic: state.endpointsOf(n).any((e) => e.isQuic),
+                          ),
+                        ),
+                    ],
+                    onSelected: (id) => setState(() {
+                      _nodeId = id;
+                      _transport = null;
+                    }),
+                  ),
+                  if (endpoints.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      strings.websiteTransport,
+                      style: theme.textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final e in endpoints)
+                          ChoiceChip(
+                            label: Text('${e.transport.label} · ${e.port}'),
+                            selected: e.transport == endpoint?.transport,
+                            onSelected: _saving
+                                ? null
+                                : (_) =>
+                                      setState(() => _transport = e.transport),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ],
+              if (target case NodeTarget(:final endpoint)) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(Icons.route, size: 18, color: scheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        strings.websiteRoutesVia(
+                          endpoint.address,
+                          endpoint.transport.label,
+                        ),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (_error == WebsiteRuleError.storage) ...[
+                const SizedBox(height: 16),
+                Text(
+                  strings.websiteStoreError,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.error,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.pop(context),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: canSave ? () => _save(target) : null,
+            child: _saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(strings.save),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NodeEntryMeta extends StatelessWidget {
+  const _NodeEntryMeta({
+    required this.country,
+    required this.language,
+    required this.hasQuic,
+  });
+
+  final String country;
+  final String language;
+  final bool hasQuic;
+
+  @override
+  Widget build(BuildContext context) {
+    final place = country.isEmpty ? '' : countryName(country, language);
+    if (place.isEmpty && !hasQuic) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (place.isNotEmpty)
+          Text(
+            place,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        if (place.isNotEmpty && hasQuic) const SizedBox(width: 6),
+        if (hasQuic) ProtocolTag(UpstreamTransport.quic.label),
       ],
     );
   }

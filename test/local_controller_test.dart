@@ -184,6 +184,15 @@ void main() {
         final mcpState = called['result']['structuredContent'] as Map;
         expect(mcpState['active']['node_id'], next.nodeId);
         expect(state.websiteRules.rules.single.site, 'mcp.example');
+        expect(
+          await state.websiteRules.save(
+            '*.mcp.example',
+            const DirectTarget(),
+            previous: 'mcp.example',
+          ),
+          isNull,
+        );
+        expect(state.websiteRules.rules.single.site, '*.mcp.example');
 
         // Restarting keeps the address and token an agent was set up with.
         final (url, token) = (controller.url, controller.token!);

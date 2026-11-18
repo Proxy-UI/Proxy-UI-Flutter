@@ -22,10 +22,14 @@ class _Rules extends FakeProxyService {
   Future<Map<String, dynamic>> websiteRules(Map<String, Object?> change) async {
     changes.add(change);
     final site = change['site'] as String?;
+    final previous = change['previous'] as String?;
     switch (change['action']) {
       case 'set' when site == 'not a site':
         return {'Err': 'invalid_rule'};
       case 'set':
+        if (previous != null && previous != site) {
+          rules.remove(previous);
+        }
         rules[site!] = {'site': site, 'target': change['target']};
       case 'remove':
         rules.remove(site);
@@ -112,6 +116,21 @@ void main() {
       },
     });
     expect(find.text('Port 443'), findsOneWidget);
+    expect(
+      find.textContaining('Hong Kong · 198.51.100.25:10811'),
+      findsOneWidget,
+    );
+
+    // Editing a rule can rename its site and toggle subdomain scope atomically.
+    await tester.tap(find.byTooltip('Edit rule'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, '*. All subdomains'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(service.changes.last['previous'], '*.example.org:443');
+    expect(service.changes.last['site'], 'example.org:443');
+    expect(service.rules.keys.single, 'example.org:443');
 
     await tester.tap(find.byTooltip('Delete rule'));
     await tester.pumpAndSettle();
@@ -120,4 +139,54 @@ void main() {
     expect(service.rules, isEmpty);
     expect(find.text('No website rules yet'), findsOneWidget);
   });
+
+  testWidgets(
+    'compact mobile layout and inline staleness warning render cleanly',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final service = _Rules()
+        ..rules['media.example.tv'] = {
+          'site': 'media.example.tv',
+          'target': {
+            'action': 'node',
+            'node_id': '198.51.100.25:1081',
+            'host': '198.51.100.25',
+            'port': 2000,
+            'transport': 'tcp',
+          },
+        };
+      late ProxyState state;
+      await tester.runAsync(() async {
+        state = ProxyState(service: service);
+        while (!state.isInitialized) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+      });
+      addTearDown(state.dispose);
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: state,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: buildAppTheme(Colors.indigo, Brightness.dark),
+            home: const Scaffold(body: WebsiteRulesPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        find.textContaining('The catalogue now lists 198.51.100.25:1081.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Add rule'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

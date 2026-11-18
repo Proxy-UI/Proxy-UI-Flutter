@@ -328,6 +328,32 @@ class _LocalControllerCardState extends State<_LocalControllerCard> {
     ToastUtils.showInfo(message);
   }
 
+  Future<void> _confirmIssueNewToken(LocalController controller) async {
+    final strings = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.autorenew),
+        title: Text(strings.issueControllerTokenConfirmTitle),
+        content: Text(strings.issueControllerTokenConfirmHint),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(strings.issueControllerTokenAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      setState(() => _revealToken = false);
+      await controller.issueNewToken();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n;
@@ -466,23 +492,20 @@ class _LocalControllerCardState extends State<_LocalControllerCard> {
                         icon: const Icon(Icons.autorenew, size: 20),
                         onPressed: controller.busy
                             ? null
-                            : controller.issueNewToken,
+                            : () => _confirmIssueNewToken(controller),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          strings.localControllerTokenHint,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final hint = Text(
+                        strings.localControllerTokenHint,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton.tonalIcon(
+                      );
+                      final connectButton = FilledButton.tonalIcon(
                         icon: const Icon(Icons.smart_toy_outlined, size: 18),
                         label: Text(strings.connectAgent),
                         onPressed: () => showDialog<void>(
@@ -490,8 +513,28 @@ class _LocalControllerCardState extends State<_LocalControllerCard> {
                           builder: (_) =>
                               _ConnectAgentDialog(url: url, token: token),
                         ),
-                      ),
-                    ],
+                      );
+                      if (constraints.maxWidth < 460) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            hint,
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: connectButton,
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: hint),
+                          const SizedBox(width: 12),
+                          connectButton,
+                        ],
+                      );
+                    },
                   ),
                 ],
               ],
@@ -541,15 +584,18 @@ class _ConnectAgentDialogState extends State<_ConnectAgentDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            SegmentedButton<AgentSetup>(
-              segments: [
-                for (final setup in AgentSetup.values)
-                  ButtonSegment(value: setup, label: Text(setup.label)),
-              ],
-              selected: {_setup},
-              showSelectedIcon: false,
-              onSelectionChanged: (selected) =>
-                  setState(() => _setup = selected.first),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<AgentSetup>(
+                segments: [
+                  for (final setup in AgentSetup.values)
+                    ButtonSegment(value: setup, label: Text(setup.label)),
+                ],
+                selected: {_setup},
+                showSelectedIcon: false,
+                onSelectionChanged: (selected) =>
+                    setState(() => _setup = selected.first),
+              ),
             ),
             const SizedBox(height: 12),
             Text(
@@ -569,8 +615,9 @@ class _ConnectAgentDialogState extends State<_ConnectAgentDialog> {
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.outlineVariant),
               ),
-              child: Text(
+              child: SelectableText(
                 shown,
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontFamily: 'monospace',

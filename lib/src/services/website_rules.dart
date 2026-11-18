@@ -41,9 +41,18 @@ class WebsiteRules extends ChangeNotifier {
     _notify();
   }
 
-  /// Add or replace the rule for [site]. Returns null once saved.
-  Future<WebsiteRuleError?> save(String site, RuleTarget target) =>
-      _apply({'action': 'set', 'site': site, 'target': target.toJson()});
+  /// Add or replace the rule for [site], optionally renaming [previous]
+  /// atomically. Returns null once saved.
+  Future<WebsiteRuleError?> save(
+    String site,
+    RuleTarget target, {
+    String? previous,
+  }) => _apply({
+    'action': 'set',
+    if (previous != null && previous != site) 'previous': previous,
+    'site': site,
+    'target': target.toJson(),
+  });
 
   Future<WebsiteRuleError?> remove(String site) =>
       _apply({'action': 'remove', 'site': site});

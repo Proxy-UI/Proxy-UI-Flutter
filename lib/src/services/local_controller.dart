@@ -110,6 +110,7 @@ class LocalController extends ChangeNotifier {
   /// Start on a free port when the saved one is taken. Agents need the new
   /// address.
   Future<void> useNewPort() async {
+    if (_busy || running || _disposed || !supported) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_portKey);
     await start();
@@ -117,15 +118,38 @@ class LocalController extends ChangeNotifier {
 
   /// Replace the token. Agents configured with the old one stop working.
   Future<void> issueNewToken() async {
-    if (_busy) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, _newToken());
-    if (running) {
-      await _halt();
-      await start();
-    } else {
-      _notify();
+    if (_busy || _disposed || !supported) return;
+    _setBusy(true, clearError: true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = _newToken();
+      await prefs.setString(_tokenKey, token);
+      final previousId = _id;
+      if (previousId != null) {
+        final port = _port ?? prefs.getInt(_portKey) ?? 0;
+        await _service.localController({'action': 'stop', 'id': previousId});
+        _forget(previousId);
+        if (_disposed) return;
+        final started = await _service.localController({
+          'action': 'start',
+          'port': port,
+          'token': token,
+        });
+        final id = started['id'] as int;
+        final boundPort = started['port'] as int;
+        _id = id;
+        _port = boundPort;
+        _token = token;
+        await prefs.setInt(_portKey, boundPort);
+        await prefs.setBool(_enabledKey, true);
+        unawaited(_serve(id));
+      }
+    } catch (error) {
+      _error = _message(error);
+    } finally {
+      _setBusy(false);
     }
+    if (_disposed) await _halt();
   }
 
   static String _newToken() {
