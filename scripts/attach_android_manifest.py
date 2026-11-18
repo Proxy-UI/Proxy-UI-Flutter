@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add already locally built APKs to a verified desktop update manifest.
+"""Verify signed APKs and add them to a desktop update manifest.
 
 This tool does not build or sign APKs. Verify the existing manifest signature
 before calling it, then sign the resulting manifest with the update key.
@@ -10,6 +10,9 @@ import json
 from pathlib import Path
 import re
 import subprocess
+from zipfile import ZipFile
+
+from release_artifact_name import app_version
 
 CERTIFICATE = '5ac9aa7c2a99b410864e7e88b4ec9a28771ddadf69c620a9b18b8dd66ac8305c'
 ABI_OFFSETS = {'armeabi-v7a': 1000, 'arm64-v8a': 2000, 'x86_64': 4000}
@@ -33,8 +36,32 @@ def apk_metadata(badging, signing, version, build, abi):
             'certificate_sha256': CERTIFICATE}
 
 
+def apk_names(version, build):
+    return {f'cipherrelay-v{version}-{build}-android-{abi}.apk': abi for abi in ABI_OFFSETS}
+
+
+def inspect_apk(path, tools, version, build, abi):
+    badging = subprocess.check_output([str(tools / 'aapt'), 'dump', 'badging', str(path)], text=True)
+    signing = subprocess.check_output([str(tools / 'apksigner'), 'verify', '--print-certs', str(path)], text=True)
+    metadata = apk_metadata(badging, signing, version, build, abi)
+    with ZipFile(path) as archive:
+        if archive.getinfo(f'lib/{abi}/libhttp_proxy.so').file_size == 0:
+            raise ValueError(f'APK contains an empty native proxy library: {path.name}')
+    return {'name': path.name, 'size': path.stat().st_size, 'sha256': digest(path), **metadata}
+
+
+def verify_apks(directory, tools):
+    version, build = app_version()
+    expected = apk_names(version, build)
+    if {path.name for path in directory.glob('*.apk')} != set(expected):
+        raise ValueError('Expected exactly the three split APKs for this build')
+    for name, abi in expected.items():
+        print(json.dumps(inspect_apk(directory / name, tools, version, build, abi)))
+
+
 def attach(directory, tools, source_commit, *, android_build=None,
-           android_source_commit=None, android_native_source_commit=None):
+           android_source_commit=None, android_native_source_commit=None,
+           build_environment='maintainer-local'):
     manifest_path = directory / 'release-manifest.json'
     manifest = json.loads(manifest_path.read_text())
     if manifest['source_commit'] != source_commit:
@@ -55,21 +82,17 @@ def attach(directory, tools, source_commit, *, android_build=None,
         path = directory / asset['name']
         if path.stat().st_size != asset['size'] or digest(path) != asset['sha256']:
             raise ValueError(f'Existing asset checksum differs: {path.name}')
-    expected = {f'cipherrelay-v{version}-{build}-android-{abi}.apk': abi for abi in ABI_OFFSETS}
+    expected = apk_names(version, build)
     # Old APKs stay available until the replacement manifest has been signed
     # and published, so readers of the previous manifest can finish downloads.
     allowed = set(expected) | ({a['name'] for a in previous_android} if hotfix else set())
     if {path.name for path in directory.glob('*.apk')} != allowed:
-        raise ValueError('Expected exactly the three local split APKs for this release')
+        raise ValueError('Expected exactly the three split APKs for this release')
     entries = [asset for asset in manifest['assets'] if asset.get('platform') != 'android']
     for name, abi in sorted(expected.items()):
-        path = directory / name
-        badging = subprocess.check_output([str(tools / 'aapt'), 'dump', 'badging', str(path)], text=True)
-        signing = subprocess.check_output([str(tools / 'apksigner'), 'verify', '--print-certs', str(path)], text=True)
-        metadata = apk_metadata(badging, signing, version, build, abi)
-        entries.append({'name': name, 'size': path.stat().st_size, 'sha256': digest(path), **metadata})
+        entries.append(inspect_apk(directory / name, tools, version, build, abi))
     manifest['assets'] = sorted(entries, key=lambda asset: asset['name'])
-    manifest['android_build_environment'] = 'maintainer-local'
+    manifest['android_build_environment'] = build_environment
     if hotfix:
         # The release build/source still describe the unchanged desktop files.
         manifest['android_build'] = build
@@ -83,12 +106,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('build_tools', type=Path)
-    parser.add_argument('source_commit')
+    parser.add_argument('source_commit', nargs='?')
+    parser.add_argument('--verify-apks', action='store_true')
+    parser.add_argument('--build-environment', choices=['maintainer-local', 'github-actions'],
+                        default='maintainer-local')
     parser.add_argument('--android-build', type=int)
     parser.add_argument('--android-source-commit')
     parser.add_argument('--android-native-source-commit')
     args = parser.parse_args()
-    attach(args.directory, args.build_tools, args.source_commit,
-           android_build=args.android_build,
-           android_source_commit=args.android_source_commit,
-           android_native_source_commit=args.android_native_source_commit)
+    if args.verify_apks:
+        verify_apks(args.directory, args.build_tools)
+    else:
+        if args.source_commit is None:
+            parser.error('source_commit is required when updating the manifest')
+        attach(args.directory, args.build_tools, args.source_commit,
+               android_build=args.android_build,
+               android_source_commit=args.android_source_commit,
+               android_native_source_commit=args.android_native_source_commit,
+               build_environment=args.build_environment)

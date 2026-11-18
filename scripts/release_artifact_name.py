@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 
-def artifact_name(platform, architecture, extension):
+def app_version():
     pubspec = Path(__file__).resolve().parents[1] / "pubspec.yaml"
     version = re.search(
         r"(?m)^version:\s*(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)\+(\d+)\s*$",
@@ -14,7 +14,12 @@ def artifact_name(platform, architecture, extension):
     )
     if version is None:
         raise ValueError("pubspec.yaml must declare a version and build number")
-    return f"cipherrelay-v{version[1]}-{version[2]}-{platform}-{architecture}.{extension}"
+    return version[1], int(version[2])
+
+
+def artifact_name(platform, architecture, extension):
+    version, build = app_version()
+    return f"cipherrelay-v{version}-{build}-{platform}-{architecture}.{extension}"
 
 
 if __name__ == "__main__":
