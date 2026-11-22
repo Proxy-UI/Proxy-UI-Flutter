@@ -173,6 +173,7 @@ void main() {
       expect(config.containsKey('setSystemProxy'), isFalse);
       expect(config.containsKey('allowLan'), isFalse);
       expect(config.containsKey('tunBypassProcesses'), isFalse);
+      expect(config.containsKey('tunDnsServer'), isFalse);
       pendingStart!.complete();
       expect(await starting, ProxyResult.ok);
       expect(service.isTunRunning, isTrue);
