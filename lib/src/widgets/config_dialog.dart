@@ -214,7 +214,8 @@ class _ConfigDialogState extends State<ConfigDialog> {
     final state = context.read<ProxyState>();
     final serverPort = int.tryParse(_serverPortController.text);
     final localPort = int.tryParse(_localPortController.text);
-    if (InternetAddress.tryParse(_tunDnsController.text.trim()) == null) {
+    final dns = _tunDnsController.text.trim();
+    if (dns.isNotEmpty && InternetAddress.tryParse(dns) == null) {
       ToastUtils.showError(context.l10n.invalidTunDnsServer);
       return;
     }
@@ -485,6 +486,7 @@ class _ConfigDialogState extends State<ConfigDialog> {
                           enabled: !_tunFakeIp,
                           decoration: InputDecoration(
                             labelText: context.l10n.tunDnsServer,
+                            hintText: '1.1.1.1',
                             helperText: context.l10n.tunDnsServerDescription,
                             helperMaxLines: 3,
                           ),

@@ -23,7 +23,11 @@ void main() {
     }
   });
   test('TUN resolver persists across imports and copies', () {
-    expect(ProxyConfigModel.fromJson({}).tunDnsServer, '223.5.5.5');
+    expect(ProxyConfigModel.fromJson({}).tunDnsServer, isEmpty);
+    expect(
+      ProxyConfigModel.fromJson({'tunDnsServer': '223.5.5.5'}).tunDnsServer,
+      '223.5.5.5',
+    );
     final config = ProxyConfigModel.fromJson({'tunDnsServer': ' 10.20.30.53 '});
     expect(config.tunDnsServer, '10.20.30.53');
     expect(

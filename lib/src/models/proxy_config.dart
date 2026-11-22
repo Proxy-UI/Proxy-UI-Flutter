@@ -31,6 +31,8 @@ class ProxyConfigModel {
   bool udpDirectFallback;
   bool tunEnabled;
   bool tunFakeIp;
+
+  /// Empty means use the native default for proxied TUN DNS.
   String tunDnsServer;
   List<String> tunBypassProcesses;
   bool tunBypassWeGame;
@@ -55,7 +57,7 @@ class ProxyConfigModel {
     bool? udpDirectFallback,
     this.tunEnabled = false,
     bool? tunFakeIp,
-    this.tunDnsServer = '223.5.5.5',
+    this.tunDnsServer = '',
     List<String> tunBypassProcesses = const [],
     bool? tunBypassWeGame,
     this.androidVpnRoutingMode = AndroidVpnRoutingMode.all,
@@ -145,7 +147,7 @@ class ProxyConfigModel {
         // routes after an application upgrade.
         tunEnabled: _parseBool(json['tunEnabled'], false),
         tunFakeIp: _parseBool(json['tunFakeIp'], BuildCapabilities.isIOS),
-        tunDnsServer: (json['tunDnsServer'] ?? '223.5.5.5').toString().trim(),
+        tunDnsServer: (json['tunDnsServer'] ?? '').toString().trim(),
         tunBypassProcesses: _parseStringList(json['tunBypassProcesses']),
         tunBypassWeGame: _parseBool(
           json['tunBypassWeGame'],

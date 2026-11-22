@@ -416,7 +416,7 @@
   "secureTransport": "使用 v3 传输协议",
   "secureTransportDescription": "原生代理连接默认已全程加密。v3 使用独立方向密钥且不增加握手往返；启用前需升级全部节点。关闭时使用兼容旧节点的加密协议。",
   "tunDnsServer": "TUN DNS 解析器 IP",
-  "tunDnsServerDescription": "TUN DNS 通过代理访问此解析器。桌面端已匹配排除规则的进程，其 DNS 走物理网卡，优先使用阿里云、腾讯云。共享系统 DNS 查询未匹配排除规则时仍走代理。已有配置保留，重新连接后生效。",
+  "tunDnsServerDescription": "留空时，TUN DNS 默认通过代理访问 Cloudflare 1.1.1.1。桌面端已匹配排除规则的进程，其 DNS 走物理网卡，优先使用阿里云、腾讯云。共享系统 DNS 查询未匹配排除规则时仍走代理。已有配置保留，重新连接后生效。",
   "invalidTunDnsServer": "请输入有效的 IPv4 或 IPv6 DNS 解析器地址。",
   "tunFakeIp": "TUN Fake-IP DNS",
   "tunFakeIpDescription": "使用虚拟地址，将域名交给代理服务器解析。iOS 建议开启，避免节点不支持 IPv6 时网页超时。关闭后查询真实地址，重新连接后生效。",

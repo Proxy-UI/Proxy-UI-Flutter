@@ -43,7 +43,7 @@ class ApplePacketTunnelProxyService extends ProxyService {
     bool udpDirectFallback = false,
     bool tunEnabled = false,
     bool tunFakeIp = false,
-    String tunDnsServer = '8.8.8.8',
+    String tunDnsServer = '',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     bool secureTransport = false,
@@ -64,7 +64,7 @@ class ApplePacketTunnelProxyService extends ProxyService {
         'autoProxy': !BuildCapabilities.isMacAppStore && autoProxy,
         'udpEnabled': udpEnabled,
         'tunFakeIp': tunFakeIp,
-        'tunDnsServer': tunDnsServer,
+        if (tunDnsServer.isNotEmpty) 'tunDnsServer': tunDnsServer,
         // Legacy field cannot override the provider's fixed country policy.
         'udpDirectFallback': false,
         'reverseGeo': !BuildCapabilities.isMacAppStore && reverseGeo,

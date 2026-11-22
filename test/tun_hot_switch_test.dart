@@ -211,8 +211,8 @@ void main() {
         ),
         isFalse,
       );
-      expect(state.config.tunDnsServer, '223.5.5.5');
-      expect(service.lastTunDnsServer, '223.5.5.5');
+      expect(state.config.tunDnsServer, '');
+      expect(service.lastTunDnsServer, '');
       expect(state.isRunning && state.isTunRunning, isTrue);
       expect(state.lastError, contains('simulated TUN restart failure'));
     },
@@ -339,7 +339,7 @@ void main() {
       );
       expect(await state.start(), isTrue);
       expect(service.lastTunFakeIp, isFalse);
-      expect(service.lastTunDnsServer, '223.5.5.5');
+      expect(service.lastTunDnsServer, '');
       expect(await state.stop(), isTrue);
       state.updateConfig(
         state.config.copyWith(tunFakeIp: true, tunDnsServer: '10.20.30.53'),
@@ -655,7 +655,7 @@ class _FakeProxyService extends ProxyService {
     bool udpDirectFallback = true,
     bool tunEnabled = false,
     bool tunFakeIp = false,
-    String tunDnsServer = '223.5.5.5',
+    String tunDnsServer = '',
     List<String> tunBypassProcesses = const [],
     bool reverseGeo = false,
     bool secureTransport = false,
